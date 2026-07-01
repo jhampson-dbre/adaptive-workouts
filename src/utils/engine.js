@@ -42,6 +42,10 @@ export function generateWorkout(timeBudget, unrecoveredGroups) {
     // Filter and compute dynamic tier
     let candidates = [];
     for (const ex of catalog) {
+        if (ex.isActive === false) {
+            continue;
+        }
+
         if (unrecoveredGroups.includes(ex.muscleGroup)) {
             continue;
         }

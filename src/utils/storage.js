@@ -34,3 +34,7 @@ export function getCatalog() {
     return safeGetItem('adaptive-catalog', defaultCatalog);
 }
 
+export function saveCatalog(catalog) {
+    localStorage.setItem('adaptive-catalog', JSON.stringify(catalog));
+}
+
