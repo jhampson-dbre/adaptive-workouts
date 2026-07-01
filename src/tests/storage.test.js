@@ -21,7 +21,12 @@ describe('Storage Layer', () => {
 
     it('returns default catalog when none exists', () => {
         const catalog = getCatalog();
-        expect(catalog).toEqual([]);
+        expect(catalog.length).toBeGreaterThan(0);
+        expect(catalog[0]).toHaveProperty('id');
+        expect(catalog[0]).toHaveProperty('name');
+        expect(catalog[0]).toHaveProperty('muscleGroup');
+        expect(catalog[0]).toHaveProperty('tier');
+        expect(catalog[0]).toHaveProperty('sets');
     });
 
     it('handles corrupted JSON gracefully', () => {
