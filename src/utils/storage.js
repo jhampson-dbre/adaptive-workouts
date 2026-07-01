@@ -23,6 +23,14 @@ export function getSettings() {
 }
 
 export function getCatalog() {
-    return safeGetItem('adaptive-catalog', []);
+    const defaultCatalog = [
+        { id: '1', name: 'Barbell Curl', muscleGroup: 'Biceps', tier: 1, sets: 3 },
+        { id: '2', name: 'Overhead Press', muscleGroup: 'Shoulders', tier: 1, sets: 3 },
+        { id: '3', name: 'Bench Press', muscleGroup: 'Chest', tier: 3, sets: 3 },
+        { id: '4', name: 'Pull Up', muscleGroup: 'Back', tier: 3, sets: 3 },
+        { id: '5', name: 'Plank', muscleGroup: 'Core', tier: 4, sets: 3 },
+        { id: '6', name: 'Squat', muscleGroup: 'Legs', tier: 4, sets: 3 }
+    ];
+    return safeGetItem('adaptive-catalog', defaultCatalog);
 }
 

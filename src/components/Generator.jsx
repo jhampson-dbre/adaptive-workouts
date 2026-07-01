@@ -3,10 +3,13 @@ import { generateWorkout } from '../utils/engine';
 
 const MUSCLE_GROUPS = ['Biceps', 'Shoulders', 'Back', 'Chest', 'Triceps', 'Core', 'Legs'];
 
-export default function Generator({ onGenerate }) {
-  const [timeBudget, setTimeBudget] = useState(45);
-  const [unrecoveredGroups, setUnrecoveredGroups] = useState([]);
-
+export default function Generator({ 
+  timeBudget, 
+  setTimeBudget, 
+  unrecoveredGroups, 
+  setUnrecoveredGroups, 
+  onGenerate 
+}) {
   const handleToggleGroup = (group) => {
     setUnrecoveredGroups((prev) => 
       prev.includes(group)

@@ -51,21 +51,17 @@ export default function WorkoutView({ workout, onFinish }) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  if (!startedAt) {
-    return (
-      <div className="workout-view">
-        <h2>Ready to sweat?</h2>
-        <button className="start-btn" onClick={handleStart}>Start Workout</button>
-      </div>
-    );
-  }
-
   return (
     <div className="workout-view">
       <div className="workout-header">
-        <h2>Active Workout</h2>
-        <div className="timer">{formatTime(elapsed)}</div>
+        <h2>{startedAt ? "Active Workout" : "Ready to sweat?"}</h2>
+        {startedAt && <div className="timer">{formatTime(elapsed)}</div>}
       </div>
+
+      {!startedAt && (
+        <button className="start-btn" onClick={handleStart} style={{marginBottom: '1rem'}}>Start Workout</button>
+      )}
+
       <ul className="workout-checklist">
         {workout.map((ex, idx) => (
           <li key={`${ex.id}-${idx}`} className={completedExercises.has(idx) ? 'completed' : ''}>
@@ -74,6 +70,7 @@ export default function WorkoutView({ workout, onFinish }) {
                 type="checkbox" 
                 checked={completedExercises.has(idx)}
                 onChange={() => handleToggle(idx)} 
+                disabled={!startedAt}
               />
               <span className="exercise-details">
                 <strong>{ex.name}</strong> ({ex.muscleGroup}) - {ex.sets} sets
@@ -82,7 +79,9 @@ export default function WorkoutView({ workout, onFinish }) {
           </li>
         ))}
       </ul>
-      <button className="finish-btn" onClick={handleFinish}>Finish Workout</button>
+      {startedAt && (
+        <button className="finish-btn" onClick={handleFinish}>Finish Workout</button>
+      )}
     </div>
   );
 }

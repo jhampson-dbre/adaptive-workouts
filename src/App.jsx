@@ -5,6 +5,8 @@ import WorkoutView from './components/WorkoutView'
 
 function App() {
   const [workout, setWorkout] = useState(null)
+  const [timeBudget, setTimeBudget] = useState(45)
+  const [unrecoveredGroups, setUnrecoveredGroups] = useState([])
 
   return (
     <>
@@ -14,7 +16,13 @@ function App() {
       
       <main>
         {(!workout || workout.length === 0) && (
-          <Generator onGenerate={(w) => setWorkout(w)} />
+          <Generator 
+            timeBudget={timeBudget}
+            setTimeBudget={setTimeBudget}
+            unrecoveredGroups={unrecoveredGroups}
+            setUnrecoveredGroups={setUnrecoveredGroups}
+            onGenerate={(w) => setWorkout(w)} 
+          />
         )}
         
         {workout && workout.length === 0 && (
