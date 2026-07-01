@@ -32,7 +32,7 @@ export default function WorkoutView({ workout, onFinish }) {
 
   const handleFinish = () => {
     const end = Date.now();
-    const diff = Math.round((end - startedAt) / 60000); // duration in minutes
+    const diff = Math.max(1, Math.round((end - startedAt) / 60000)); // duration in minutes
     
     saveWorkout({
       date: new Date().toISOString(),

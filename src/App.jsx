@@ -13,7 +13,9 @@ function App() {
       </header>
       
       <main>
-        <Generator onGenerate={(w) => setWorkout(w)} />
+        {(!workout || workout.length === 0) && (
+          <Generator onGenerate={(w) => setWorkout(w)} />
+        )}
         
         {workout && workout.length === 0 && (
           <section className="workout-result">
