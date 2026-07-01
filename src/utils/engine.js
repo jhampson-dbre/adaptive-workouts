@@ -6,6 +6,8 @@ export function generateWorkout(timeBudget, unrecoveredGroups) {
     const catalog = getCatalog();
     const staleThreshold = settings.staleThreshold || 5;
     
+    const catalogMap = new Map(catalog.map(c => [c.id, c]));
+
     // Find last pivot
     let lastPivot = null;
     for (let i = history.length - 1; i >= 0; i--) {
@@ -13,12 +15,12 @@ export function generateWorkout(timeBudget, unrecoveredGroups) {
         if (!session.exercises) continue;
         const pivotEx = session.exercises.find(
             e => {
-                const catEx = catalog.find(c => c.id === e.id);
+                const catEx = catalogMap.get(e.id);
                 return catEx && (catEx.muscleGroup === 'Biceps' || catEx.muscleGroup === 'Shoulders');
             }
         );
         if (pivotEx) {
-            const catEx = catalog.find(c => c.id === pivotEx.id);
+            const catEx = catalogMap.get(pivotEx.id);
             lastPivot = catEx.muscleGroup;
             break;
         }
@@ -77,12 +79,35 @@ export function generateWorkout(timeBudget, unrecoveredGroups) {
     
     const workout = [];
     let totalTime = 0;
+    const addedIds = new Set();
     
     for (const ex of candidates) {
-        const estTime = ex.sets * 1.75;
-        if (totalTime + estTime <= timeBudget) {
-            workout.push(ex);
-            totalTime += estTime;
+        if (addedIds.has(ex.id)) continue;
+
+        let linkedEx = null;
+        if (ex.linkedTo) {
+            linkedEx = candidates.find(c => c.id === ex.linkedTo);
+        } else {
+            // Also check if any candidate is linked TO this one
+            linkedEx = candidates.find(c => c.linkedTo === ex.id);
+        }
+
+        if (linkedEx && !addedIds.has(linkedEx.id)) {
+            const estTime1 = ex.sets * 1.75;
+            const estTime2 = linkedEx.sets * 1.75;
+            if (totalTime + estTime1 + estTime2 <= timeBudget) {
+                workout.push(ex, linkedEx);
+                totalTime += (estTime1 + estTime2);
+                addedIds.add(ex.id);
+                addedIds.add(linkedEx.id);
+            }
+        } else {
+            const estTime = ex.sets * 1.75;
+            if (totalTime + estTime <= timeBudget) {
+                workout.push(ex);
+                totalTime += estTime;
+                addedIds.add(ex.id);
+            }
         }
     }
     

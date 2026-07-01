@@ -16,7 +16,9 @@ const mockCatalog = [
     { id: 'tri_ext', name: 'Tricep Extensions', muscleGroup: 'Triceps', tier: 3, sets: 3 },
     { id: 'dips', name: 'Dips', muscleGroup: 'Chest', tier: 3, sets: 3 },
     { id: 'plank', name: 'Plank', muscleGroup: 'Core', tier: 4, sets: 2 },
-    { id: 'leg_press', name: 'Leg Press', muscleGroup: 'Legs', tier: 4, sets: 3 }
+    { id: 'leg_press', name: 'Leg Press', muscleGroup: 'Legs', tier: 4, sets: 3 },
+    { id: 'leg_extension', name: 'Leg Extension', muscleGroup: 'Legs', tier: 4, sets: 3, linkedTo: 'leg_curl' },
+    { id: 'leg_curl', name: 'Leg Curl', muscleGroup: 'Legs', tier: 4, sets: 3 }
 ];
 
 describe('Generator Engine', () => {
@@ -104,5 +106,32 @@ describe('Generator Engine', () => {
         expect(workout.some(ex => ex.id === 'biceps_curl')).toBe(true);
         expect(workout.some(ex => ex.id === 'chest_row')).toBe(true);
         expect(workout.some(ex => ex.tier === 4)).toBe(false);
+    });
+
+    it('groups linked exercises together or skips both if they do not fit', () => {
+        storage.getCatalog.mockReturnValue(mockCatalog);
+        storage.getHistory.mockReturnValue([]);
+        storage.getSettings.mockReturnValue({ staleThreshold: 5 });
+
+        // If time budget is only enough for the pivot and one of the linked legs, 
+        // neither leg exercise should be included because they are linked.
+        // Pivot: Biceps (3 * 1.75 = 5.25 mins)
+        // Leg Extension: 3 * 1.75 = 5.25 mins
+        // Leg Curl: 3 * 1.75 = 5.25 mins
+        // If budget is 12 mins, we have enough for Biceps + Leg Extension (10.5 mins)
+        // BUT because it is linked to Leg Curl, the total for the pair + Biceps is 15.75 mins.
+        // So both leg exercises should be skipped.
+
+        // Also we don't include unlinked leg press for purity of the test, let's just make budget very tight for the 3.
+        const tightBudgetWorkout = generateWorkout(12, ['Back', 'Chest', 'Triceps']); // isolate Biceps + Legs + Core
+
+        expect(tightBudgetWorkout.some(ex => ex.id === 'leg_extension')).toBe(false);
+        expect(tightBudgetWorkout.some(ex => ex.id === 'leg_curl')).toBe(false);
+
+        // If budget is 30 mins, they should all fit and both be included
+        const enoughBudgetWorkout = generateWorkout(30, ['Back', 'Chest', 'Triceps']);
+        
+        expect(enoughBudgetWorkout.some(ex => ex.id === 'leg_extension')).toBe(true);
+        expect(enoughBudgetWorkout.some(ex => ex.id === 'leg_curl')).toBe(true);
     });
 });
