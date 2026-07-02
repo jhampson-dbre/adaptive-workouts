@@ -173,5 +173,18 @@ describe('Generator Engine', () => {
             const tier4Legs = workout.filter(ex => ex.muscleGroup === 'Legs' && ex.tier === 4);
             expect(tier4Legs.length).toBe(0);
         });
+
+        it('skips all Tier 3 leg exercises if they do not fit in the time budget (All-or-Nothing)', () => {
+            storage.getCatalog.mockReturnValue(mockCatalog);
+            storage.getHistory.mockReturnValue([]);
+            storage.getSettings.mockReturnValue({ staleThreshold: 5, legDayOfWeek: 'None' });
+
+            // On forced leg day, squat is dynamicTier 0 and takes 4 sets * 1.75 mins = 7 minutes.
+            // If the budget is tight (e.g. 5 minutes), the squat should not fit.
+            // Even though it's Tier 0, the All-or-Nothing logic should skip it entirely and NOT include it individually later.
+            const workout = generateWorkout(5, [], true); // forceLegDay = true
+            const tier3Legs = workout.filter(ex => ex.muscleGroup === 'Legs' && ex.tier === 3);
+            expect(tier3Legs.length).toBe(0);
+        });
     });
 });

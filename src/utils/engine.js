@@ -3,7 +3,7 @@ import { getHistory, getSettings, getCatalog } from './storage';
 /**
  * Get days since last leg day.
  */
-export function getDaysSinceLastLegDay(history) {
+export function getDaysSinceLastLegDay(history, today = new Date()) {
     let lastLegDate = null;
     for (let i = history.length - 1; i >= 0; i--) {
         const session = history[i];
@@ -13,12 +13,23 @@ export function getDaysSinceLastLegDay(history) {
         }
     }
     if (!lastLegDate) return Infinity;
-    return (new Date().getTime() - lastLegDate.getTime()) / (1000 * 60 * 60 * 24);
+    return (today.getTime() - lastLegDate.getTime()) / (1000 * 60 * 60 * 24);
 }
 
 export function getDayOfWeek(date) {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     return days[date.getDay()];
+}
+
+export function checkIsLegDay(date, unrecoveredGroups, history, settings) {
+    if (!settings.legDayOfWeek || settings.legDayOfWeek === 'None') return false;
+    if (unrecoveredGroups.includes('Legs')) return false;
+    
+    const daysSinceLastLeg = getDaysSinceLastLegDay(history, date);
+    if (getDayOfWeek(date) === settings.legDayOfWeek && daysSinceLastLeg >= 4) {
+        return true;
+    }
+    return false;
 }
 
 export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay = false) {
@@ -27,19 +38,13 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
     const catalog = getCatalog();
     const staleThreshold = settings.staleThreshold || 5;
     
-    const daysSinceLastLeg = getDaysSinceLastLegDay(history);
     const today = new Date();
-    let isLegDay = forceLegDay;
-    
-    if (!isLegDay && settings.legDayOfWeek && settings.legDayOfWeek !== 'None' && !unrecoveredGroups.includes('Legs')) {
-        if (getDayOfWeek(today) === settings.legDayOfWeek && daysSinceLastLeg >= 4) {
-            isLegDay = true;
-        }
-    }
+    const daysSinceLastLeg = getDaysSinceLastLegDay(history, today);
+    let isLegDay = forceLegDay || checkIsLegDay(today, unrecoveredGroups, history, settings);
 
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const isTomorrowLegDay = settings.legDayOfWeek && getDayOfWeek(tomorrow) === settings.legDayOfWeek;
+    const isTomorrowLegDay = checkIsLegDay(tomorrow, unrecoveredGroups, history, settings);
 
     const catalogMap = new Map(catalog.map(c => [c.id, c]));
 
@@ -144,8 +149,10 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
                 addedIds.add(ex.id);
             });
             totalTime += legTime;
+        } else {
+            // If they don't fit, mark as added so the main loop skips them entirely
+            primaryLegs.forEach(ex => addedIds.add(ex.id));
         }
-        // If they don't fit, none of them are added.
     }
     
     for (const ex of candidates) {
