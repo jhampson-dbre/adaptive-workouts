@@ -91,7 +91,7 @@ export default function Settings({ onClose }) {
           muscleGroup: editGroup,
           tier: Number(editTier),
           sets: Number(editSets),
-          linkedTo: editLink || null
+          linkedTo: (editGroup === 'Legs' && String(editTier) === '3') ? null : (editLink || null)
         };
       }
       return ex;

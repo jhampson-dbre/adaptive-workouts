@@ -1,6 +1,17 @@
 import { getHistory, getSettings, getCatalog } from './storage';
 
 /**
+ * Calculate difference in calendar days between two dates.
+ */
+function getCalendarDaysBetween(date1, date2) {
+    const d1 = new Date(date1);
+    d1.setHours(0, 0, 0, 0);
+    const d2 = new Date(date2);
+    d2.setHours(0, 0, 0, 0);
+    return Math.round(Math.abs((d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24)));
+}
+
+/**
  * Get days since last leg day.
  */
 export function getDaysSinceLastLegDay(history, today = new Date()) {
@@ -13,7 +24,8 @@ export function getDaysSinceLastLegDay(history, today = new Date()) {
         }
     }
     if (!lastLegDate) return Infinity;
-    return (today.getTime() - lastLegDate.getTime()) / (1000 * 60 * 60 * 24);
+    
+    return getCalendarDaysBetween(today, lastLegDate);
 }
 
 export function getDayOfWeek(date) {
@@ -77,8 +89,6 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
         }
     }
     
-    const now = new Date();
-
     // Filter and compute dynamic tier
     let candidates = [];
     for (const ex of catalog) {
@@ -102,7 +112,7 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
         } else {
             const lastDate = lastDates[ex.id];
             if (lastDate) {
-                const daysSince = (now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24);
+                const daysSince = getCalendarDaysBetween(today, lastDate);
                 if (daysSince > staleThreshold) {
                     dynamicTier = 2; // High urgency
                 }
@@ -118,8 +128,8 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
                     dynamicTier = 0; // absolute priority
                 }
             } else if (ex.tier === 4) {
-                // Supplemental Filter
-                if (isLegDay || daysSinceLastLeg < 1 || isTomorrowLegDay) {
+                // Supplemental Filter (+/- 1 day)
+                if (isLegDay || daysSinceLastLeg <= 1 || isTomorrowLegDay) {
                     continue; // Skip supplemental legs
                 }
             }
