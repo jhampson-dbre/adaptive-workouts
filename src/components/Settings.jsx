@@ -48,6 +48,16 @@ export default function Settings({ onClose }) {
   };
 
   const handleSaveEdit = (id) => {
+    if (!editName.trim()) {
+      alert("Exercise name cannot be empty.");
+      return;
+    }
+
+    if (Number(editTier) === 1 && editGroup !== 'Biceps' && editGroup !== 'Shoulders') {
+      alert("Tier 1 is reserved exclusively for the core alternating pivots (Biceps and Shoulders).");
+      return;
+    }
+
     const updated = catalog.map(ex => {
       if (ex.id === id) {
         return {
@@ -68,6 +78,11 @@ export default function Settings({ onClose }) {
   const handleAdd = (e) => {
     e.preventDefault();
     if (!newName.trim()) return;
+
+    if (Number(newTier) === 1 && newGroup !== 'Biceps' && newGroup !== 'Shoulders') {
+      alert("Tier 1 is reserved exclusively for the core alternating pivots (Biceps and Shoulders).");
+      return;
+    }
     
     const id = newName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     
