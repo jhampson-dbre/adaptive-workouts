@@ -16,7 +16,7 @@ describe('Storage Layer', () => {
 
     it('returns default settings when none exist', () => {
         const settings = getSettings();
-        expect(settings).toEqual({});
+        expect(settings).toEqual({"warmupTime": 10, "staleThreshold": 5, "legDayOfWeek": "None"});
     });
 
     it('returns default catalog when none exists', () => {

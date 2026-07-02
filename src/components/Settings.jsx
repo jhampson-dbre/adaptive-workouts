@@ -150,7 +150,7 @@ export default function Settings({ onClose }) {
         <label style={{ marginRight: '10px' }}>Leg Day Schedule</label>
         <select value={legDayOfWeek} onChange={(e) => {
           setLegDayOfWeek(e.target.value);
-          handleSaveSettings({ warmupTime, staleThreshold, legDayOfWeek: e.target.value });
+          handleSaveSettings({ legDayOfWeek: e.target.value });
         }}>
           {['None', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
             <option key={day} value={day}>{day}</option>
