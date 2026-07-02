@@ -126,6 +126,8 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
             if (ex.tier === 3) {
                 if (isLegDay) {
                     dynamicTier = 0; // absolute priority
+                } else if (settings.legDayOfWeek && settings.legDayOfWeek !== 'None') {
+                    continue; // Skip Tier 3 Legs entirely on non-Leg days
                 }
             } else if (ex.tier === 4) {
                 // Supplemental Filter (+/- 1 day)
