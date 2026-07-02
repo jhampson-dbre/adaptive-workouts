@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getCatalog, saveCatalog } from '../utils/storage';
+import { getCatalog, saveCatalog, getSettings, saveSettings } from '../utils/storage';
 
 const getTier1Groups = (currentCatalog, ignoreId = null) => {
   const t1Exercises = currentCatalog.filter(ex => ex.tier === 1 && ex.id !== ignoreId);
@@ -9,6 +9,10 @@ const getTier1Groups = (currentCatalog, ignoreId = null) => {
 export default function Settings({ onClose }) {
   const [catalog, setCatalog] = useState([]);
   const [editingId, setEditingId] = useState(null);
+  const [settings, setSettings] = useState({});
+  const [legDayOfWeek, setLegDayOfWeek] = useState('None');
+  const [warmupTime, setWarmupTime] = useState(10);
+  const [staleThreshold, setStaleThreshold] = useState(5);
   
   // New exercise state
   const [newName, setNewName] = useState('');
@@ -26,7 +30,18 @@ export default function Settings({ onClose }) {
 
   useEffect(() => {
     setCatalog(getCatalog());
+    const currentSettings = getSettings();
+    setSettings(currentSettings);
+    setLegDayOfWeek(currentSettings.legDayOfWeek || 'None');
+    setWarmupTime(currentSettings.warmupTime || 10);
+    setStaleThreshold(currentSettings.staleThreshold || 5);
   }, []);
+
+  const handleSaveSettings = (updates) => {
+    const newSettings = { ...settings, ...updates };
+    setSettings(newSettings);
+    saveSettings(newSettings);
+  };
 
   const handleSave = (newCatalog) => {
     setCatalog(newCatalog);
@@ -130,6 +145,23 @@ export default function Settings({ onClose }) {
         <h2>Catalog Management</h2>
         <button className="close-btn" onClick={onClose}>Close</button>
       </div>
+
+      <div className="setting-group" style={{ padding: '15px' }}>
+        <label style={{ marginRight: '10px' }}>Leg Day Schedule</label>
+        <select value={legDayOfWeek} onChange={(e) => {
+          setLegDayOfWeek(e.target.value);
+          handleSaveSettings({ warmupTime, staleThreshold, legDayOfWeek: e.target.value });
+        }}>
+          {['None', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+            <option key={day} value={day}>{day}</option>
+          ))}
+        </select>
+        {legDayOfWeek !== 'None' && catalog.filter(ex => ex.muscleGroup === 'Legs' && ex.tier === 3).length === 0 && (
+          <div className="alert-warning" style={{ color: 'red', marginTop: '5px' }}>
+            You must add at least one Tier 3 Leg Exercise to the catalog to use Leg Day.
+          </div>
+        )}
+      </div>
       
       <div className="add-exercise">
         <h3>Add New Exercise</h3>
@@ -155,9 +187,18 @@ export default function Settings({ onClose }) {
             onChange={(e) => setNewTier(e.target.value)} 
             title="Priority Tier"
           >
-            <option value="1">Tier 1 (Core Pivot)</option>
-            <option value="3">Tier 3 (Standard)</option>
-            <option value="4">Tier 4 (Low Priority)</option>
+            {newGroup === 'Legs' ? (
+              <>
+                <option value="3">Tier 3 (Primary Leg Day)</option>
+                <option value="4">Tier 4 (Supplemental)</option>
+              </>
+            ) : (
+              <>
+                <option value="1">Tier 1 (Core Pivot)</option>
+                <option value="3">Tier 3 (Standard)</option>
+                <option value="4">Tier 4 (Low Priority)</option>
+              </>
+            )}
           </select>
           <input 
             type="number" 
@@ -168,12 +209,14 @@ export default function Settings({ onClose }) {
             title="Sets"
             placeholder="Sets"
           />
-          <select value={newLink} onChange={(e) => setNewLink(e.target.value)}>
-            <option value="">No Link</option>
-            {catalog.map(ex => (
-              <option key={ex.id} value={ex.id}>Link to: {ex.name}</option>
-            ))}
-          </select>
+          {newGroup === 'Legs' && String(newTier) === '3' ? (
+            <span className="badge">Primary Leg exercises are automatically linked together on Leg Day.</span>
+          ) : (
+            <select value={newLink} onChange={(e) => setNewLink(e.target.value)}>
+              <option value="">None</option>
+              {catalog.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
+            </select>
+          )}
           <button type="submit" className="add-btn">Add</button>
         </form>
       </div>
@@ -204,9 +247,18 @@ export default function Settings({ onClose }) {
                     onChange={(e) => setEditTier(e.target.value)} 
                     title="Priority Tier"
                   >
-                    <option value="1">Tier 1 (Core Pivot)</option>
-                    <option value="3">Tier 3 (Standard)</option>
-                    <option value="4">Tier 4 (Low Priority)</option>
+                    {editGroup === 'Legs' ? (
+                      <>
+                        <option value="3">Tier 3 (Primary Leg Day)</option>
+                        <option value="4">Tier 4 (Supplemental)</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="1">Tier 1 (Core Pivot)</option>
+                        <option value="3">Tier 3 (Standard)</option>
+                        <option value="4">Tier 4 (Low Priority)</option>
+                      </>
+                    )}
                   </select>
                   <input 
                     type="number" 
@@ -216,12 +268,16 @@ export default function Settings({ onClose }) {
                     onChange={(e) => setEditSets(e.target.value)} 
                     title="Sets"
                   />
-                  <select value={editLink} onChange={(e) => setEditLink(e.target.value)}>
-                    <option value="">No Link</option>
-                    {catalog.filter(c => c.id !== ex.id).map(c => (
-                      <option key={c.id} value={c.id}>Link to: {c.name}</option>
-                    ))}
-                  </select>
+                  {editGroup === 'Legs' && String(editTier) === '3' ? (
+                    <span className="badge">Primary Leg exercises are automatically linked together on Leg Day.</span>
+                  ) : (
+                    <select value={editLink} onChange={(e) => setEditLink(e.target.value)}>
+                      <option value="">None</option>
+                      {catalog.filter(c => c.id !== ex.id).map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  )}
                   <div className="edit-actions">
                     <button onClick={() => handleSaveEdit(ex.id)} className="save-btn">Save</button>
                     <button onClick={() => setEditingId(null)} className="cancel-btn">Cancel</button>
