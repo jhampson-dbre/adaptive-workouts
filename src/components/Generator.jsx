@@ -35,11 +35,13 @@ export default function Generator({
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       
-      const isOverdue = daysSince > 7 && getDayOfWeek(today) !== settings.legDayOfWeek;
+      const isOverdue = daysSince !== Infinity && daysSince > 7 && getDayOfWeek(today) !== settings.legDayOfWeek;
       const isEarly = getDayOfWeek(tomorrow) === settings.legDayOfWeek && daysSince >= 4;
 
       if (isOverdue) {
-          const doLegDay = window.confirm(`Leg Day is ${Math.floor(daysSince - 7)} days overdue! (${Math.floor(daysSince)} days since last Leg workout).\n\nClick OK to do Leg Day today, or Cancel to skip to normal workout.`);
+          const overdueDays = Math.floor(daysSince - 7);
+          const totalDays = Math.floor(daysSince);
+          const doLegDay = window.confirm(`Leg Day is ${overdueDays} day${overdueDays === 1 ? '' : 's'} overdue! (${totalDays} days since last Leg workout).\n\nClick OK to do Leg Day today, or Cancel to skip to normal workout.`);
           const generated = generateWorkout(timeBudget, unrecoveredGroups, doLegDay); // doLegDay=true means forceLegDay=true
           if (onGenerate) onGenerate(generated);
           return;
