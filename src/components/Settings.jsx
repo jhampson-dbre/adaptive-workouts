@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { getCatalog, saveCatalog } from '../utils/storage';
 
+const getTier1Groups = (currentCatalog, ignoreId = null) => {
+  const t1Exercises = currentCatalog.filter(ex => ex.tier === 1 && ex.id !== ignoreId);
+  return new Set(t1Exercises.map(ex => ex.muscleGroup));
+};
+
 export default function Settings({ onClose }) {
   const [catalog, setCatalog] = useState([]);
   const [editingId, setEditingId] = useState(null);
@@ -8,7 +13,7 @@ export default function Settings({ onClose }) {
   // New exercise state
   const [newName, setNewName] = useState('');
   const [newGroup, setNewGroup] = useState('Chest');
-  const [newTier, setNewTier] = useState(1);
+  const [newTier, setNewTier] = useState(3);
   const [newSets, setNewSets] = useState(3);
   const [newLink, setNewLink] = useState('');
   
@@ -53,8 +58,13 @@ export default function Settings({ onClose }) {
       return;
     }
 
-    if (Number(editTier) === 1 && editGroup !== 'Biceps' && editGroup !== 'Shoulders') {
-      alert("Tier 1 is reserved exclusively for the core alternating pivots (Biceps and Shoulders).");
+    const currentT1Groups = getTier1Groups(catalog, id);
+    if (Number(editTier) === 1) {
+      currentT1Groups.add(editGroup);
+    }
+    
+    if (currentT1Groups.size > 2) {
+      alert("You can only have up to 2 Tier 1 muscle groups. Please demote an existing Tier 1 exercise first.");
       return;
     }
 
@@ -79,8 +89,13 @@ export default function Settings({ onClose }) {
     e.preventDefault();
     if (!newName.trim()) return;
 
-    if (Number(newTier) === 1 && newGroup !== 'Biceps' && newGroup !== 'Shoulders') {
-      alert("Tier 1 is reserved exclusively for the core alternating pivots (Biceps and Shoulders).");
+    const currentT1Groups = getTier1Groups(catalog);
+    if (Number(newTier) === 1) {
+      currentT1Groups.add(newGroup);
+    }
+    
+    if (currentT1Groups.size > 2) {
+      alert("You can only have up to 2 Tier 1 muscle groups. Please demote an existing Tier 1 exercise first.");
       return;
     }
     
@@ -104,7 +119,7 @@ export default function Settings({ onClose }) {
     handleSave([...catalog, newEx]);
     setNewName('');
     setNewGroup('Chest');
-    setNewTier(1);
+    setNewTier(3);
     setNewSets(3);
     setNewLink('');
   };
@@ -135,15 +150,15 @@ export default function Settings({ onClose }) {
             <option value="Triceps">Triceps</option>
             <option value="Core">Core</option>
           </select>
-          <input 
-            type="number" 
-            min="1" 
-            max="5" 
+          <select 
             value={newTier} 
             onChange={(e) => setNewTier(e.target.value)} 
-            title="Tier (1=highest, 5=lowest)"
-            placeholder="Tier"
-          />
+            title="Priority Tier"
+          >
+            <option value="1">Tier 1 (Core Pivot)</option>
+            <option value="3">Tier 3 (Standard)</option>
+            <option value="4">Tier 4 (Low Priority)</option>
+          </select>
           <input 
             type="number" 
             min="1" 
@@ -184,14 +199,15 @@ export default function Settings({ onClose }) {
                     <option value="Triceps">Triceps</option>
                     <option value="Core">Core</option>
                   </select>
-                  <input 
-                    type="number" 
-                    min="1" 
-                    max="5" 
+                  <select 
                     value={editTier} 
                     onChange={(e) => setEditTier(e.target.value)} 
-                    title="Tier"
-                  />
+                    title="Priority Tier"
+                  >
+                    <option value="1">Tier 1 (Core Pivot)</option>
+                    <option value="3">Tier 3 (Standard)</option>
+                    <option value="4">Tier 4 (Low Priority)</option>
+                  </select>
                   <input 
                     type="number" 
                     min="1" 
