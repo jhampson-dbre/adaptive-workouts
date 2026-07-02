@@ -1,5 +1,8 @@
 import { getHistory, getSettings, getCatalog } from './storage';
 
+/**
+ * Get days since last leg day.
+ */
 export function getDaysSinceLastLegDay(history) {
     let lastLegDate = null;
     for (let i = history.length - 1; i >= 0; i--) {
