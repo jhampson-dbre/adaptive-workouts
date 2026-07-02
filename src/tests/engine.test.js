@@ -16,6 +16,7 @@ const mockCatalog = [
     { id: 'tri_ext', name: 'Tricep Extensions', muscleGroup: 'Triceps', tier: 3, sets: 3 },
     { id: 'dips', name: 'Dips', muscleGroup: 'Chest', tier: 3, sets: 3 },
     { id: 'plank', name: 'Plank', muscleGroup: 'Core', tier: 4, sets: 2 },
+    { id: 'squat', name: 'Squats', muscleGroup: 'Legs', tier: 3, sets: 4 },
     { id: 'leg_press', name: 'Leg Press', muscleGroup: 'Legs', tier: 4, sets: 3 },
     { id: 'leg_extension', name: 'Leg Extension', muscleGroup: 'Legs', tier: 4, sets: 3, linkedTo: 'leg_curl' },
     { id: 'leg_curl', name: 'Leg Curl', muscleGroup: 'Legs', tier: 4, sets: 3 }
@@ -128,10 +129,49 @@ describe('Generator Engine', () => {
         expect(tightBudgetWorkout.some(ex => ex.id === 'leg_extension')).toBe(false);
         expect(tightBudgetWorkout.some(ex => ex.id === 'leg_curl')).toBe(false);
 
-        // If budget is 30 mins, they should all fit and both be included
-        const enoughBudgetWorkout = generateWorkout(30, ['Back', 'Chest', 'Triceps']);
+        // If budget is 40 mins, they should all fit and both be included
+        const enoughBudgetWorkout = generateWorkout(40, ['Back', 'Chest', 'Triceps']);
         
         expect(enoughBudgetWorkout.some(ex => ex.id === 'leg_extension')).toBe(true);
         expect(enoughBudgetWorkout.some(ex => ex.id === 'leg_curl')).toBe(true);
+    });
+
+    describe('Leg Day Logic', () => {
+        it('assigns dynamicTier: 0 to Tier 3 legs when forceLegDay is true', () => {
+            storage.getCatalog.mockReturnValue(mockCatalog);
+            storage.getHistory.mockReturnValue([]);
+            storage.getSettings.mockReturnValue({ staleThreshold: 5, legDayOfWeek: 'None' });
+
+            const workout = generateWorkout(60, [], true); // forceLegDay = true
+            expect(workout[0].muscleGroup).toBe('Legs');
+            expect(workout[0].id).toBe('squat');
+            expect(workout[0].dynamicTier).toBe(0); 
+        });
+
+        it('excludes Tier 4 legs when forceLegDay is true', () => {
+            storage.getCatalog.mockReturnValue(mockCatalog);
+            storage.getHistory.mockReturnValue([]);
+            storage.getSettings.mockReturnValue({ staleThreshold: 5, legDayOfWeek: 'None' });
+
+            const workout = generateWorkout(60, [], true);
+            const tier4Legs = workout.filter(ex => ex.muscleGroup === 'Legs' && ex.tier === 4);
+            expect(tier4Legs.length).toBe(0);
+        });
+
+        it('excludes Tier 4 legs when daysSinceLastLeg < 1', () => {
+            storage.getCatalog.mockReturnValue(mockCatalog);
+            storage.getSettings.mockReturnValue({ staleThreshold: 5, legDayOfWeek: 'None' });
+            
+            storage.getHistory.mockReturnValue([
+                {
+                    date: '2026-06-30T10:00:00Z',
+                    exercises: [{ id: 'squat', muscleGroup: 'Legs', tier: 3 }]
+                }
+            ]);
+
+            const workout = generateWorkout(60, [], false);
+            const tier4Legs = workout.filter(ex => ex.muscleGroup === 'Legs' && ex.tier === 4);
+            expect(tier4Legs.length).toBe(0);
+        });
     });
 });

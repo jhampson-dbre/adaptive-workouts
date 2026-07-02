@@ -1,11 +1,43 @@
 import { getHistory, getSettings, getCatalog } from './storage';
 
-export function generateWorkout(timeBudget, unrecoveredGroups) {
+export function getDaysSinceLastLegDay(history) {
+    let lastLegDate = null;
+    for (let i = history.length - 1; i >= 0; i--) {
+        const session = history[i];
+        if (session.exercises && session.exercises.some(ex => ex.muscleGroup === 'Legs' && ex.tier === 3)) {
+            lastLegDate = new Date(session.date);
+            break;
+        }
+    }
+    if (!lastLegDate) return Infinity;
+    return (new Date().getTime() - lastLegDate.getTime()) / (1000 * 60 * 60 * 24);
+}
+
+export function getDayOfWeek(date) {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[date.getDay()];
+}
+
+export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay = false) {
     const history = getHistory();
     const settings = getSettings();
     const catalog = getCatalog();
     const staleThreshold = settings.staleThreshold || 5;
     
+    const daysSinceLastLeg = getDaysSinceLastLegDay(history);
+    const today = new Date();
+    let isLegDay = forceLegDay;
+    
+    if (!isLegDay && settings.legDayOfWeek && settings.legDayOfWeek !== 'None' && !unrecoveredGroups.includes('Legs')) {
+        if (getDayOfWeek(today) === settings.legDayOfWeek && daysSinceLastLeg >= 4) {
+            isLegDay = true;
+        }
+    }
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const isTomorrowLegDay = settings.legDayOfWeek && getDayOfWeek(tomorrow) === settings.legDayOfWeek;
+
     const catalogMap = new Map(catalog.map(c => [c.id, c]));
 
     // Find last pivot
@@ -71,6 +103,19 @@ export function generateWorkout(timeBudget, unrecoveredGroups) {
                 dynamicTier = 2;
             }
         }
+
+        if (ex.muscleGroup === 'Legs') {
+            if (ex.tier === 3) {
+                if (isLegDay) {
+                    dynamicTier = 0; // absolute priority
+                }
+            } else if (ex.tier === 4) {
+                // Supplemental Filter
+                if (isLegDay || daysSinceLastLeg < 1 || isTomorrowLegDay) {
+                    continue; // Skip supplemental legs
+                }
+            }
+        }
         
         candidates.push({ ...ex, dynamicTier });
     }
@@ -84,6 +129,21 @@ export function generateWorkout(timeBudget, unrecoveredGroups) {
     const workout = [];
     let totalTime = 0;
     const addedIds = new Set();
+    
+    if (isLegDay) {
+        const primaryLegs = candidates.filter(ex => ex.muscleGroup === 'Legs' && ex.dynamicTier === 0);
+        let legTime = 0;
+        primaryLegs.forEach(ex => legTime += (ex.sets * 1.75));
+        
+        if (legTime <= timeBudget) {
+            primaryLegs.forEach(ex => {
+                workout.push(ex);
+                addedIds.add(ex.id);
+            });
+            totalTime += legTime;
+        }
+        // If they don't fit, none of them are added.
+    }
     
     for (const ex of candidates) {
         if (addedIds.has(ex.id)) continue;
