@@ -173,7 +173,11 @@ export default function Settings({ onClose }) {
             onChange={(e) => setNewName(e.target.value)} 
             required 
           />
-          <select value={newGroup} onChange={(e) => setNewGroup(e.target.value)}>
+          <select value={newGroup} onChange={(e) => {
+            setNewGroup(e.target.value);
+            if (e.target.value === 'Legs' && newTier !== 3 && newTier !== 4) setNewTier(3);
+            if (e.target.value !== 'Legs' && newTier !== 1 && newTier !== 3 && newTier !== 4) setNewTier(3);
+          }}>
             <option value="Chest">Chest</option>
             <option value="Back">Back</option>
             <option value="Legs">Legs</option>
@@ -233,7 +237,11 @@ export default function Settings({ onClose }) {
                     value={editName} 
                     onChange={(e) => setEditName(e.target.value)} 
                   />
-                  <select value={editGroup} onChange={(e) => setEditGroup(e.target.value)}>
+                  <select value={editGroup} onChange={(e) => {
+                    setEditGroup(e.target.value);
+                    if (e.target.value === 'Legs' && editTier !== 3 && editTier !== 4) setEditTier(3);
+                    if (e.target.value !== 'Legs' && editTier !== 1 && editTier !== 3 && editTier !== 4) setEditTier(3);
+                  }}>
                     <option value="Chest">Chest</option>
                     <option value="Back">Back</option>
                     <option value="Legs">Legs</option>

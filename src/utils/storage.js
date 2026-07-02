@@ -19,7 +19,7 @@ export function saveWorkout(workout) {
 }
 
 export function getSettings() {
-    return JSON.parse(localStorage.getItem('adaptive-settings') || '{"warmupTime": 10, "staleThreshold": 5, "legDayOfWeek": "None"}');
+    return safeGetItem('adaptive-settings', { warmupTime: 10, staleThreshold: 5, legDayOfWeek: 'None' });
 }
 
 export function saveSettings(settings) {
