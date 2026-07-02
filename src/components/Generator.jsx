@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { generateWorkout } from '../utils/engine';
+import { generateWorkout, getDaysSinceLastLegDay, getDayOfWeek } from '../utils/engine';
+import { getSettings, getHistory, getCatalog } from '../utils/storage';
 
 const MUSCLE_GROUPS = ['Biceps', 'Shoulders', 'Back', 'Chest', 'Triceps', 'Core', 'Legs'];
 
@@ -19,10 +20,43 @@ export default function Generator({
   };
 
   const handleGenerate = () => {
-    const workout = generateWorkout(timeBudget, unrecoveredGroups);
-    if (onGenerate) {
-      onGenerate(workout);
+    if (timeBudget <= 0) return;
+
+    const settings = getSettings();
+    const history = getHistory();
+    const catalog = getCatalog();
+    
+    // Check if we have primary leg exercises
+    const hasPrimaryLegs = catalog.some(ex => ex.muscleGroup === 'Legs' && ex.tier === 3);
+    
+    if (hasPrimaryLegs && settings.legDayOfWeek && settings.legDayOfWeek !== 'None' && !unrecoveredGroups.includes('Legs')) {
+      const daysSince = getDaysSinceLastLegDay(history);
+      const today = new Date();
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const isOverdue = daysSince !== Infinity && daysSince > 7 && getDayOfWeek(today) !== settings.legDayOfWeek;
+      const isEarly = getDayOfWeek(tomorrow) === settings.legDayOfWeek && daysSince >= 4;
+
+      if (isOverdue) {
+          const overdueDays = Math.floor(daysSince - 7);
+          const totalDays = Math.floor(daysSince);
+          const doLegDay = window.confirm(`Leg Day is ${overdueDays} day${overdueDays === 1 ? '' : 's'} overdue! (${totalDays} days since last Leg workout).\n\nClick OK to do Leg Day today, or Cancel to skip to normal workout.`);
+          const generated = generateWorkout(timeBudget, unrecoveredGroups, doLegDay); // doLegDay=true means forceLegDay=true
+          if (onGenerate) onGenerate(generated);
+          return;
+      }
+      
+      if (isEarly) {
+          const doEarly = window.confirm(`Tomorrow is Leg Day. Want to do it a day early?`);
+          const generated = generateWorkout(timeBudget, unrecoveredGroups, doEarly);
+          if (onGenerate) onGenerate(generated);
+          return;
+      }
     }
+
+    const generated = generateWorkout(timeBudget, unrecoveredGroups, false);
+    if (onGenerate) onGenerate(generated);
   };
 
   return (
