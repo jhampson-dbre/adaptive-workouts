@@ -1,10 +1,14 @@
-import { useState, useEffect } from 'react';
-import { saveWorkout } from '../utils/storage';
+import { useState, useEffect, useContext } from 'react';
+import { saveWorkout, getHistory } from '../utils/storage';
+import { AuthContext } from '../App';
 
 export default function WorkoutView({ workout, onFinish }) {
+  const user = useContext(AuthContext);
   const [startedAt, setStartedAt] = useState(null);
   const [elapsed, setElapsed] = useState(0);
   const [completedExercises, setCompletedExercises] = useState(new Set());
+  const [history, setHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
 
   useEffect(() => {
     let interval;
@@ -15,6 +19,31 @@ export default function WorkoutView({ workout, onFinish }) {
     }
     return () => clearInterval(interval);
   }, [startedAt]);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!user || !user.uid) {
+      setLoadingHistory(false);
+      return;
+    }
+    const fetchHistory = async () => {
+      try {
+        setLoadingHistory(true);
+        const data = await getHistory(user.uid);
+        if (isMounted) {
+          setHistory(data);
+          setLoadingHistory(false);
+        }
+      } catch (error) {
+        console.error("Failed to fetch history:", error);
+        if (isMounted) {
+          setLoadingHistory(false);
+        }
+      }
+    };
+    fetchHistory();
+    return () => { isMounted = false; };
+  }, [user]);
 
   const handleStart = () => {
     setStartedAt(Date.now());
@@ -30,15 +59,21 @@ export default function WorkoutView({ workout, onFinish }) {
     setCompletedExercises(newCompleted);
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     const end = Date.now();
     const diff = Math.max(1, Math.round((end - startedAt) / 60000)); // duration in minutes
     
-    saveWorkout({
-      date: new Date().toISOString(),
-      actualDuration: diff,
-      exercises: workout
-    });
+    if (user && user.uid) {
+      try {
+        await saveWorkout(user.uid, {
+          date: new Date().toISOString(),
+          actualDuration: diff,
+          exercises: workout
+        });
+      } catch (error) {
+        console.error("Failed to save workout:", error);
+      }
+    }
     
     if (onFinish) {
       onFinish();
@@ -82,6 +117,29 @@ export default function WorkoutView({ workout, onFinish }) {
       {startedAt && (
         <button className="finish-btn" onClick={handleFinish}>Finish Workout</button>
       )}
+
+      <div className="workout-history-section" style={{marginTop: '2rem'}}>
+        <h2>Workout History</h2>
+        {loadingHistory ? (
+          <div>Loading history...</div>
+        ) : history.length === 0 ? (
+          <p>No workouts logged yet.</p>
+        ) : (
+          <ul className="history-list">
+            {history.map((h, index) => (
+              <li key={h.id || index} className="history-card">
+                <h3>{new Date(h.date).toLocaleDateString()}</h3>
+                <p>Duration: {h.actualDuration} mins</p>
+                <ul>
+                  {h.exercises.map((ex, i) => (
+                    <li key={i}>{ex.name}: {ex.sets} sets</li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
