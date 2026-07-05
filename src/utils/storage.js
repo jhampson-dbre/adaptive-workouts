@@ -19,23 +19,29 @@ export async function migrateLocalData(userId) {
   const userDoc = await getDoc(userDocRef);
   
   if (!userDoc.exists()) {
-    const settings = localSettingsStr ? JSON.parse(localSettingsStr) : { warmupTime: 10, staleThreshold: 5, legDayOfWeek: 'None' };
+    let settings;
+    try { settings = localSettingsStr ? JSON.parse(localSettingsStr) : null; } catch { settings = null; }
+    settings = settings ?? { warmupTime: 10, staleThreshold: 5, legDayOfWeek: 'None' };
     await setDoc(userDocRef, settings);
     
-    const catalog = localCatalogStr ? JSON.parse(localCatalogStr) : DEFAULT_CATALOG;
+    let catalog;
+    try { catalog = localCatalogStr ? JSON.parse(localCatalogStr) : null; } catch { catalog = null; }
+    catalog = catalog ?? DEFAULT_CATALOG;
     const catalogRef = collection(db, 'users', userId, 'catalog');
     for (const item of catalog) {
        await setDoc(doc(catalogRef, item.id), item);
     }
     
     if (localHistoryStr) {
-       const history = JSON.parse(localHistoryStr);
-       const historyRef = collection(db, 'users', userId, 'history');
-       for (const workout of history) {
-          await addDoc(historyRef, workout);
-       }
+      let history;
+      try { history = JSON.parse(localHistoryStr); } catch { history = []; }
+      const historyRef = collection(db, 'users', userId, 'history');
+      for (const workout of history) {
+         await addDoc(historyRef, workout);
+      }
     }
     
+    // Only remove localStorage after all writes succeed
     localStorage.removeItem('adaptive-history');
     localStorage.removeItem('adaptive-settings');
     localStorage.removeItem('adaptive-catalog');

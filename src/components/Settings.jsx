@@ -88,7 +88,11 @@ export default function Settings({ onClose }) {
     });
     try {
       await handleSave(updated, changedItem);
-    } catch (error) {}
+    } catch (error) {
+      // Rollback the optimistic UI update
+      console.error('Failed to toggle exercise active state:', error);
+      setCatalog(catalog);
+    }
   };
 
   const handleStartEdit = (ex) => {
@@ -134,7 +138,9 @@ export default function Settings({ onClose }) {
     try {
       await handleSave(updated, changedItem);
       setEditingId(null);
-    } catch (error) {}
+    } catch (error) {
+      console.error('Failed to save exercise edit:', error);
+    }
   };
 
   const handleAdd = async (e) => {
@@ -175,7 +181,9 @@ export default function Settings({ onClose }) {
       setNewTier(3);
       setNewSets(3);
       setNewLink('');
-    } catch (error) {}
+    } catch (error) {
+      console.error('Failed to add new exercise:', error);
+    }
   };
 
   if (loading) return (

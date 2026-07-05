@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, createContext } from 'react'
+import { useState, useEffect, createContext } from 'react'
 import './App.css'
 import Generator from './components/Generator'
 import WorkoutView from './components/WorkoutView'
@@ -20,7 +20,11 @@ function App() {
   useEffect(() => {
     const unsubscribe = subscribeToAuthChanges(async (currentUser) => {
       if (currentUser) {
-        await migrateLocalData(currentUser.uid);
+        try {
+          await migrateLocalData(currentUser.uid);
+        } catch (e) {
+          console.error('Migration failed, continuing with Firestore:', e);
+        }
         setUser(currentUser);
       } else {
         setUser(null);

@@ -1,12 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { generateWorkout } from '../utils/engine';
-import * as storage from '../utils/storage';
-
-vi.mock('../utils/storage', () => ({
-    getHistory: vi.fn(),
-    getSettings: vi.fn(),
-    getCatalog: vi.fn()
-}));
 
 const mockCatalog = [
     { id: 'biceps_curl', name: 'Bicep Curls', muscleGroup: 'Biceps', tier: 1, sets: 3 },
