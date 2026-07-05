@@ -20,7 +20,7 @@ describe('Generator Component', () => {
             { id: 'leg1', name: 'Squat', muscleGroup: 'Legs', tier: 3, sets: 3, isActive: true }
         ]);
         
-        engine.generateWorkout.mockResolvedValue([]);
+        engine.generateWorkout.mockReturnValue([]);
     });
 
     const renderWithAuth = (ui) => {
@@ -49,7 +49,7 @@ describe('Generator Component', () => {
         fireEvent.click(btn);
         
         await waitFor(() => {
-            expect(engine.generateWorkout).toHaveBeenCalledWith(30, [], false);
+            expect(engine.generateWorkout).toHaveBeenCalledWith(30, [], false, expect.any(Array), expect.any(Array), expect.any(Object));
             expect(onGenerate).toHaveBeenCalled();
             expect(window.confirm).not.toHaveBeenCalled();
         });
@@ -74,7 +74,7 @@ describe('Generator Component', () => {
         
         await waitFor(() => {
             expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('overdue'));
-            expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], true); // doLegDay=true
+            expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], true, expect.any(Array), expect.any(Array), expect.any(Object)); // doLegDay=true
         });
     });
 
@@ -101,7 +101,7 @@ describe('Generator Component', () => {
         
         await waitFor(() => {
             expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('early'));
-            expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], true); // doEarly=true
+            expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], true, expect.any(Array), expect.any(Array), expect.any(Object)); // doEarly=true
         });
     });
 });

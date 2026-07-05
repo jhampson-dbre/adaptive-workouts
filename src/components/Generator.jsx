@@ -14,6 +14,7 @@ export default function Generator({
 }) {
   const user = useContext(AuthContext);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleToggleGroup = (group) => {
     setUnrecoveredGroups((prev) => 
@@ -29,6 +30,7 @@ export default function Generator({
     if (timeBudget <= 0) return;
 
     setIsGenerating(true);
+    setError(null);
     try {
       const [settings, history, catalog] = await Promise.all([
         getSettings(user.uid),
@@ -52,23 +54,24 @@ export default function Generator({
             const overdueDays = Math.floor(daysSince - 7);
             const totalDays = Math.floor(daysSince);
             const doLegDay = window.confirm(`Leg Day is ${overdueDays} day${overdueDays === 1 ? '' : 's'} overdue! (${totalDays} days since last Leg workout).\n\nClick OK to do Leg Day today, or Cancel to skip to normal workout.`);
-            const generated = await generateWorkout(timeBudget, unrecoveredGroups, doLegDay); // doLegDay=true means forceLegDay=true
+            const generated = generateWorkout(timeBudget, unrecoveredGroups, doLegDay, catalog, history, settings); // doLegDay=true means forceLegDay=true
             if (onGenerate) onGenerate(generated);
             return;
         }
         
         if (isEarly) {
             const doEarly = window.confirm(`Tomorrow is Leg Day. Want to do it a day early?`);
-            const generated = await generateWorkout(timeBudget, unrecoveredGroups, doEarly);
+            const generated = generateWorkout(timeBudget, unrecoveredGroups, doEarly, catalog, history, settings);
             if (onGenerate) onGenerate(generated);
             return;
         }
       }
 
-      const generated = await generateWorkout(timeBudget, unrecoveredGroups, false);
+      const generated = generateWorkout(timeBudget, unrecoveredGroups, false, catalog, history, settings);
       if (onGenerate) onGenerate(generated);
     } catch (err) {
       console.error("Error generating workout:", err);
+      setError("Failed to generate workout. Please try again.");
     } finally {
       setIsGenerating(false);
     }
@@ -78,6 +81,8 @@ export default function Generator({
     <div className="generator">
       <h2>Generate Workout</h2>
       
+      {error && <div className="error-message">{error}</div>}
+
       <div className="slider-container">
         <label htmlFor="time-slider">
           Time Budget (minutes)
