@@ -9,6 +9,8 @@ export default function WorkoutView({ workout, onFinish }) {
   const [completedExercises, setCompletedExercises] = useState(new Set());
   const [history, setHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [error, setError] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     let interval;
@@ -23,12 +25,14 @@ export default function WorkoutView({ workout, onFinish }) {
   useEffect(() => {
     let isMounted = true;
     if (!user || !user.uid) {
+      setHistory([]);
       setLoadingHistory(false);
       return;
     }
     const fetchHistory = async () => {
       try {
         setLoadingHistory(true);
+        setError(null);
         const data = await getHistory(user.uid);
         if (isMounted) {
           setHistory(data);
@@ -37,6 +41,7 @@ export default function WorkoutView({ workout, onFinish }) {
       } catch (error) {
         console.error("Failed to fetch history:", error);
         if (isMounted) {
+          setError("Failed to load workout history.");
           setLoadingHistory(false);
         }
       }
@@ -63,6 +68,7 @@ export default function WorkoutView({ workout, onFinish }) {
     const end = Date.now();
     const diff = Math.max(1, Math.round((end - startedAt) / 60000)); // duration in minutes
     
+    setIsSaving(true);
     if (user && user.uid) {
       try {
         await saveWorkout(user.uid, {
@@ -74,6 +80,7 @@ export default function WorkoutView({ workout, onFinish }) {
         console.error("Failed to save workout:", error);
       }
     }
+    setIsSaving(false);
     
     if (onFinish) {
       onFinish();
@@ -115,13 +122,17 @@ export default function WorkoutView({ workout, onFinish }) {
         ))}
       </ul>
       {startedAt && (
-        <button className="finish-btn" onClick={handleFinish}>Finish Workout</button>
+        <button className="finish-btn" onClick={handleFinish} disabled={isSaving}>
+          {isSaving ? "Saving..." : "Finish Workout"}
+        </button>
       )}
 
       <div className="workout-history-section" style={{marginTop: '2rem'}}>
         <h2>Workout History</h2>
         {loadingHistory ? (
           <div>Loading history...</div>
+        ) : error ? (
+          <div className="error-message">{error}</div>
         ) : history.length === 0 ? (
           <p>No workouts logged yet.</p>
         ) : (

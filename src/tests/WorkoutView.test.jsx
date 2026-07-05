@@ -29,6 +29,7 @@ test('renders start workout button initially', async () => {
   await waitFor(() => {
     expect(storage.getHistory).toHaveBeenCalledWith('test-user-id');
   });
+  await waitFor(() => expect(screen.queryByText('Loading history...')).toBeNull());
 });
 
 test('starts workout and displays checklist', async () => {
@@ -40,6 +41,7 @@ test('starts workout and displays checklist', async () => {
   expect(screen.getByText('Active Workout')).toBeDefined();
   expect(screen.getByText('Push Up')).toBeDefined();
   expect(screen.getByText('Finish Workout')).toBeDefined();
+  await waitFor(() => expect(screen.queryByText('Loading history...')).toBeNull());
 });
 
 test('completes workout and calls saveWorkout', async () => {
@@ -54,4 +56,5 @@ test('completes workout and calls saveWorkout', async () => {
     expect(storage.saveWorkout).toHaveBeenCalled();
   });
   expect(onFinish).toHaveBeenCalled();
+  await waitFor(() => expect(screen.queryByText('Loading history...')).toBeNull());
 });
