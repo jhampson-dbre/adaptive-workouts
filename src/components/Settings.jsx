@@ -33,35 +33,51 @@ export default function Settings({ onClose }) {
 
   useEffect(() => {
     const loadData = async () => {
-      if (!user) return;
-      const fetchedCatalog = await getCatalog(user.uid);
-      setCatalog(fetchedCatalog);
-      
-      const currentSettings = await getSettings(user.uid);
-      setSettings(currentSettings);
-      setLegDayOfWeek(currentSettings.legDayOfWeek || 'None');
-      setWarmupTime(currentSettings.warmupTime || 10);
-      setStaleThreshold(currentSettings.staleThreshold || 5);
-      
-      setLoading(false);
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const fetchedCatalog = await getCatalog(user.uid);
+        setCatalog(fetchedCatalog);
+        
+        const currentSettings = await getSettings(user.uid);
+        setSettings(currentSettings);
+        setLegDayOfWeek(currentSettings.legDayOfWeek || 'None');
+        setWarmupTime(currentSettings.warmupTime || 10);
+        setStaleThreshold(currentSettings.staleThreshold || 5);
+      } catch (error) {
+        console.error("Failed to load data:", error);
+      } finally {
+        setLoading(false);
+      }
     };
     loadData();
   }, [user]);
 
   const handleSaveSettings = async (updates) => {
     const newSettings = { ...settings, ...updates };
-    setSettings(newSettings);
-    await saveSettings(user.uid, newSettings);
-  };
-
-  const handleSave = async (newCatalog, changedItem = null) => {
-    setCatalog(newCatalog);
-    if (changedItem) {
-      await saveCatalogItem(user.uid, changedItem);
+    try {
+      await saveSettings(user.uid, newSettings);
+      setSettings(newSettings);
+    } catch (error) {
+      console.error("Failed to save settings:", error);
     }
   };
 
-  const handleToggleActive = (id) => {
+  const handleSave = async (newCatalog, changedItem = null) => {
+    try {
+      if (changedItem) {
+        await saveCatalogItem(user.uid, changedItem);
+      }
+      setCatalog(newCatalog);
+    } catch (error) {
+      console.error("Failed to save catalog item:", error);
+      throw error;
+    }
+  };
+
+  const handleToggleActive = async (id) => {
     let changedItem = null;
     const updated = catalog.map(ex => {
       if (ex.id === id) {
@@ -70,7 +86,9 @@ export default function Settings({ onClose }) {
       }
       return ex;
     });
-    handleSave(updated, changedItem);
+    try {
+      await handleSave(updated, changedItem);
+    } catch (error) {}
   };
 
   const handleStartEdit = (ex) => {
@@ -82,7 +100,7 @@ export default function Settings({ onClose }) {
     setEditLink(ex.linkedTo || '');
   };
 
-  const handleSaveEdit = (id) => {
+  const handleSaveEdit = async (id) => {
     if (!editName.trim()) {
       alert("Exercise name cannot be empty.");
       return;
@@ -113,11 +131,13 @@ export default function Settings({ onClose }) {
       }
       return ex;
     });
-    handleSave(updated, changedItem);
-    setEditingId(null);
+    try {
+      await handleSave(updated, changedItem);
+      setEditingId(null);
+    } catch (error) {}
   };
 
-  const handleAdd = (e) => {
+  const handleAdd = async (e) => {
     e.preventDefault();
     if (!newName.trim()) return;
 
@@ -148,12 +168,14 @@ export default function Settings({ onClose }) {
       linkedTo: newLink || null
     };
     
-    handleSave([...catalog, newEx], newEx);
-    setNewName('');
-    setNewGroup('Chest');
-    setNewTier(3);
-    setNewSets(3);
-    setNewLink('');
+    try {
+      await handleSave([...catalog, newEx], newEx);
+      setNewName('');
+      setNewGroup('Chest');
+      setNewTier(3);
+      setNewSets(3);
+      setNewLink('');
+    } catch (error) {}
   };
 
   if (loading) return (
