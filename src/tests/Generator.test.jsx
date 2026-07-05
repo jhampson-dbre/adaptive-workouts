@@ -1,6 +1,7 @@
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Generator from '../components/Generator';
+import { AuthContext } from '../App';
 import * as storage from '../utils/storage';
 import * as engine from '../utils/engine';
 
@@ -13,22 +14,30 @@ describe('Generator Component', () => {
         vi.clearAllMocks();
         window.confirm = vi.fn();
         
-        storage.getSettings.mockReturnValue({ legDayOfWeek: 'Friday' });
-        storage.getHistory.mockReturnValue([]);
-        storage.getCatalog.mockReturnValue([
+        storage.getSettings.mockResolvedValue({ legDayOfWeek: 'Friday' });
+        storage.getHistory.mockResolvedValue([]);
+        storage.getCatalog.mockResolvedValue([
             { id: 'leg1', name: 'Squat', muscleGroup: 'Legs', tier: 3, sets: 3, isActive: true }
         ]);
         
-        engine.generateWorkout.mockReturnValue([]);
+        engine.generateWorkout.mockResolvedValue([]);
     });
 
-    it('renders and calls onGenerate with normal generation', () => {
-        storage.getCatalog.mockReturnValue([]); // No primary legs
+    const renderWithAuth = (ui) => {
+        return render(
+            <AuthContext.Provider value={{ uid: 'test-user' }}>
+                {ui}
+            </AuthContext.Provider>
+        );
+    };
+
+    it('renders and calls onGenerate with normal generation', async () => {
+        storage.getCatalog.mockResolvedValue([]); // No primary legs
         const onGenerate = vi.fn();
         const setTimeBudget = vi.fn();
         const setUnrecoveredGroups = vi.fn();
         
-        render(<Generator 
+        renderWithAuth(<Generator 
             timeBudget={30} 
             setTimeBudget={setTimeBudget} 
             unrecoveredGroups={[]} 
@@ -39,19 +48,21 @@ describe('Generator Component', () => {
         const btn = screen.getByText('Generate Plan');
         fireEvent.click(btn);
         
-        expect(engine.generateWorkout).toHaveBeenCalledWith(30, [], false);
-        expect(onGenerate).toHaveBeenCalled();
-        expect(window.confirm).not.toHaveBeenCalled();
+        await waitFor(() => {
+            expect(engine.generateWorkout).toHaveBeenCalledWith(30, [], false);
+            expect(onGenerate).toHaveBeenCalled();
+            expect(window.confirm).not.toHaveBeenCalled();
+        });
     });
 
-    it('prompts if leg day is overdue', () => {
+    it('prompts if leg day is overdue', async () => {
         engine.getDaysSinceLastLegDay.mockReturnValue(8);
         engine.getDayOfWeek.mockReturnValue('Monday'); // Not Friday
         window.confirm.mockReturnValue(true);
 
         const onGenerate = vi.fn();
         
-        render(<Generator 
+        renderWithAuth(<Generator 
             timeBudget={45} 
             setTimeBudget={vi.fn()} 
             unrecoveredGroups={[]} 
@@ -61,11 +72,13 @@ describe('Generator Component', () => {
 
         fireEvent.click(screen.getByText('Generate Plan'));
         
-        expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('overdue'));
-        expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], true); // doLegDay=true
+        await waitFor(() => {
+            expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('overdue'));
+            expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], true); // doLegDay=true
+        });
     });
 
-    it('prompts if leg day is tomorrow', () => {
+    it('prompts if leg day is tomorrow', async () => {
         engine.getDaysSinceLastLegDay.mockReturnValue(5);
         // Today is Thursday, tomorrow is Friday
         engine.getDayOfWeek.mockImplementation((date) => {
@@ -76,7 +89,7 @@ describe('Generator Component', () => {
 
         const onGenerate = vi.fn();
         
-        render(<Generator 
+        renderWithAuth(<Generator 
             timeBudget={45} 
             setTimeBudget={vi.fn()} 
             unrecoveredGroups={[]} 
@@ -86,7 +99,9 @@ describe('Generator Component', () => {
 
         fireEvent.click(screen.getByText('Generate Plan'));
         
-        expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('early'));
-        expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], true); // doEarly=true
+        await waitFor(() => {
+            expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('early'));
+            expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], true); // doEarly=true
+        });
     });
 });
