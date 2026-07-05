@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useContext } from 'react';
+import { AuthContext } from '../App';
 import { generateWorkout, getDaysSinceLastLegDay, getDayOfWeek } from '../utils/engine';
 import { getSettings, getHistory, getCatalog } from '../utils/storage';
 
@@ -11,6 +12,10 @@ export default function Generator({
   setUnrecoveredGroups, 
   onGenerate 
 }) {
+  const user = useContext(AuthContext);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState(null);
+
   const handleToggleGroup = (group) => {
     setUnrecoveredGroups((prev) => 
       prev.includes(group)
@@ -19,50 +24,65 @@ export default function Generator({
     );
   };
 
-  const handleGenerate = () => {
+  if (!user) return null;
+
+  const handleGenerate = async () => {
     if (timeBudget <= 0) return;
 
-    const settings = getSettings();
-    const history = getHistory();
-    const catalog = getCatalog();
-    
-    // Check if we have primary leg exercises
-    const hasPrimaryLegs = catalog.some(ex => ex.muscleGroup === 'Legs' && ex.tier === 3);
-    
-    if (hasPrimaryLegs && settings.legDayOfWeek && settings.legDayOfWeek !== 'None' && !unrecoveredGroups.includes('Legs')) {
-      const daysSince = getDaysSinceLastLegDay(history);
-      const today = new Date();
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+    setIsGenerating(true);
+    setError(null);
+    try {
+      const [settings, history, catalog] = await Promise.all([
+        getSettings(user.uid),
+        getHistory(user.uid),
+        getCatalog(user.uid)
+      ]);
       
-      const isOverdue = daysSince !== Infinity && daysSince > 7 && getDayOfWeek(today) !== settings.legDayOfWeek;
-      const isEarly = getDayOfWeek(tomorrow) === settings.legDayOfWeek && daysSince >= 4;
+      // Check if we have primary leg exercises
+      const hasPrimaryLegs = catalog.some(ex => ex.muscleGroup === 'Legs' && ex.tier === 3);
+      
+      if (hasPrimaryLegs && settings.legDayOfWeek && settings.legDayOfWeek !== 'None' && !unrecoveredGroups.includes('Legs')) {
+        const daysSince = getDaysSinceLastLegDay(history);
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        const isOverdue = daysSince !== Infinity && daysSince > 7 && getDayOfWeek(today) !== settings.legDayOfWeek;
+        const isEarly = getDayOfWeek(tomorrow) === settings.legDayOfWeek && daysSince >= 4;
 
-      if (isOverdue) {
-          const overdueDays = Math.floor(daysSince - 7);
-          const totalDays = Math.floor(daysSince);
-          const doLegDay = window.confirm(`Leg Day is ${overdueDays} day${overdueDays === 1 ? '' : 's'} overdue! (${totalDays} days since last Leg workout).\n\nClick OK to do Leg Day today, or Cancel to skip to normal workout.`);
-          const generated = generateWorkout(timeBudget, unrecoveredGroups, doLegDay); // doLegDay=true means forceLegDay=true
-          if (onGenerate) onGenerate(generated);
-          return;
+        if (isOverdue) {
+            const overdueDays = Math.floor(daysSince - 7);
+            const totalDays = Math.floor(daysSince);
+            const doLegDay = window.confirm(`Leg Day is ${overdueDays} day${overdueDays === 1 ? '' : 's'} overdue! (${totalDays} days since last Leg workout).\n\nClick OK to do Leg Day today, or Cancel to skip to normal workout.`);
+            const generated = generateWorkout(timeBudget, unrecoveredGroups, doLegDay, catalog, history, settings); // doLegDay=true means forceLegDay=true
+            if (onGenerate) onGenerate(generated);
+            return;
+        }
+        
+        if (isEarly) {
+            const doEarly = window.confirm(`Tomorrow is Leg Day. Want to do it a day early?`);
+            const generated = generateWorkout(timeBudget, unrecoveredGroups, doEarly, catalog, history, settings);
+            if (onGenerate) onGenerate(generated);
+            return;
+        }
       }
-      
-      if (isEarly) {
-          const doEarly = window.confirm(`Tomorrow is Leg Day. Want to do it a day early?`);
-          const generated = generateWorkout(timeBudget, unrecoveredGroups, doEarly);
-          if (onGenerate) onGenerate(generated);
-          return;
-      }
+
+      const generated = generateWorkout(timeBudget, unrecoveredGroups, false, catalog, history, settings);
+      if (onGenerate) onGenerate(generated);
+    } catch (err) {
+      console.error("Error generating workout:", err);
+      setError("Failed to generate workout. Please try again.");
+    } finally {
+      setIsGenerating(false);
     }
-
-    const generated = generateWorkout(timeBudget, unrecoveredGroups, false);
-    if (onGenerate) onGenerate(generated);
   };
 
   return (
     <div className="generator">
       <h2>Generate Workout</h2>
       
+      {error && <div className="error-message">{error}</div>}
+
       <div className="slider-container">
         <label htmlFor="time-slider">
           Time Budget (minutes)
@@ -96,8 +116,8 @@ export default function Generator({
         </div>
       </div>
 
-      <button className="generate-btn" onClick={handleGenerate}>
-        Generate Plan
+      <button className="generate-btn" onClick={handleGenerate} disabled={isGenerating}>
+        {isGenerating ? 'Generating...' : 'Generate Plan'}
       </button>
     </div>
   );

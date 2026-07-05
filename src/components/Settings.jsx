@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { getCatalog, saveCatalog, getSettings, saveSettings } from '../utils/storage';
+import React, { useState, useEffect, useContext } from 'react';
+import { AuthContext } from '../App';
+import { getCatalog, saveCatalogItem, getSettings, saveSettings } from '../utils/storage';
 
 const getTier1Groups = (currentCatalog, ignoreId = null) => {
   const t1Exercises = currentCatalog.filter(ex => ex.tier === 1 && ex.id !== ignoreId);
@@ -7,6 +8,8 @@ const getTier1Groups = (currentCatalog, ignoreId = null) => {
 };
 
 export default function Settings({ onClose }) {
+  const user = useContext(AuthContext);
+  const [loading, setLoading] = useState(true);
   const [catalog, setCatalog] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [settings, setSettings] = useState({});
@@ -29,33 +32,67 @@ export default function Settings({ onClose }) {
   const [editLink, setEditLink] = useState('');
 
   useEffect(() => {
-    setCatalog(getCatalog());
-    const currentSettings = getSettings();
-    setSettings(currentSettings);
-    setLegDayOfWeek(currentSettings.legDayOfWeek || 'None');
-    setWarmupTime(currentSettings.warmupTime || 10);
-    setStaleThreshold(currentSettings.staleThreshold || 5);
-  }, []);
+    const loadData = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const fetchedCatalog = await getCatalog(user.uid);
+        setCatalog(fetchedCatalog);
+        
+        const currentSettings = await getSettings(user.uid);
+        setSettings(currentSettings);
+        setLegDayOfWeek(currentSettings.legDayOfWeek || 'None');
+        setWarmupTime(currentSettings.warmupTime || 10);
+        setStaleThreshold(currentSettings.staleThreshold || 5);
+      } catch (error) {
+        console.error("Failed to load data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [user]);
 
-  const handleSaveSettings = (updates) => {
+  const handleSaveSettings = async (updates) => {
     const newSettings = { ...settings, ...updates };
-    setSettings(newSettings);
-    saveSettings(newSettings);
+    try {
+      await saveSettings(user.uid, newSettings);
+      setSettings(newSettings);
+    } catch (error) {
+      console.error("Failed to save settings:", error);
+    }
   };
 
-  const handleSave = (newCatalog) => {
-    setCatalog(newCatalog);
-    saveCatalog(newCatalog);
+  const handleSave = async (newCatalog, changedItem = null) => {
+    try {
+      if (changedItem) {
+        await saveCatalogItem(user.uid, changedItem);
+      }
+      setCatalog(newCatalog);
+    } catch (error) {
+      console.error("Failed to save catalog item:", error);
+      throw error;
+    }
   };
 
-  const handleToggleActive = (id) => {
+  const handleToggleActive = async (id) => {
+    let changedItem = null;
     const updated = catalog.map(ex => {
       if (ex.id === id) {
-        return { ...ex, isActive: ex.isActive === false ? true : false };
+        changedItem = { ...ex, isActive: ex.isActive === false ? true : false };
+        return changedItem;
       }
       return ex;
     });
-    handleSave(updated);
+    try {
+      await handleSave(updated, changedItem);
+    } catch (error) {
+      // Rollback the optimistic UI update
+      console.error('Failed to toggle exercise active state:', error);
+      setCatalog(catalog);
+    }
   };
 
   const handleStartEdit = (ex) => {
@@ -67,7 +104,7 @@ export default function Settings({ onClose }) {
     setEditLink(ex.linkedTo || '');
   };
 
-  const handleSaveEdit = (id) => {
+  const handleSaveEdit = async (id) => {
     if (!editName.trim()) {
       alert("Exercise name cannot be empty.");
       return;
@@ -83,9 +120,10 @@ export default function Settings({ onClose }) {
       return;
     }
 
+    let changedItem = null;
     const updated = catalog.map(ex => {
       if (ex.id === id) {
-        return {
+        changedItem = {
           ...ex,
           name: editName,
           muscleGroup: editGroup,
@@ -93,14 +131,19 @@ export default function Settings({ onClose }) {
           sets: Number(editSets),
           linkedTo: (editGroup === 'Legs' && String(editTier) === '3') ? null : (editLink || null)
         };
+        return changedItem;
       }
       return ex;
     });
-    handleSave(updated);
-    setEditingId(null);
+    try {
+      await handleSave(updated, changedItem);
+      setEditingId(null);
+    } catch (error) {
+      console.error('Failed to save exercise edit:', error);
+    }
   };
 
-  const handleAdd = (e) => {
+  const handleAdd = async (e) => {
     e.preventDefault();
     if (!newName.trim()) return;
 
@@ -131,13 +174,27 @@ export default function Settings({ onClose }) {
       linkedTo: newLink || null
     };
     
-    handleSave([...catalog, newEx]);
-    setNewName('');
-    setNewGroup('Chest');
-    setNewTier(3);
-    setNewSets(3);
-    setNewLink('');
+    try {
+      await handleSave([...catalog, newEx], newEx);
+      setNewName('');
+      setNewGroup('Chest');
+      setNewTier(3);
+      setNewSets(3);
+      setNewLink('');
+    } catch (error) {
+      console.error('Failed to add new exercise:', error);
+    }
   };
+
+  if (loading) return (
+    <div className="settings-view">
+      <div className="settings-header">
+        <h2>Catalog Management</h2>
+        <button className="close-btn" onClick={onClose}>Close</button>
+      </div>
+      <div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>
+    </div>
+  );
 
   return (
     <div className="settings-view">

@@ -1,5 +1,3 @@
-import { getHistory, getSettings, getCatalog } from './storage';
-
 /**
  * Calculate difference in calendar days between two dates.
  */
@@ -44,10 +42,7 @@ export function checkIsLegDay(date, unrecoveredGroups, history, settings) {
     return false;
 }
 
-export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay = false) {
-    const history = getHistory();
-    const settings = getSettings();
-    const catalog = getCatalog();
+export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay = false, catalog, history, settings) {
     const staleThreshold = settings.staleThreshold || 5;
     
     const today = new Date();
