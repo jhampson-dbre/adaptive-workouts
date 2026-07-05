@@ -55,25 +55,40 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
 
     const catalogMap = new Map(catalog.map(c => [c.id, c]));
 
-    // Find last pivot
-    let lastPivot = null;
-    for (let i = history.length - 1; i >= 0; i--) {
-        const session = history[i];
-        if (!session.exercises) continue;
-        const pivotEx = session.exercises.find(
-            e => {
+    // ── Dynamic Pivot Engine ──────────────────────────────────────────────────
+    // Step 1: Discover all Tier 1 muscle groups from the catalog (sorted for
+    //         stable N-way rotation).
+    const tier1Groups = [
+        ...new Set(
+            catalog
+                .filter(ex => ex.tier === 1 && ex.isActive !== false)
+                .map(ex => ex.muscleGroup)
+        )
+    ].sort();
+
+    // Step 2: Determine today's pivot group.
+    //         Scan history (newest first) for the most recent session that
+    //         contained a Tier 1 exercise, then advance one position in the list.
+    let todayPivot = tier1Groups[0] ?? null; // default: first alphabetical group
+    if (tier1Groups.length > 0) {
+        let lastPivotGroup = null;
+        for (let i = history.length - 1; i >= 0; i--) {
+            const session = history[i];
+            if (!session.exercises) continue;
+            const pivotEx = session.exercises.find(e => {
                 const catEx = catalogMap.get(e.id);
-                return catEx && (catEx.muscleGroup === 'Biceps' || catEx.muscleGroup === 'Shoulders');
+                return catEx && catEx.tier === 1 && tier1Groups.includes(catEx.muscleGroup);
+            });
+            if (pivotEx) {
+                lastPivotGroup = catalogMap.get(pivotEx.id).muscleGroup;
+                break;
             }
-        );
-        if (pivotEx) {
-            const catEx = catalogMap.get(pivotEx.id);
-            lastPivot = catEx.muscleGroup;
-            break;
+        }
+        if (lastPivotGroup !== null) {
+            const idx = tier1Groups.indexOf(lastPivotGroup);
+            todayPivot = tier1Groups[(idx + 1) % tier1Groups.length];
         }
     }
-    
-    const todayPivot = lastPivot === 'Biceps' ? 'Shoulders' : 'Biceps';
 
     // Find last completion date for each exercise
     const lastDates = {};
@@ -81,6 +96,23 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
         if (!session.exercises) continue;
         for (const ex of session.exercises) {
             lastDates[ex.id] = new Date(session.date);
+        }
+    }
+
+    // Step 3: Internal rotation — pick the single least-recently-done Tier 1
+    //         exercise for todayPivot. All others in that group are skipped.
+    let chosenPivotExId = null;
+    if (todayPivot !== null) {
+        const pivotCandidates = catalog.filter(
+            ex => ex.tier === 1 && ex.muscleGroup === todayPivot && ex.isActive !== false
+        );
+        if (pivotCandidates.length > 0) {
+            pivotCandidates.sort((a, b) => {
+                const dateA = lastDates[a.id] ? lastDates[a.id].getTime() : -Infinity;
+                const dateB = lastDates[b.id] ? lastDates[b.id].getTime() : -Infinity;
+                return dateA - dateB; // oldest (or never done) first
+            });
+            chosenPivotExId = pivotCandidates[0].id;
         }
     }
     
@@ -95,15 +127,20 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
             continue;
         }
 
-        const isPivotGroup = ex.muscleGroup === 'Biceps' || ex.muscleGroup === 'Shoulders';
-        if (isPivotGroup && ex.muscleGroup !== todayPivot) {
-            continue; // Skip the non-pivot for today
+        // Skip exercises from a non-today Tier 1 pivot group
+        if (tier1Groups.includes(ex.muscleGroup) && ex.tier === 1 && ex.muscleGroup !== todayPivot) {
+            continue;
+        }
+
+        // Internal rotation: skip Tier 1 pivot exercises that are not the chosen one
+        if (ex.tier === 1 && ex.muscleGroup === todayPivot && ex.id !== chosenPivotExId) {
+            continue;
         }
 
         let dynamicTier = ex.tier;
         
-        if (isPivotGroup && ex.muscleGroup === todayPivot) {
-            dynamicTier = 1;
+        if (ex.tier === 1 && ex.muscleGroup === todayPivot && ex.id === chosenPivotExId) {
+            dynamicTier = 1; // keep at Tier 1 priority
         } else {
             const lastDate = lastDates[ex.id];
             if (lastDate) {

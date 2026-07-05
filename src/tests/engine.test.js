@@ -15,6 +15,28 @@ const mockCatalog = [
     { id: 'leg_curl', name: 'Leg Curl', muscleGroup: 'Legs', tier: 4, sets: 3 }
 ];
 
+// Catalog with multiple Tier 1 exercises in the same pivot muscle group,
+// used to regression-test internal rotation (only one should be selected per day).
+const multiTier1BicepsCatalog = [
+    { id: 'biceps_curl', name: 'Bicep Curls', muscleGroup: 'Biceps', tier: 1, sets: 3 },
+    { id: 'preacher_curl', name: 'Preacher Curls', muscleGroup: 'Biceps', tier: 1, sets: 3 },
+    { id: 'incline_curl', name: 'Incline Curls', muscleGroup: 'Biceps', tier: 1, sets: 3 },
+    { id: 'shoulder_press', name: 'Shoulder Press', muscleGroup: 'Shoulders', tier: 1, sets: 3 },
+    { id: 'chest_row', name: 'Chest-Supported Rows', muscleGroup: 'Back', tier: 3, sets: 4 },
+    { id: 'tri_ext', name: 'Tricep Extensions', muscleGroup: 'Triceps', tier: 3, sets: 3 },
+    { id: 'plank', name: 'Plank', muscleGroup: 'Core', tier: 4, sets: 2 },
+];
+
+// Catalog with a third Tier 1 muscle group (Chest) to test N-way dynamic rotation.
+const threeGroupTier1Catalog = [
+    { id: 'biceps_curl', name: 'Bicep Curls', muscleGroup: 'Biceps', tier: 1, sets: 3 },
+    { id: 'shoulder_press', name: 'Shoulder Press', muscleGroup: 'Shoulders', tier: 1, sets: 3 },
+    { id: 'chest_fly', name: 'Cable Chest Fly', muscleGroup: 'Chest', tier: 1, sets: 3 },
+    { id: 'chest_row', name: 'Chest-Supported Rows', muscleGroup: 'Back', tier: 3, sets: 4 },
+    { id: 'tri_ext', name: 'Tricep Extensions', muscleGroup: 'Triceps', tier: 3, sets: 3 },
+    { id: 'plank', name: 'Plank', muscleGroup: 'Core', tier: 4, sets: 2 },
+];
+
 describe('Generator Engine', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -127,6 +149,112 @@ describe('Generator Engine', () => {
         
         expect(enoughBudgetWorkout.some(ex => ex.id === 'leg_extension')).toBe(true);
         expect(enoughBudgetWorkout.some(ex => ex.id === 'leg_curl')).toBe(true);
+    });
+
+    // ── Regression: Dynamic Pivot Internal Rotation ──────────────────────────
+    describe('Dynamic Pivot – internal rotation (one Tier 1 exercise per day)', () => {
+        it('selects only ONE Tier 1 exercise for the pivot group when multiple exist (no prior history)', () => {
+            // Regression for: engine included ALL Tier 1 Biceps exercises (e.g. Preacher Curls
+            // AND Incline Curls) instead of the single least-recently-done one.
+            const settings = { staleThreshold: 5 };
+            const history = [];
+
+            const workout = generateWorkout(60, [], false, multiTier1BicepsCatalog, history, settings);
+
+            const bicepExercises = workout.filter(ex => ex.muscleGroup === 'Biceps');
+            expect(bicepExercises.length).toBe(1);
+        });
+
+        it('selects only ONE Tier 1 exercise for the pivot group when multiple exist (with history)', () => {
+            // After one Biceps session, the next pivot should be Shoulders, and still
+            // only one Biceps exercise should have been chosen (whichever was least-recently-done).
+            const settings = { staleThreshold: 5 };
+            // Last session used preacher_curl, so internal rotation should now pick biceps_curl or incline_curl (never done).
+            const history = [
+                {
+                    date: '2026-06-29T10:00:00Z',
+                    exercises: [{ id: 'preacher_curl' }]
+                }
+            ];
+
+            // Today pivot should be Shoulders (last was Biceps)
+            const workout = generateWorkout(60, [], false, multiTier1BicepsCatalog, history, settings);
+
+            const shoulderExercises = workout.filter(ex => ex.muscleGroup === 'Shoulders');
+            const bicepExercises = workout.filter(ex => ex.muscleGroup === 'Biceps');
+            expect(shoulderExercises.length).toBe(1);
+            expect(bicepExercises.length).toBe(0); // Biceps is not today's pivot
+        });
+
+        it('picks the least-recently-done Tier 1 exercise for internal rotation', () => {
+            // preacher_curl was done most recently; incline_curl and biceps_curl have never been done.
+            // The engine should pick one of the never-done exercises (oldest = never done first alphabetically or by catalog order).
+            const settings = { staleThreshold: 5 };
+            const history = [
+                {
+                    date: '2026-06-25T10:00:00Z', // older
+                    exercises: [{ id: 'incline_curl' }]
+                },
+                {
+                    date: '2026-06-28T10:00:00Z', // more recent
+                    exercises: [{ id: 'preacher_curl' }]
+                }
+            ];
+            // Last pivot was Biceps (preacher_curl session most recently had a Biceps exercise),
+            // so today pivot = Shoulders. Force Biceps pivot by making Shoulders the last pivot.
+            const historyLastShoulder = [
+                {
+                    date: '2026-06-25T10:00:00Z',
+                    exercises: [{ id: 'incline_curl' }]
+                },
+                {
+                    date: '2026-06-28T10:00:00Z',
+                    exercises: [{ id: 'preacher_curl' }]
+                },
+                {
+                    date: '2026-06-29T10:00:00Z',
+                    exercises: [{ id: 'shoulder_press' }]
+                }
+            ];
+
+            const workout = generateWorkout(60, [], false, multiTier1BicepsCatalog, historyLastShoulder, settings);
+
+            const bicepExercises = workout.filter(ex => ex.muscleGroup === 'Biceps');
+            expect(bicepExercises.length).toBe(1);
+            // biceps_curl was never done — it should be chosen over incline_curl (done 2026-06-25)
+            expect(bicepExercises[0].id).toBe('biceps_curl');
+        });
+    });
+
+    // ── Regression: Dynamic Tier 1 group detection ───────────────────────────
+    describe('Dynamic Pivot – N-way group detection from catalog', () => {
+        it('cycles through a third Tier 1 group (Chest) that is only in the catalog', () => {
+            // Regression for: engine hardcoded Biceps/Shoulders and ignored any additional
+            // Tier 1 groups defined in the catalog.
+            const settings = { staleThreshold: 5 };
+            // Tier 1 groups sorted alphabetically: ['Biceps', 'Chest', 'Shoulders'].
+            // Last session: Biceps → next pivot = Chest (index 1).
+            const history = [
+                {
+                    date: '2026-06-28T10:00:00Z',
+                    exercises: [{ id: 'shoulder_press' }]
+                },
+                {
+                    date: '2026-06-29T10:00:00Z',
+                    exercises: [{ id: 'biceps_curl' }]
+                }
+            ];
+
+            const workout = generateWorkout(60, [], false, threeGroupTier1Catalog, history, settings);
+
+            const chestTier1 = workout.filter(ex => ex.muscleGroup === 'Chest' && ex.tier === 1);
+            const bicepsTier1 = workout.filter(ex => ex.muscleGroup === 'Biceps');
+            const shouldersTier1 = workout.filter(ex => ex.muscleGroup === 'Shoulders');
+
+            expect(chestTier1.length).toBe(1);     // Chest is today's pivot
+            expect(bicepsTier1.length).toBe(0);    // Not today's pivot
+            expect(shouldersTier1.length).toBe(0); // Not today's pivot
+        });
     });
 
     describe('Leg Day Logic', () => {
