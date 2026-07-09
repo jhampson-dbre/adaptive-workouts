@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { AuthContext } from '../App';
+import { AuthContext } from '../context/AuthContext';
 import { getCatalog, saveCatalogItem, getSettings, saveSettings } from '../utils/storage';
 
 const getTier1Groups = (currentCatalog, ignoreId = null) => {
@@ -14,8 +14,6 @@ export default function Settings({ onClose }) {
   const [editingId, setEditingId] = useState(null);
   const [settings, setSettings] = useState({});
   const [legDayOfWeek, setLegDayOfWeek] = useState('None');
-  const [warmupTime, setWarmupTime] = useState(10);
-  const [staleThreshold, setStaleThreshold] = useState(5);
   
   // New exercise state
   const [newName, setNewName] = useState('');
@@ -44,8 +42,6 @@ export default function Settings({ onClose }) {
         const currentSettings = await getSettings(user.uid);
         setSettings(currentSettings);
         setLegDayOfWeek(currentSettings.legDayOfWeek || 'None');
-        setWarmupTime(currentSettings.warmupTime || 10);
-        setStaleThreshold(currentSettings.staleThreshold || 5);
       } catch (error) {
         console.error("Failed to load data:", error);
       } finally {

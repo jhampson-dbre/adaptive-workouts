@@ -7,6 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
+    "ci:test": "vitest run",
+    "ci:lint": "oxlint --deny-warnings",
+    "ci:build": "vite build",
+    "ci:rules": "node scripts/ci-rules.mjs",
+    "ci:check": "npm run ci:test && npm run ci:lint && npm run ci:build && npm run ci:rules",
     "preview": "vite preview",
     "test": "vitest",
     "emulators": "firebase emulators:start --project demo-project"
@@ -17,6 +22,7 @@
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

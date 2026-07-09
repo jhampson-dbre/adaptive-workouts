@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from 'react';
 import { saveWorkout, getHistory } from '../utils/storage';
-import { AuthContext } from '../App';
+import { AuthContext } from '../context/AuthContext';
 
 export default function WorkoutView({ workout, onFinish }) {
   const user = useContext(AuthContext);

@@ -1,13 +1,12 @@
-import { useState, useEffect, createContext } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
 import Generator from './components/Generator'
 import WorkoutView from './components/WorkoutView'
 import Settings from './components/Settings'
 import Login from './components/Login'
+import { AuthContext } from './context/AuthContext'
 import { subscribeToAuthChanges } from './utils/auth'
 import { migrateLocalData } from './utils/storage'
-
-export const AuthContext = createContext(null);
 
 function App() {
   const [workout, setWorkout] = useState(null)

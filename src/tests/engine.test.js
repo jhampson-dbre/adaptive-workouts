@@ -46,13 +46,12 @@ describe('Generator Engine', () => {
 
     it('respects time budget and excludes unrecovered groups', () => {
         const catalog = mockCatalog;
-        const history = [];
         const settings = { staleThreshold: 5 };
 
         // Unrecovered Biceps -> Biceps should be excluded.
         // Time budget: 10 mins. 
         // 1 set = 1.75 mins.
-        const workout = generateWorkout(10, ['Biceps'], false, catalog, history, settings);
+        const workout = generateWorkout(10, ['Biceps'], false, catalog, [], settings);
         const totalEstimatedTime = workout.reduce((total, ex) => total + (ex.sets * 1.75), 0);
         
         expect(totalEstimatedTime).toBeLessThanOrEqual(10);
@@ -190,16 +189,6 @@ describe('Generator Engine', () => {
             // preacher_curl was done most recently; incline_curl and biceps_curl have never been done.
             // The engine should pick one of the never-done exercises (oldest = never done first alphabetically or by catalog order).
             const settings = { staleThreshold: 5 };
-            const history = [
-                {
-                    date: '2026-06-25T10:00:00Z', // older
-                    exercises: [{ id: 'incline_curl' }]
-                },
-                {
-                    date: '2026-06-28T10:00:00Z', // more recent
-                    exercises: [{ id: 'preacher_curl' }]
-                }
-            ];
             // Last pivot was Biceps (preacher_curl session most recently had a Biceps exercise),
             // so today pivot = Shoulders. Force Biceps pivot by making Shoulders the last pivot.
             const historyLastShoulder = [

@@ -2,7 +2,7 @@ import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/re
 import WorkoutView from '../components/WorkoutView';
 import * as storage from '../utils/storage';
 import { expect, test, vi, afterEach } from 'vitest';
-import { AuthContext } from '../App';
+import { AuthContext } from '../context/AuthContext';
 
 afterEach(cleanup);
 

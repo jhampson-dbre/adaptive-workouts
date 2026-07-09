@@ -1,5 +1,5 @@
 import { useState, useContext } from 'react';
-import { AuthContext } from '../App';
+import { AuthContext } from '../context/AuthContext';
 import { generateWorkout, getDaysSinceLastLegDay, getDayOfWeek } from '../utils/engine';
 import { getSettings, getHistory, getCatalog } from '../utils/storage';
 

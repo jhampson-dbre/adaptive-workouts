@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { getHistory, saveWorkout, getSettings, getCatalog, migrateLocalData } from '../utils/storage';
 
 describe('Storage Layer (Async)', () => {

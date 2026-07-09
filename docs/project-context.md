@@ -85,14 +85,30 @@ The production build should emit:
 Useful commands:
 
 ```bash
-npm test -- --run
-npm run build
-npm run lint
+npm run ci:check
+npm run ci:test
+npm run ci:lint
+npm run ci:build
+npm run ci:rules
 ```
 
 Tests live under `src/tests/`.
 
 When changing workout logic, prioritize engine tests. When changing storage or auth behavior, check storage tests and production/emulator implications. When changing deployment or PWA behavior, verify `npm run build` output.
+
+CI runs on pull requests and pushes to `main` through `.github/workflows/ci.yml`.
+
+CI contract:
+
+- GitHub Actions uses Node 24, `actions/setup-node` npm caching, and `npm ci`.
+- `app-quality` runs `npm run ci:test`, `npm run ci:lint`, and `npm run ci:build`.
+- `ci:lint` runs `oxlint --deny-warnings`; lint warnings fail the gate.
+- `firestore-rules` runs `npm run ci:rules` as a separate job.
+- `ci:rules` starts the Firestore emulator for `demo-project` and runs `src/tests/firestore.rules.test.js`.
+- Firestore rules validation proves unauthenticated access is denied, same-user access under `users/{uid}/...` is allowed, and cross-user access is denied.
+- CI must not require production `VITE_FIREBASE_*` values, Firebase secrets, or Vercel secrets.
+
+Run `npm run ci:check` locally before opening a PR. It runs tests, warning-free lint, build, and Firestore rules validation in the same order as the local aggregate gate.
 
 ## Trekker Map
 
