@@ -103,7 +103,7 @@ CI contract:
 - GitHub Actions uses Node 24, `actions/setup-node` npm caching, and `npm ci`.
 - `app-quality` runs `npm run ci:test`, `npm run ci:lint`, and `npm run ci:build`.
 - `ci:lint` runs `oxlint --deny-warnings`; lint warnings fail the gate.
-- `firestore-rules` runs `npm run ci:rules` as a separate job.
+- `firestore-rules` sets up Java 21 for the Firebase emulator and runs `npm run ci:rules` as a separate job.
 - `ci:rules` starts the Firestore emulator for `demo-project` and runs `src/tests/firestore.rules.test.js`.
 - Firestore rules validation proves unauthenticated access is denied, same-user access under `users/{uid}/...` is allowed, and cross-user access is denied.
 - CI must not require production `VITE_FIREBASE_*` values, Firebase secrets, or Vercel secrets.
