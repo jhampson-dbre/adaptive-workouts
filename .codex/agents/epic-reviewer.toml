@@ -25,6 +25,8 @@ Review focus:
 - tests and build verification
 - hidden regressions across task boundaries
 - deployment and migration readiness
+- publish-handoff evidence: required review complete, draft PR open, and required checks visible, passing, or documented with an exact next step
+- deferred verification is unresolved unless required evidence exists or a dependent task/subtask explicitly checkpoints it
 - workflow feedback when the epic review instructions, Trekker context, PR context, or verification expectations were unclear or hard to execute
 
 Output:

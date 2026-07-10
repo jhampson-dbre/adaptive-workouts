@@ -6,6 +6,11 @@ Codex planning is the scratchpad. Trekker is the durable source of truth.
 
 Feature planning runs in the main agent session. A subagent may help draft or review, but the main agent owns the user conversation, approval gates, review integration, and Trekker writes.
 
+Architecture/design and senior-developer reviews required by this workflow are
+standingly authorized dispatches. The main coordinator should request them before
+the applicable approval gate without asking for a separate delegation decision;
+the user still controls design approval and Trekker record creation.
+
 ## Goals
 
 - Preserve the creative design loop before committing to tracking.
@@ -110,6 +115,16 @@ After design approval, convert the spec into Trekker-shaped work:
 - likely subagent roles per task
 - TDD expectations per task
 
+For each verification criterion, label it as one of:
+
+- immediate: can be run before the task is handed off
+- deferred: requires a PR, deployment, production setup, or user action
+
+For a deferred check, state its trigger, evidence, owner, and completion boundary.
+Keep it in the implementation task only when that task remains open through the
+trigger; otherwise create a dependent follow-up task or subtask. Do not describe a
+deferred check as complete before its evidence exists.
+
 Task descriptions should answer:
 
 - what changes
@@ -163,7 +178,23 @@ The main agent must validate each reviewer finding before changing the implement
 
 If the reviewer raises a design concern, return to Phase 4 for a design revision and architecture/design review before updating the implementation plan again.
 
-## Phase 7. Approval Gate
+## Phase 7. Implementation Specificity Pass
+
+Before asking for Trekker creation approval, make the implementation choices that
+would otherwise be left to the first implementor. For each task, record:
+
+- named artifacts: the expected file, script, config key, route, or other concrete output
+- chosen mechanism: the library, command pattern, lifecycle, or integration approach when it matters
+- implementation discretion: decisions deliberately left to the implementor, with boundaries
+- deferred verification: checks that require an external event, such as a PR, deployment, or production setup
+- completion boundary: whether the task may be completed locally or must remain open until its deferred check occurs
+
+Keep this pass proportional: small tasks need only short, concrete notes. Resolve
+meaningful choices before approval so the Trekker records do not make future
+implementors guess, while leaving ordinary coding details open where they do not
+affect consistency or verification.
+
+## Phase 8. Approval Gate
 
 Before writing to Trekker, show the proposed epic/task/subtask structure and ask for approval. Include relevant review notes so the user can see what changed during reviewer validation.
 
@@ -171,7 +202,7 @@ Do not create or update Trekker records until the user approves the implementati
 
 Approval gate 2: ask the user to approve Trekker record creation.
 
-## Phase 8. Create Trekker Records
+## Phase 9. Create Trekker Records
 
 After approval:
 
@@ -184,6 +215,11 @@ trekker dep add DEPENDENT-TASK-ID BLOCKING-TASK-ID
 
 Use exact command syntax supported by the local Trekker CLI. Before bulk creation, inspect `trekker --help` or an existing successful local command pattern if syntax is uncertain.
 
+Create records, dependencies, and comments sequentially so each write is durable
+before the next begins. Parallelize only independent, read-only context lookups. On
+a transient `database is locked` error, retry the failed command sequentially after
+a brief wait rather than re-running a bulk command.
+
 Add comments to the epic or first task when needed to preserve:
 
 - approved design link or summary
@@ -191,13 +227,18 @@ Add comments to the epic or first task when needed to preserve:
 - known non-goals
 - unresolved risks
 
-## Phase 9. Sync Session Plan
+## Phase 10. Sync Session Plan
+
+Before mirroring the implementation plan into execution, validate any planning-funnel
+workflow feedback. Capture durable follow-ups under `EPIC-6` now, or explicitly
+record why the feedback is deferred. Only then hand the approved, tracked plan to
+execution.
 
 Only after Trekker is accurate, mirror the immediate work in Codex `update_plan`.
 
 Trekker wins if the session plan and Trekker ever diverge.
 
-## Phase 10. Execution Handoff
+## Phase 11. Execution Handoff
 
 Execution starts from Trekker:
 
@@ -228,6 +269,8 @@ Before creating Trekker records, confirm:
 - dependencies encode ordering
 - subtasks are concrete
 - each task has verification criteria
+- implementation-specificity choices, permitted discretion, deferred checks, and completion boundaries are explicit where relevant
+- deferred checks name their trigger, evidence, owner, and whether they need a follow-up task or subtask
 - behavior tasks have TDD expectations
 - execution can resume from Trekker alone
 - reviewer or planner workflow feedback has been validated and either incorporated into the workflow, linked to a Trekker follow-up, or declined with a reason

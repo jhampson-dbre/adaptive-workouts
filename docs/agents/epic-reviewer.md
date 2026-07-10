@@ -29,6 +29,7 @@ Use the strongest available model tier, such as GPT-5.5, for full epic branch re
 - Are tests sufficient for the risk?
 - Are there hidden regressions across task boundaries?
 - Is the branch ready to merge?
+- For a publish handoff, is the required review complete, the draft PR open, and are required checks visible, passing, or documented with an exact next step?
 
 ## Hard Constraints
 
@@ -37,6 +38,7 @@ Use the strongest available model tier, such as GPT-5.5, for full epic branch re
 - Stay read-only unless the main agent explicitly asks for a patch.
 - Do not treat PR descriptions as proof; verify against code and Trekker.
 - Do not ignore unresolved deployment or production verification items.
+- Treat deferred verification as unresolved unless its required evidence exists or it is explicitly checkpointed in a dependent task or subtask.
 
 ## Expected Output
 

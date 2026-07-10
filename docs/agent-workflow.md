@@ -22,6 +22,11 @@ trekker search "keyword"
 
 Use one distinctive keyword at a time. Multi-word searches are narrower and can miss related work.
 
+Serialize Trekker writes, including creates, updates, dependency changes, and
+comments. Independent read-only lookups may run together only when safe. If Trekker
+returns a transient `database is locked` error, retry the failed command
+sequentially after a brief wait; do not batch it again with writes.
+
 ## 2. Start Exactly One Task
 
 When the work is ready to begin:
@@ -32,6 +37,13 @@ trekker task update TREK-ID -s in_progress
 ```
 
 If another task is already `in_progress`, decide whether it is the same work. If it is unrelated, tell the user before switching focus.
+
+After completing a task in an active epic, continue with the next ready,
+in-scope task in that epic when no blocker or approval gate remains. Checkpoint and
+hand back only for a user decision, external blocker, meaningful scope expansion,
+explicit pause/stop request, or authorized-work boundary. Do not select an
+unrelated ready task merely because it appears in `trekker ready`; state why work
+stopped or continued in the final handoff and after-action audit.
 
 ## 3. Inspect Before Editing
 
@@ -73,6 +85,11 @@ Documentation-only changes, copy changes, and deployment-console work may skip T
 
 The main agent owns Trekker and final decisions. Subagents are advisory or implementation helpers.
 
+This repository treats required workflow roles as standing user authorization for
+dispatch. The main agent may dispatch the required planning reviewers without a
+separate per-session delegation request, while retaining Trekker ownership and
+using subagents only where the dispatch matrix calls for them.
+
 Use role contracts in `docs/agents/`:
 
 - `main-coordinator.md` for session ownership
@@ -97,7 +114,7 @@ Use this dispatch matrix:
 - Behavior change or bug fix: use the implementor role unless the change is purely mechanical.
 - Ambiguous requirements, user-facing behavior, migration behavior, auth/storage behavior, or acceptance changes: use the spec reviewer.
 - Non-trivial code changes: use the code reviewer before task completion.
-- Branch, PR, or epic readiness: use the epic reviewer before merge or epic closure.
+- Branch, PR, or epic readiness: use the epic reviewer before publishing an implementation branch or epic handoff, merge, or epic closure.
 
 Use this handoff packet:
 
@@ -160,6 +177,19 @@ npm run lint
 
 Known current lint warnings may exist outside the touched area. Do not treat unrelated existing warnings as task blockers, but report them if relevant.
 
+### Firebase Emulator Verification In The Sandbox
+
+For emulator-backed Firebase checks, run the project script (currently `npm run
+ci:rules`) rather than relying on a globally installed Firebase CLI. The script
+resolves `firebase-tools/lib/bin/firebase.js` from the installed package and runs
+it with Node, so the CLI version matches the project dependency.
+
+In the sandboxed Windows environment, Firebase Tools may try to read or write host
+configuration before tests start. Isolate that state with a temporary
+`XDG_CONFIG_HOME` directory for the command, then remove it after completion. See
+`scripts/ci-rules.mjs` for the established `mkdtempSync` / `spawnSync` / `rmSync`
+pattern; preserve it when adding emulator-backed verification.
+
 ## 9. Handoff Or Complete
 
 If pausing:
@@ -202,15 +232,22 @@ Summary: ...
 TDD: skipped because <reason>. Verification: <command or manual check>.
 ```
 
+For verification that depends on a PR, deployment, production setup, or user
+action, do not mark the check complete before the evidence exists. Keep the task
+open with a `Checkpoint:` comment through the trigger, or create a dependent
+follow-up task or subtask that records the trigger, owner, expected evidence, and
+completion boundary.
+
 ## 10. Branch And PR Cadence
 
 - Prefer a focused branch per task or small related task set.
 - Use the `codex/` branch prefix unless the user asks for another naming scheme.
 - Keep branch scope aligned with Trekker scope.
-- Open a PR when the task or task set is ready for review.
+- For implementation branch or epic work, the default review handoff is a draft PR unless the user explicitly opts out. Before handing it back, complete the required code or epic review, commit and push the intended changes, open the draft PR, and confirm required checks are visible. Fix CI-only failures that are in scope; otherwise document the failure and exact next step.
+- Use `gh` for PR creation when the GitHub connector lacks PR-create permission. Request escalation up front for known sandbox-limited git or `gh` publish operations instead of repeating failed attempts.
 - Run the code reviewer before marking a non-trivial task complete.
-- Run the epic reviewer before merging an epic branch, closing an epic, or merging a high-risk PR.
-- Do not merge, push, or deploy unless the user asked for that action.
+- Run the epic reviewer before publishing an epic or branch handoff, merging an epic branch, closing an epic, or merging a high-risk PR.
+- Do not merge or deploy unless the user asked for that action.
 
 ## 11. Review Checklist
 
@@ -222,8 +259,22 @@ Before final response:
 - No unrelated files were changed.
 - No secrets were added.
 - User-facing production steps are documented when applicable.
+- Deferred verification is either evidenced or documented as an open, checkpointed follow-up.
 - Workflow friction from subagents has been validated, captured, or explicitly declined.
 - The next ready task is surfaced when useful.
+
+For non-trivial tracked work, PR-bound work, and epic work, perform an after-action
+workflow audit before handoff:
+
+- Did the user have to remind the agent about a required workflow step?
+- Did work stop before the repository-defined handoff endpoint?
+- Were predictable sandbox or permission failures retried instead of using the known escalation or fallback path?
+- Did a subagent or reviewer expose bookkeeping, scope, or handoff drift?
+- Do Trekker tasks and subtasks match the work actually completed?
+
+Treat a user-reminded workflow miss as `Workflow feedback:` and validate it for an
+`EPIC-6` follow-up. In the final response, state either that no workflow follow-up
+was found or name the Trekker item created or updated.
 
 ## 12. Workflow Self-Improvement Loop
 

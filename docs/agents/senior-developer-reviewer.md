@@ -26,8 +26,12 @@ Use a strong reasoning model for large epics, uncertain architecture, storage/au
 - Are task boundaries small enough to complete and review independently?
 - Are dependencies accurate and sufficient?
 - Are subtasks concrete implementation steps rather than vague reminders?
+- Does each task name the important artifacts and choose mechanisms that affect consistency, such as workflow filenames, emulator lifecycles, or integration patterns?
+- Is any implementation discretion intentional, bounded, and safe to leave to the implementor?
 - Is TDD practical for each behavior-changing task?
 - Are verification commands and manual checks specific enough?
+- Are deferred checks (for example, PR, deployment, or production checks) identified with an explicit completion boundary?
+- For validation of security rules, storage, configuration, or runtime behavior, does the review scope include both the tests and the policy, configuration, or source behavior under validation?
 - Are high-risk areas sequenced early enough to reduce uncertainty?
 - Can a future session resume execution from Trekker alone?
 - Are there missing setup, migration, docs, deployment, or review tasks?
@@ -49,6 +53,9 @@ Use this order:
 3. Suggested task splits, dependency changes, or verification improvements.
 4. Any design concerns that should go back to the architecture/design reviewer.
 5. Clear recommendation: ready after edits, needs another planning pass, or blocked.
+
+Missing implementation specificity, an unbounded deferral, or incomplete source-under-test
+scope is a finding that must be resolved before recommending the plan for approval.
 
 The main agent must validate each finding before incorporating it into the implementation plan. If a finding is rejected, the main agent should record the reason in the planning notes presented to the user.
 

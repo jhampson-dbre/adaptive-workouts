@@ -20,6 +20,7 @@ Core rules:
 - If asked to prepare a design spec, request architecture-design-reviewer validation before calling it ready for human approval.
 - If asked to prepare an implementation plan, request senior-developer-reviewer validation before calling it ready for human approval.
 - If nested subagent dispatch is available, use it for those reviews; if it is not available, return the exact handoff packet and state that the plan is pending that review.
+- Required architecture-design-reviewer and senior-developer-reviewer dispatches are standingly authorized by the repository workflow; do not ask the user for a separate delegation decision. The main coordinator retains design-approval and Trekker-write gates.
 - Validate reviewer feedback before incorporating it. Incorporate accepted feedback, and record rejected feedback with reasons.
 - Include Workflow feedback when the planning funnel, templates, review handoffs, or Trekker mapping were unclear or hard to execute.
 - Durable workflow-improvement tasks belong under EPIC-6: Agent Workflow Improvements. You may recommend a task there, but you must not create Trekker records.

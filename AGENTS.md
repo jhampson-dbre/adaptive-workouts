@@ -6,6 +6,8 @@ This repository is optimized for task-tracked AI agent work. Treat Trekker as th
 
 The main agent session owns coordination. It may dispatch specialized subagents, but it remains responsible for Trekker state, final integration, verification, and user communication.
 
+The user authorizes the main agent to dispatch the project-scoped subagents required by this repository workflow without a separate per-session delegation request. Use that authority deliberately: required planning reviewers may be dispatched before their approval gates, while the main agent keeps Trekker ownership and avoids unnecessary parallel work.
+
 Use the role contracts in `docs/agents/`:
 
 - `docs/agents/main-coordinator.md`: main session responsibilities
@@ -92,7 +94,7 @@ Use subagents deliberately:
 - Any behavior change or bug fix: use the implementor role unless the change is truly mechanical.
 - Ambiguous requirements, user-facing behavior, migration behavior, auth/storage behavior, or acceptance criteria changes: use the spec reviewer before or alongside implementation.
 - Non-trivial code changes: use the code reviewer before completing the Trekker task.
-- Branch, PR, or epic readiness review: use the epic reviewer before merge or epic closure.
+- Branch, PR, or epic readiness review: use the epic reviewer before publishing an implementation branch or epic handoff, merge, or epic closure.
 
 Parallel reviewers are allowed. Only one implementor may edit a given file set at a time. Reviewers are read-only unless the main agent explicitly asks them to prepare a patch.
 
@@ -151,11 +153,26 @@ Before marking complete:
 6. Run `trekker ready` and report the next ready task.
 7. If workflow friction was discovered, either document why no change is needed or create/link a follow-up Trekker task.
 
+When the active task belongs to an epic, continue with the next ready, in-scope
+task in that epic unless a user decision, external blocker, meaningful scope
+expansion, explicit pause/stop request, or authorized-work boundary requires a
+handoff. Do not switch to an unrelated ready task merely because it appears in
+`trekker ready`.
+
+Before final handoff for non-trivial tracked, PR-bound, or epic work, run an
+after-action workflow audit: confirm no required step needed a user reminder, the
+repository handoff endpoint was reached, known sandbox/permission fallbacks were
+used rather than retried blindly, reviewer feedback did not expose scope or
+bookkeeping drift, and Trekker matches reality. Treat a user-reminded workflow
+miss as `Workflow feedback:` and validate it for `EPIC-6`; state in the final
+response whether no follow-up was found or name the Trekker item created or updated.
+
 Do not mark work complete without a `Summary:` comment.
 
 ## Tracking Rules
 
 - Search before creating tasks: use one distinctive keyword at a time, such as `trekker search "auth"` or `trekker search "migration"`.
+- Serialize Trekker writes (create, update, dependency, and comment operations). Run reads in parallel only when they are independent and known safe; on a transient `database is locked` error, wait briefly and retry the failed command sequentially.
 - Prefer extending existing tasks over creating duplicates.
 - Keep one active implementation task when practical.
 - If a task is partly done, leave it `in_progress` with a `Checkpoint:` comment.
@@ -182,7 +199,8 @@ Planning flow:
 8. Run senior-developer implementation-plan review, validate the feedback, and either incorporate it or record why it was not accepted.
 9. Ask for approval before creating or updating Trekker records.
 10. Create Trekker epic/task/subtask records and dependencies.
-11. Mirror only the current session in `update_plan` after Trekker is correct.
+11. Validate and capture planning-funnel workflow feedback under `EPIC-6`, or explicitly record why it is deferred.
+12. Mirror only the current session in `update_plan` after Trekker is correct.
 
 Do not create Trekker epics, tasks, or subtasks from brainstorming unless the user has approved the design and implementation plan.
 
@@ -202,8 +220,8 @@ Do not create Trekker epics, tasks, or subtasks from brainstorming unless the us
 - Keep branch scope aligned with Trekker scope.
 - Open a PR when the task or task set is ready for review.
 - Run the code reviewer before marking a non-trivial task complete.
-- Run the epic reviewer before merging an epic branch, closing an epic, or merging a high-risk PR.
-- Do not merge, push, or deploy unless the user asked for that action.
+- Run the epic reviewer before publishing an implementation branch or epic handoff, merging an epic branch, closing an epic, or merging a high-risk PR.
+- For implementation branch or epic work, the default review handoff is a draft PR unless the user explicitly opts out: complete required reviews, commit and push intended changes, open a draft PR, and confirm required checks are visible, passing, or documented with exact next steps. Prefer `gh` when the GitHub connector cannot create PRs, and request escalation for known sandbox-limited git or `gh` publish operations.
 
 ## Review Expectations
 
