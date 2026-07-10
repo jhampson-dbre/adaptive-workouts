@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Generator from '../components/Generator';
-import { AuthContext } from '../App';
+import { AuthContext } from '../context/AuthContext';
 import * as storage from '../utils/storage';
 import * as engine from '../utils/engine';
 

@@ -1,16 +1,44 @@
-# React + Vite
+# Adaptive Workouts
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Adaptive Workouts is a React/Vite app for generating adaptive hypertrophy workouts. It uses Firebase Auth and Firestore for production persistence, with local Firebase emulator support for rules validation.
 
-Currently, two official plugins are available:
+## Local Development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Install dependencies:
 
-## React Compiler
+```bash
+npm install
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Start the dev server:
 
-## Expanding the Oxlint configuration
+```bash
+npm run dev
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+## Quality Gates
+
+Pull requests and pushes to `main` run two GitHub Actions jobs:
+
+- `app-quality`: unit tests, warning-free lint, and production build.
+- `firestore-rules`: behavioral Firestore security rules validation against the emulator.
+
+Run the same full gate locally before opening a PR:
+
+```bash
+npm run ci:check
+```
+
+The app-quality scripts are also available individually:
+
+```bash
+npm run ci:test
+npm run ci:lint
+npm run ci:build
+```
+
+Firestore rules validation starts the Firestore emulator with the demo project and does not require production Firebase or Vercel secrets:
+
+```bash
+npm run ci:rules
+```
