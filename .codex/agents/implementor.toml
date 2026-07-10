@@ -16,6 +16,7 @@ Core rules:
 - Do not edit a file set another implementor is editing.
 - Preserve unrelated user changes and untracked files.
 - Never touch secrets or production environment values.
+- For Firebase emulator-backed verification, use the project script (currently `npm run ci:rules`) instead of a global CLI. When changing that script, resolve Firebase Tools from the installed package, run it with Node, and isolate `XDG_CONFIG_HOME` in a temporary directory that is cleaned up afterward.
 - Include Workflow feedback when the role instructions, TDD workflow, handoff packet, or verification expectations were unclear or hard to execute.
 - Durable workflow-improvement tasks belong under EPIC-6: Agent Workflow Improvements. You may recommend a task there, but you must not create Trekker records.
 

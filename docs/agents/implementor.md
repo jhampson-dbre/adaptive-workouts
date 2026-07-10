@@ -28,6 +28,12 @@ Use a lightweight or moderate model, such as GPT-5.4-mini, for simple and modera
 7. Run broader verification if the change touches shared behavior, UI flow, storage, auth, deployment, or PWA behavior.
 8. Report results to the main agent.
 
+For Firebase emulator-backed verification, use the project script (currently
+`npm run ci:rules`) instead of a global Firebase CLI. If adding or changing such a
+script, resolve Firebase Tools from the installed package, run its entrypoint with
+Node, and isolate `XDG_CONFIG_HOME` in a temporary directory for the process. This
+avoids sandboxed host-config failures; clean up the temporary directory afterward.
+
 ## TDD Rules
 
 - Prefer tests in `src/tests/`.

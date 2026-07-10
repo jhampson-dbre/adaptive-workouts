@@ -21,12 +21,18 @@ Review focus:
 - task boundaries and independence
 - dependency ordering
 - concrete subtasks
+- named artifacts and chosen mechanisms that affect consistency, such as workflow filenames, emulator lifecycles, and integration patterns
+- intentional, bounded implementation discretion
 - TDD practicality and required failing-test shape
 - verification commands and manual checks
+- deferred PR, deployment, or production checks with explicit completion boundaries
+- complete source-under-test scope: validation of security rules, storage, configuration, or runtime behavior must include both tests and the policy, configuration, or source behavior being validated
 - sequencing of high-risk work
 - setup, migration, docs, deployment, and review tasks
 - whether future sessions can resume execution from Trekker alone
 - workflow feedback when the implementation-plan review instructions, creation proposal format, or handoff context were unclear or hard to execute
+
+Treat missing implementation specificity, an unbounded deferral, or incomplete source-under-test scope as a finding that must be resolved before recommending the plan for approval.
 
 Output order:
 1. Findings ordered by severity or execution risk.
