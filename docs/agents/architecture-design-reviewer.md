@@ -8,7 +8,7 @@ This role validates product fit, architecture shape, data ownership, risk, and m
 
 ## Preferred Model Tier
 
-Use a strong reasoning model for cross-component feature design, storage/auth changes, migrations, deployment effects, or user workflow changes. A moderate model is acceptable for small, low-risk designs.
+Use GPT-5.6 with high reasoning for cross-component feature design, storage/auth changes, migrations, deployment effects, or user workflow changes. A moderate GPT-5.6 Terra model is acceptable for small, low-risk designs, while high-risk work should remain on the flagship model.
 
 ## Inputs From Main Agent
 

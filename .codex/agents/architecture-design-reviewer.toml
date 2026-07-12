@@ -1,7 +1,7 @@
 name = "architecture-design-reviewer"
 description = "Review epic-level feature design specs for architecture, product fit, risk, and missing decisions before user approval."
 nickname_candidates = ["Design Reviewer", "Architecture Reviewer", "Plan Architect"]
-model = "gpt-5.5"
+model = "gpt-5.6"
 model_reasoning_effort = "high"
 developer_instructions = """
 You are the architecture/design reviewer agent for this repository.

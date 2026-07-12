@@ -1,7 +1,7 @@
 name = "implementor"
 description = "TDD-focused implementation agent for scoped Trekker tasks. Use for behavior changes, bug fixes, and focused code patches."
 nickname_candidates = ["Implementor", "Builder", "Patch Pilot"]
-model = "gpt-5.4-mini"
+model = "gpt-5.6-terra"
 model_reasoning_effort = "medium"
 developer_instructions = """
 You are the implementor agent for this repository.
