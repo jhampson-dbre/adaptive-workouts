@@ -245,6 +245,7 @@ completion boundary.
 - Keep branch scope aligned with Trekker scope.
 - For implementation branch or epic work, the default review handoff is a draft PR unless the user explicitly opts out. Before handing it back, complete the required code or epic review, commit and push the intended changes, open the draft PR, and confirm required checks are visible. Fix CI-only failures that are in scope; otherwise document the failure and exact next step.
 - Use `gh` for PR creation when the GitHub connector lacks PR-create permission. Request escalation up front for known sandbox-limited git or `gh` publish operations instead of repeating failed attempts.
+- For `gh pr create` or `gh pr edit`, write multiline Markdown into a temporary file and use `--body-file <path>`. Do not put escaped `\n` sequences in a command-line body argument: GitHub will render them literally. Remove the temporary file after the command succeeds.
 - Run the code reviewer before marking a non-trivial task complete.
 - Run the epic reviewer before publishing an epic or branch handoff, merging an epic branch, closing an epic, or merging a high-risk PR.
 - Do not merge or deploy unless the user asked for that action.
