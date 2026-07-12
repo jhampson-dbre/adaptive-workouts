@@ -104,4 +104,28 @@ describe('Generator Component', () => {
             expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], true, expect.any(Array), expect.any(Array), expect.any(Object)); // doEarly=true
         });
     });
+
+    it('uses normal generation when the early-leg-day prompt is dismissed', async () => {
+        engine.getDaysSinceLastLegDay.mockReturnValue(5);
+        engine.getDayOfWeek.mockImplementation((date) => {
+            if (date.getDate() === new Date().getDate()) return 'Thursday';
+            return 'Friday';
+        });
+        window.confirm.mockReturnValue(false);
+
+        renderWithAuth(<Generator
+            timeBudget={45}
+            setTimeBudget={vi.fn()}
+            unrecoveredGroups={[]}
+            setUnrecoveredGroups={vi.fn()}
+            onGenerate={vi.fn()}
+        />);
+
+        fireEvent.click(screen.getByText('Generate Plan'));
+
+        await waitFor(() => {
+            expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('early'));
+            expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], false, expect.any(Array), expect.any(Array), expect.any(Object));
+        });
+    });
 });
