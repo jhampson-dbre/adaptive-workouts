@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { generateWorkout } from '../utils/engine';
+import { generateWorkout, getDaysSinceLastLegDay } from '../utils/engine';
 
 const mockCatalog = [
     { id: 'biceps_curl', name: 'Bicep Curls', muscleGroup: 'Biceps', tier: 1, sets: 3 },
@@ -243,6 +243,46 @@ describe('Generator Engine', () => {
             expect(chestTier1.length).toBe(1);     // Chest is today's pivot
             expect(bicepsTier1.length).toBe(0);    // Not today's pivot
             expect(shouldersTier1.length).toBe(0); // Not today's pivot
+        });
+    });
+
+    describe('History ordering', () => {
+        const liveTier1Catalog = [
+            { id: 'incline_curl', name: 'Incline Curl', muscleGroup: 'Biceps', tier: 1, sets: 3, isActive: true },
+            { id: 'preacher_curl', name: 'Preacher Curl', muscleGroup: 'Biceps', tier: 1, sets: 3, isActive: true },
+            { id: 'lateral_raise', name: 'Lateral Shoulder Raise', muscleGroup: 'Shoulders', tier: 1, sets: 3, isActive: true },
+            { id: 'incline_press', name: 'Incline Press', muscleGroup: 'Chest', tier: 3, sets: 3, isActive: true },
+            { id: 'split_squat', name: 'Split Squat', muscleGroup: 'Legs', tier: 3, sets: 3, isActive: true },
+        ];
+
+        it('selects Preacher Curl for the live unordered history regardless of input order', () => {
+            const settings = { staleThreshold: 5, legDayOfWeek: 'None' };
+            const unorderedHistory = [
+                { date: '2026-07-09T12:00:00Z', exercises: [{ id: 'lateral_raise' }] },
+                { date: '2026-07-08T12:00:00Z', exercises: [{ id: 'incline_curl' }] },
+                { date: '2026-07-10T12:00:00Z', exercises: [{ id: 'incline_press' }] },
+                { date: '2026-07-11T12:00:00Z', exercises: [{ id: 'split_squat', muscleGroup: 'Legs', tier: 3 }] },
+            ];
+            const sortedHistory = [...unorderedHistory].sort((a, b) => new Date(a.date) - new Date(b.date));
+            const newestFirstHistory = [...sortedHistory].reverse();
+
+            const unorderedWorkout = generateWorkout(60, [], false, liveTier1Catalog, unorderedHistory, settings);
+            const sortedWorkout = generateWorkout(60, [], false, liveTier1Catalog, sortedHistory, settings);
+            const newestFirstWorkout = generateWorkout(60, [], false, liveTier1Catalog, newestFirstHistory, settings);
+
+            expect(unorderedWorkout.filter(ex => ex.tier === 1).map(ex => ex.id)).toEqual(['preacher_curl']);
+            expect(sortedWorkout.filter(ex => ex.tier === 1).map(ex => ex.id)).toEqual(['preacher_curl']);
+            expect(newestFirstWorkout.filter(ex => ex.tier === 1).map(ex => ex.id)).toEqual(['preacher_curl']);
+        });
+
+        it('uses the newest valid leg session regardless of input order', () => {
+            const unorderedHistory = [
+                { date: '2026-06-20T12:00:00Z', exercises: [{ id: 'squat', muscleGroup: 'Legs', tier: 3 }] },
+                { date: 'not-a-date', exercises: [{ id: 'squat', muscleGroup: 'Legs', tier: 3 }] },
+                { date: '2026-06-28T12:00:00Z', exercises: [{ id: 'squat', muscleGroup: 'Legs', tier: 3 }] },
+            ];
+
+            expect(getDaysSinceLastLegDay(unorderedHistory, new Date('2026-06-30T12:00:00Z'))).toBe(2);
         });
     });
 

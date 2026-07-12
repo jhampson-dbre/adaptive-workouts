@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, collection, getDocs, addDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, addDoc, query, orderBy } from 'firebase/firestore';
 import { db } from './firebase';
 
 const DEFAULT_CATALOG = [
@@ -60,7 +60,8 @@ export async function saveSettings(userId, settings) {
 
 export async function getHistory(userId) {
   const colRef = collection(db, 'users', userId, 'history');
-  const snapshot = await getDocs(colRef);
+  const historyQuery = query(colRef, orderBy('date', 'asc'));
+  const snapshot = await getDocs(historyQuery);
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 

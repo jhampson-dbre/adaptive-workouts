@@ -9,13 +9,25 @@ function getCalendarDaysBetween(date1, date2) {
     return Math.round(Math.abs((d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24)));
 }
 
+function getChronologicalHistory(history = []) {
+    return history
+        .filter(session => {
+            if (!session?.date) return false;
+            const date = new Date(session?.date);
+            return !Number.isNaN(date.getTime());
+        })
+        .slice()
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
 /**
  * Get days since last leg day.
  */
 export function getDaysSinceLastLegDay(history, today = new Date()) {
     let lastLegDate = null;
-    for (let i = history.length - 1; i >= 0; i--) {
-        const session = history[i];
+    const chronologicalHistory = getChronologicalHistory(history);
+    for (let i = chronologicalHistory.length - 1; i >= 0; i--) {
+        const session = chronologicalHistory[i];
         if (session.exercises && session.exercises.some(ex => ex.muscleGroup === 'Legs' && ex.tier === 3)) {
             lastLegDate = new Date(session.date);
             break;
@@ -44,6 +56,7 @@ export function checkIsLegDay(date, unrecoveredGroups, history, settings) {
 
 export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay = false, catalog, history, settings) {
     const staleThreshold = settings.staleThreshold || 5;
+    const chronologicalHistory = getChronologicalHistory(history);
     
     const today = new Date();
     const daysSinceLastLeg = getDaysSinceLastLegDay(history, today);
@@ -72,8 +85,8 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
     let todayPivot = tier1Groups[0] ?? null; // default: first alphabetical group
     if (tier1Groups.length > 0) {
         let lastPivotGroup = null;
-        for (let i = history.length - 1; i >= 0; i--) {
-            const session = history[i];
+        for (let i = chronologicalHistory.length - 1; i >= 0; i--) {
+            const session = chronologicalHistory[i];
             if (!session.exercises) continue;
             const pivotEx = session.exercises.find(e => {
                 const catEx = catalogMap.get(e.id);
@@ -92,7 +105,7 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
 
     // Find last completion date for each exercise
     const lastDates = {};
-    for (const session of history) {
+    for (const session of chronologicalHistory) {
         if (!session.exercises) continue;
         for (const ex of session.exercises) {
             lastDates[ex.id] = new Date(session.date);
@@ -148,7 +161,7 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
                 if (daysSince > staleThreshold) {
                     dynamicTier = 2; // High urgency
                 }
-            } else if (history.length > 0) {
+            } else if (chronologicalHistory.length > 0) {
                 // If never done but we have history, it's stale
                 dynamicTier = 2;
             }
