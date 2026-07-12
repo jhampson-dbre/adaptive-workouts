@@ -109,6 +109,7 @@ Reviewer feedback already incorporated: yes/no
 - Do not create separate planning-process or execution-process epics for workflow feedback unless the user explicitly asks.
 - Do not assign overlapping file sets to multiple implementors at the same time.
 - For implementation branch or epic work, use the expected draft-PR handoff unless the user explicitly opts out: review, commit, push, open a draft PR, and confirm required checks are visible or document failures and next steps. Use `gh` if the connector cannot create PRs, and request escalation for known sandbox-limited publish operations.
+- When using `gh` to create or edit a PR, compose multiline Markdown in a temporary file and supply it with `--body-file`; do not pass shell-escaped literal `\n` text as the body. Remove the temporary file after a successful command.
 
 ## Expected Output
 

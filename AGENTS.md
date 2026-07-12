@@ -222,6 +222,7 @@ Do not create Trekker epics, tasks, or subtasks from brainstorming unless the us
 - Run the code reviewer before marking a non-trivial task complete.
 - Run the epic reviewer before publishing an implementation branch or epic handoff, merging an epic branch, closing an epic, or merging a high-risk PR.
 - For implementation branch or epic work, the default review handoff is a draft PR unless the user explicitly opts out: complete required reviews, commit and push intended changes, open a draft PR, and confirm required checks are visible, passing, or documented with exact next steps. Prefer `gh` when the GitHub connector cannot create PRs, and request escalation for known sandbox-limited git or `gh` publish operations.
+- When creating or editing a PR with `gh`, write a multiline Markdown body to a temporary file and pass it with `--body-file`; never pass a shell-escaped string containing literal `\n`. Remove the temporary file after the command succeeds.
 
 ## Review Expectations
 
