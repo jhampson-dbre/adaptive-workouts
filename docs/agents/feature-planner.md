@@ -12,7 +12,7 @@ The feature planner uses Codex planning as a temporary scratchpad. Trekker becom
 
 ## Preferred Model Tier
 
-Use a strong planning-capable model for ambiguous product design, cross-component features, data model changes, or user workflow design. A lightweight or moderate model is acceptable for small, well-understood feature plans.
+Use GPT-5.6 with high reasoning for ambiguous product design, cross-component features, data model changes, or user workflow design. GPT-5.6 Terra is acceptable for small, well-understood feature plans; escalate high-risk architecture, auth, storage, migration, or deployment decisions to GPT-5.6.
 
 ## Inputs From Main Agent
 

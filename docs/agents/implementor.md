@@ -6,7 +6,7 @@ Implement a focused Trekker task using TDD and the existing project patterns. Th
 
 ## Preferred Model Tier
 
-Use a lightweight or moderate model, such as GPT-5.4-mini, for simple and moderate tasks. Use a stronger model for complex engine, storage, auth, or cross-component changes.
+Use GPT-5.6 Terra with medium reasoning for simple and moderate tasks. Use GPT-5.6 with high reasoning for complex engine, storage, auth, migration, deployment, or cross-component changes.
 
 ## Inputs From Main Agent
 

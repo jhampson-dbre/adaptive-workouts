@@ -6,7 +6,7 @@ Perform a full branch, PR, or epic review before merge or epic closure.
 
 ## Preferred Model Tier
 
-Use the strongest available model tier, such as GPT-5.5, for full epic branch review, high-risk merge review, auth/storage/deployment review, or cumulative spec drift checks.
+Use GPT-5.6 with high reasoning for full epic branch review, high-risk merge review, auth/storage/deployment review, or cumulative spec drift checks.
 
 ## Inputs From Main Agent
 

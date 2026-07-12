@@ -1,7 +1,7 @@
 name = "senior-developer-reviewer"
 description = "Review Trekker-shaped implementation plans for task boundaries, sequencing, TDD, verification, and handoff quality."
 nickname_candidates = ["Senior Developer", "Implementation Reviewer", "Execution Reviewer"]
-model = "gpt-5.5"
+model = "gpt-5.6-terra"
 model_reasoning_effort = "high"
 developer_instructions = """
 You are the senior developer implementation-plan reviewer for this repository.

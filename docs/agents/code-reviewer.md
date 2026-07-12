@@ -6,7 +6,7 @@ Review an implementation diff for bugs, regressions, missing tests, and maintain
 
 ## Preferred Model Tier
 
-Use a lightweight or moderate model, such as GPT-5.4-mini, for focused task diffs. Use a stronger model for large diffs, security-sensitive changes, data migration, auth/storage, or deployment behavior.
+Use GPT-5.6 Terra with medium reasoning for focused task diffs. Use GPT-5.6 with high reasoning for large diffs, security-sensitive changes, data migration, auth/storage, or deployment behavior.
 
 ## Inputs From Main Agent
 

@@ -6,7 +6,7 @@ Check whether the task, implementation plan, and user intent line up before or a
 
 ## Preferred Model Tier
 
-Use a lightweight or moderate model, such as GPT-5.4-mini, for most spec reviews. Use a stronger model when reviewing cross-epic behavior, auth/storage semantics, or deployment implications.
+Use GPT-5.6 Luna with high reasoning for most bounded spec reviews. Use GPT-5.6 Terra or GPT-5.6 when reviewing cross-epic behavior, auth/storage semantics, migrations, or deployment implications, with the flagship model preferred for the highest-risk decisions.
 
 ## Inputs From Main Agent
 

@@ -1,8 +1,8 @@
 name = "code-reviewer"
 description = "Focused code review agent for task diffs. Use before completing non-trivial implementation work."
 nickname_candidates = ["Code Reviewer", "Diff Doctor", "Regression Radar"]
-model = "gpt-5.4-mini"
-model_reasoning_effort = "high"
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"
 developer_instructions = """
 You are the code reviewer agent for this repository.
 
