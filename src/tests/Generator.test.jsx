@@ -128,4 +128,90 @@ describe('Generator Component', () => {
             expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], false, expect.any(Array), expect.any(Array), expect.any(Object));
         });
     });
+
+    it('blocks generation on history failure and retries without an empty-history fallback', async () => {
+        storage.getCatalog.mockResolvedValue([]);
+        storage.getHistory.mockRejectedValueOnce(new Error('offline'));
+        const onGenerate = vi.fn();
+
+        renderWithAuth(<Generator
+            timeBudget={30}
+            setTimeBudget={vi.fn()}
+            unrecoveredGroups={[]}
+            setUnrecoveredGroups={vi.fn()}
+            onGenerate={onGenerate}
+        />);
+        fireEvent.click(screen.getByText('Generate Plan'));
+
+        const retry = await screen.findByRole('button', { name: 'Retry' });
+        expect(screen.getByText(/workout history is unavailable/i)).not.toBeNull();
+        expect(engine.generateWorkout).not.toHaveBeenCalled();
+        expect(onGenerate).not.toHaveBeenCalled();
+
+        let resolveHistory;
+        storage.getHistory.mockReturnValueOnce(new Promise(resolve => { resolveHistory = resolve; }));
+        fireEvent.click(retry);
+        expect(screen.getByRole('button', { name: 'Retrying...' }).disabled).toBe(true);
+        resolveHistory([]);
+
+        await waitFor(() => {
+            expect(engine.generateWorkout).toHaveBeenCalledTimes(1);
+            expect(onGenerate).toHaveBeenCalledTimes(1);
+            expect(screen.queryByText(/workout history is unavailable/i)).toBeNull();
+        });
+    });
+
+    it('keeps non-history load failures generic without a retry action', async () => {
+        storage.getSettings.mockRejectedValueOnce(new Error('settings unavailable'));
+        renderWithAuth(<Generator
+            timeBudget={30}
+            setTimeBudget={vi.fn()}
+            unrecoveredGroups={[]}
+            setUnrecoveredGroups={vi.fn()}
+            onGenerate={vi.fn()}
+        />);
+        fireEvent.click(screen.getByText('Generate Plan'));
+
+        expect(await screen.findByText(/failed to generate workout/i)).not.toBeNull();
+        expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    });
+
+    it('shows actionable catalog validation errors from the engine', async () => {
+        storage.getCatalog.mockResolvedValue([]);
+        const validationError = new Error('Invalid exercise configuration for "Bad Press" (bad-press). Update it in Manage Catalog / Settings.');
+        validationError.name = 'InvalidCatalogExerciseError';
+        engine.generateWorkout.mockImplementationOnce(() => { throw validationError; });
+
+        renderWithAuth(<Generator
+            timeBudget={30}
+            setTimeBudget={vi.fn()}
+            unrecoveredGroups={[]}
+            setUnrecoveredGroups={vi.fn()}
+            onGenerate={vi.fn()}
+        />);
+        fireEvent.click(screen.getByText('Generate Plan'));
+
+        expect(await screen.findByText(/Bad Press.*bad-press.*Manage Catalog.*Settings/i)).not.toBeNull();
+    });
+
+    it('ignores inactive Tier-3 legs when deciding whether to prompt', async () => {
+        storage.getCatalog.mockResolvedValue([{
+            id: 'inactive-leg', name: 'Inactive Leg', muscleGroup: 'Legs', tier: 3, sets: 3,
+            isActive: false, trackingMode: 'weighted', floorReps: 8,
+        }]);
+        engine.getDaysSinceLastLegDay.mockReturnValue(8);
+        engine.getDayOfWeek.mockReturnValue('Monday');
+
+        renderWithAuth(<Generator
+            timeBudget={30}
+            setTimeBudget={vi.fn()}
+            unrecoveredGroups={[]}
+            setUnrecoveredGroups={vi.fn()}
+            onGenerate={vi.fn()}
+        />);
+        fireEvent.click(screen.getByText('Generate Plan'));
+
+        await waitFor(() => expect(engine.generateWorkout).toHaveBeenCalled());
+        expect(window.confirm).not.toHaveBeenCalled();
+    });
 });

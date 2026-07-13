@@ -1,3 +1,80 @@
+import {
+    isValidCatalogExercise,
+    isValidV2ExerciseOccurrence,
+    normalizeCatalogExercise,
+    wasPerformed,
+} from './workoutSchema';
+import { getNextSessionRecommendation } from './progression';
+
+const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
+
+function invalidCatalogExerciseError(exercise) {
+    const name = exercise?.name || 'Unnamed exercise';
+    const id = exercise?.id || 'missing id';
+    const error = new Error(`Invalid exercise configuration for "${name}" (${id}). Update it in Manage Catalog / Settings.`);
+    error.name = 'InvalidCatalogExerciseError';
+    return error;
+}
+
+function createOccurrenceSnapshot(exercise) {
+    const snapshot = {
+        id: exercise.id,
+        name: exercise.name,
+        muscleGroup: exercise.muscleGroup,
+        tier: exercise.tier,
+        trackingMode: exercise.trackingMode,
+        sets: exercise.sets,
+        prescribedSetCount: exercise.sets,
+        dynamicTier: exercise.dynamicTier,
+    };
+    for (const key of ['linkedTo', 'isActive']) {
+        if (hasOwn(exercise, key)) snapshot[key] = exercise[key];
+    }
+    return snapshot;
+}
+
+function enrichSelectedExercise(exercise, history) {
+    const occurrence = createOccurrenceSnapshot(exercise);
+    if (exercise.trackingMode === 'simple') {
+        occurrence.completed = false;
+    } else if (exercise.trackingMode === 'bodyweight') {
+        occurrence.targetReps = exercise.targetReps;
+        occurrence.setRecords = Array.from({ length: exercise.sets }, (_, index) => ({
+            index,
+            targetReps: exercise.targetReps,
+            fullReps: 0,
+            assistedReps: 0,
+            eccentricReps: 0,
+            completed: false,
+        }));
+    } else {
+        const recommendation = getNextSessionRecommendation(exercise, history);
+        Object.assign(occurrence, {
+            startingWeight: exercise.startingWeight,
+            targetReps: exercise.targetReps,
+            floorReps: exercise.floorReps,
+            weightStep: exercise.weightStep,
+            setRecords: Array.from({ length: exercise.sets }, (_, index) => ({
+                index,
+                targetWeight: recommendation.recommendedWeight,
+                targetReps: exercise.targetReps,
+                actualWeight: recommendation.recommendedWeight,
+                actualReps: exercise.targetReps,
+                completed: false,
+                recommendationReason: index === 0 ? { ...recommendation } : {
+                    recommendedWeight: recommendation.recommendedWeight,
+                    reasonCode: 'BACKOFF_AWAITING_PRIOR_SET',
+                },
+            })),
+        });
+    }
+
+    if (!isValidV2ExerciseOccurrence(occurrence)) {
+        throw new Error(`Generated an invalid occurrence for "${exercise.name}" (${exercise.id}).`);
+    }
+    return occurrence;
+}
+
 /**
  * Calculate difference in calendar days between two dates.
  */
@@ -28,7 +105,9 @@ export function getDaysSinceLastLegDay(history, today = new Date()) {
     const chronologicalHistory = getChronologicalHistory(history);
     for (let i = chronologicalHistory.length - 1; i >= 0; i--) {
         const session = chronologicalHistory[i];
-        if (session.exercises && session.exercises.some(ex => ex.muscleGroup === 'Legs' && ex.tier === 3)) {
+        if (Array.isArray(session.exercises) && session.exercises.some(ex => (
+            wasPerformed(session, ex) && ex.muscleGroup === 'Legs' && ex.tier === 3
+        ))) {
             lastLegDate = new Date(session.date);
             break;
         }
@@ -57,6 +136,12 @@ export function checkIsLegDay(date, unrecoveredGroups, history, settings) {
 export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay = false, catalog, history, settings) {
     const staleThreshold = settings.staleThreshold || 5;
     const chronologicalHistory = getChronologicalHistory(history);
+    const normalizedCatalog = catalog.map(normalizeCatalogExercise);
+    for (const exercise of normalizedCatalog) {
+        if (exercise?.isActive !== false && !isValidCatalogExercise(exercise)) {
+            throw invalidCatalogExerciseError(exercise);
+        }
+    }
     
     const today = new Date();
     const daysSinceLastLeg = getDaysSinceLastLegDay(history, today);
@@ -66,14 +151,14 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
     tomorrow.setDate(tomorrow.getDate() + 1);
     const isTomorrowLegDay = checkIsLegDay(tomorrow, unrecoveredGroups, history, settings);
 
-    const catalogMap = new Map(catalog.map(c => [c.id, c]));
+    const catalogMap = new Map(normalizedCatalog.map(c => [c.id, c]));
 
     // ── Dynamic Pivot Engine ──────────────────────────────────────────────────
     // Step 1: Discover all Tier 1 muscle groups from the catalog (sorted for
     //         stable N-way rotation).
     const tier1Groups = [
         ...new Set(
-            catalog
+            normalizedCatalog
                 .filter(ex => ex.tier === 1 && ex.isActive !== false)
                 .map(ex => ex.muscleGroup)
         )
@@ -87,10 +172,13 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
         let lastPivotGroup = null;
         for (let i = chronologicalHistory.length - 1; i >= 0; i--) {
             const session = chronologicalHistory[i];
-            if (!session.exercises) continue;
+            if (!Array.isArray(session.exercises)) continue;
             const pivotEx = session.exercises.find(e => {
+                if (!wasPerformed(session, e)) return false;
                 const catEx = catalogMap.get(e.id);
-                return catEx && catEx.tier === 1 && tier1Groups.includes(catEx.muscleGroup);
+                return catEx
+                    && catEx.tier === 1
+                    && tier1Groups.includes(catEx.muscleGroup);
             });
             if (pivotEx) {
                 lastPivotGroup = catalogMap.get(pivotEx.id).muscleGroup;
@@ -106,9 +194,9 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
     // Find last completion date for each exercise
     const lastDates = {};
     for (const session of chronologicalHistory) {
-        if (!session.exercises) continue;
+        if (!Array.isArray(session.exercises)) continue;
         for (const ex of session.exercises) {
-            lastDates[ex.id] = new Date(session.date);
+            if (wasPerformed(session, ex)) lastDates[ex.id] = new Date(session.date);
         }
     }
 
@@ -116,7 +204,7 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
     //         exercise for todayPivot. All others in that group are skipped.
     let chosenPivotExId = null;
     if (todayPivot !== null) {
-        const pivotCandidates = catalog.filter(
+        const pivotCandidates = normalizedCatalog.filter(
             ex => ex.tier === 1 && ex.muscleGroup === todayPivot && ex.isActive !== false
         );
         if (pivotCandidates.length > 0) {
@@ -131,7 +219,7 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
     
     // Filter and compute dynamic tier
     let candidates = [];
-    for (const ex of catalog) {
+    for (const ex of normalizedCatalog) {
         if (ex.isActive === false) {
             continue;
         }
@@ -242,5 +330,5 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
         }
     }
     
-    return workout;
+    return workout.map(exercise => enrichSelectedExercise(exercise, history));
 }

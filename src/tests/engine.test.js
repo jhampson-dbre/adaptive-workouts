@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { generateWorkout, getDaysSinceLastLegDay } from '../utils/engine';
+import { isValidV2ExerciseOccurrence } from '../utils/workoutSchema';
 
 const mockCatalog = [
     { id: 'biceps_curl', name: 'Bicep Curls', muscleGroup: 'Biceps', tier: 1, sets: 3 },
@@ -36,6 +37,51 @@ const threeGroupTier1Catalog = [
     { id: 'tri_ext', name: 'Tricep Extensions', muscleGroup: 'Triceps', tier: 3, sets: 3 },
     { id: 'plank', name: 'Plank', muscleGroup: 'Core', tier: 4, sets: 2 },
 ];
+
+function simpleV2Occurrence(catalogExercise, completed) {
+    return {
+        ...catalogExercise,
+        trackingMode: 'simple',
+        prescribedSetCount: catalogExercise.sets,
+        completed,
+    };
+}
+
+function weightedV2Occurrence(catalogExercise, completedSets) {
+    return {
+        ...catalogExercise,
+        trackingMode: 'weighted',
+        prescribedSetCount: catalogExercise.sets,
+        startingWeight: 100,
+        targetReps: 8,
+        floorReps: 5,
+        weightStep: 5,
+        setRecords: Array.from({ length: catalogExercise.sets }, (_, index) => ({
+            index,
+            targetWeight: 100,
+            targetReps: 8,
+            actualWeight: 100,
+            actualReps: 0,
+            completed: completedSets[index] ?? false,
+            recommendationReason: index === 0 ? {
+                decision: 'starting',
+                sourceWorkoutId: null,
+                sourceWorkoutDate: null,
+                sourceAnchorWeight: null,
+                appliedWeightStep: 0,
+                recommendedWeight: 100,
+                reasonCode: 'STARTING_NO_ANCHOR',
+            } : {
+                recommendedWeight: 100,
+                reasonCode: 'BACKOFF_FLOOR_MET',
+            },
+        })),
+    };
+}
+
+function completedV2Workout(date, exercises) {
+    return { schemaVersion: 2, status: 'completed', date, actualDuration: 30, exercises };
+}
 
 describe('Generator Engine', () => {
     beforeEach(() => {
@@ -104,6 +150,121 @@ describe('Generator Engine', () => {
         const rowsIndex = workout.findIndex(ex => ex.id === 'chest_row');
         
         expect(dipsIndex).toBeLessThan(rowsIndex);
+    });
+
+    it('does not let a skipped v2 occurrence reset stale-exercise recency', () => {
+        const settings = { staleThreshold: 5 };
+        const dips = mockCatalog.find(ex => ex.id === 'dips');
+        const history = [
+            { date: '2026-06-24T10:00:00Z', exercises: [{ id: 'dips' }] },
+            { date: '2026-06-29T10:00:00Z', exercises: [{ id: 'chest_row' }] },
+            completedV2Workout('2026-06-30T09:00:00Z', [simpleV2Occurrence(dips, false)]),
+        ];
+
+        const generated = generateWorkout(60, [], false, mockCatalog, history, settings);
+        expect(generated.findIndex(ex => ex.id === 'dips'))
+            .toBeLessThan(generated.findIndex(ex => ex.id === 'chest_row'));
+    });
+
+    it('ignores skipped v2 Tier-1 occurrences when rotating the pivot', () => {
+        const biceps = mockCatalog.find(ex => ex.id === 'biceps_curl');
+        const shoulders = mockCatalog.find(ex => ex.id === 'shoulder_press');
+        const history = [
+            completedV2Workout('2026-06-28T10:00:00Z', [simpleV2Occurrence(biceps, true)]),
+            completedV2Workout('2026-06-29T10:00:00Z', [simpleV2Occurrence(shoulders, false)]),
+        ];
+
+        const generated = generateWorkout(60, [], false, mockCatalog, history, { staleThreshold: 5 });
+        expect(generated[0].muscleGroup).toBe('Shoulders');
+    });
+
+    describe('tracking enrichment', () => {
+        const trackingCatalog = [
+            { id: 'simple', name: 'Plank', muscleGroup: 'Core', tier: 3, sets: 2, dynamicTier: 99 },
+            {
+                id: 'weighted', name: 'Bench Press', muscleGroup: 'Chest', tier: 3, sets: 2,
+                trackingMode: 'weighted', startingWeight: 100, targetReps: 8, floorReps: 5, weightStep: 10,
+            },
+            {
+                id: 'bodyweight', name: 'Pull Up', muscleGroup: 'Back', tier: 3, sets: 2,
+                trackingMode: 'bodyweight', targetReps: 6,
+            },
+        ];
+
+        it('preserves selection order while enriching every mode into valid occurrences', () => {
+            const generated = generateWorkout(60, [], false, trackingCatalog, [], { staleThreshold: 5 });
+
+            expect(generated.map(ex => ex.id)).toEqual(['simple', 'weighted', 'bodyweight']);
+            expect(generated.every(isValidV2ExerciseOccurrence)).toBe(true);
+            expect(generated[0]).toMatchObject({
+                trackingMode: 'simple', prescribedSetCount: 2, completed: false, dynamicTier: 3,
+            });
+            expect(generated[1].setRecords).toHaveLength(2);
+            expect(generated[1].setRecords[0]).toMatchObject({
+                index: 0, targetWeight: 100, actualWeight: 100, targetReps: 8, actualReps: 8, completed: false,
+                recommendationReason: { decision: 'starting', reasonCode: 'STARTING_NO_ANCHOR' },
+            });
+            expect(generated[1].setRecords[1]).toMatchObject({
+                index: 1, targetWeight: 100, actualWeight: 100, targetReps: 8, actualReps: 8, completed: false,
+                recommendationReason: { recommendedWeight: 100, reasonCode: 'BACKOFF_AWAITING_PRIOR_SET' },
+            });
+            expect(generated[2].setRecords[0]).toEqual({
+                index: 0, targetReps: 6, fullReps: 0, assistedReps: 0, eccentricReps: 0, completed: false,
+            });
+            expect(trackingCatalog[0]).not.toHaveProperty('trackingMode');
+            expect(trackingCatalog[0].dynamicTier).toBe(99);
+        });
+
+        it('uses source snapshots for the decision and the current step in top-set provenance', () => {
+            const current = trackingCatalog[1];
+            const source = weightedV2Occurrence({ ...current, weightStep: 5 }, [true, true]);
+            source.setRecords.forEach(record => {
+                record.actualReps = record.index === 0 ? 8 : 5;
+            });
+            const history = [{
+                ...completedV2Workout('2026-06-29T10:00:00Z', [source]),
+                id: 'source-workout',
+            }];
+
+            const [generated] = generateWorkout(60, [], false, [current], history, { staleThreshold: 5 });
+            expect(generated.setRecords[0].recommendationReason).toEqual({
+                decision: 'increase',
+                sourceWorkoutId: 'source-workout',
+                sourceWorkoutDate: '2026-06-29T10:00:00Z',
+                sourceAnchorWeight: 100,
+                appliedWeightStep: 10,
+                recommendedWeight: 110,
+                reasonCode: 'INCREASE_ALL_SETS_QUALIFIED',
+            });
+            expect(generated.setRecords.every(record => record.targetWeight === 110)).toBe(true);
+        });
+
+        it('blocks malformed active catalog data by name and id but ignores inactive malformed data', () => {
+            const invalid = {
+                id: 'bad-press', name: 'Bad Press', muscleGroup: 'Chest', tier: 3, sets: 2,
+                trackingMode: 'weighted', startingWeight: 100, targetReps: 8, floorReps: 8, weightStep: 5,
+            };
+            expect(() => generateWorkout(60, [], false, [invalid], [], { staleThreshold: 5 }))
+                .toThrow(/Bad Press.*bad-press.*Manage Catalog|Settings/i);
+            expect(generateWorkout(60, [], false, [{ ...invalid, isActive: false }], [], { staleThreshold: 5 }))
+                .toEqual([]);
+        });
+    });
+
+    it('fails closed on malformed exercise containers and primitive occurrences', () => {
+        const shoulders = simpleV2Occurrence(
+            mockCatalog.find(ex => ex.id === 'shoulder_press'),
+            true,
+        );
+        const history = [
+            { schemaVersion: 2, status: 'completed', date: '2026-06-28T10:00:00Z', actualDuration: 30, exercises: {} },
+            completedV2Workout('2026-06-29T10:00:00Z', [null, 'bad-occurrence', shoulders]),
+        ];
+
+        expect(() => generateWorkout(60, [], false, mockCatalog, history, { staleThreshold: 5 }))
+            .not.toThrow();
+        expect(generateWorkout(60, [], false, mockCatalog, history, { staleThreshold: 5 })[0].muscleGroup)
+            .toBe('Biceps');
     });
 
     it('drops Tier 4 exercises if time budget is tight', () => {
@@ -321,6 +482,33 @@ describe('Generator Engine', () => {
             const workout = generateWorkout(60, [], false, catalog, history, settings);
             const tier4Legs = workout.filter(ex => ex.muscleGroup === 'Legs' && ex.tier === 4);
             expect(tier4Legs.length).toBe(0);
+        });
+
+        it('counts partial tracked leg work but ignores fully skipped v2 leg occurrences', () => {
+            const squat = mockCatalog.find(ex => ex.id === 'squat');
+            const partial = weightedV2Occurrence(squat, [true, false, false, false]);
+            const skipped = weightedV2Occurrence(squat, [false, false, false, false]);
+
+            expect(getDaysSinceLastLegDay(
+                [completedV2Workout('2026-06-29T10:00:00Z', [partial])],
+                new Date('2026-06-30T10:00:00Z'),
+            )).toBe(1);
+            expect(getDaysSinceLastLegDay(
+                [completedV2Workout('2026-06-29T10:00:00Z', [skipped])],
+                new Date('2026-06-30T10:00:00Z'),
+            )).toBe(Infinity);
+        });
+
+        it('counts a valid leg sibling when another v2 occurrence is malformed', () => {
+            const squat = simpleV2Occurrence(mockCatalog.find(ex => ex.id === 'squat'), true);
+            const malformed = { ...squat, id: 'bad-leg', sets: 99 };
+            expect(getDaysSinceLastLegDay(
+                [
+                    { schemaVersion: 2, status: 'completed', date: '2026-06-28T10:00:00Z', actualDuration: 30, exercises: 'bad' },
+                    completedV2Workout('2026-06-29T10:00:00Z', [null, malformed, squat]),
+                ],
+                new Date('2026-06-30T10:00:00Z'),
+            )).toBe(1);
         });
 
         it('skips all Tier 3 leg exercises if they do not fit in the time budget (All-or-Nothing)', () => {

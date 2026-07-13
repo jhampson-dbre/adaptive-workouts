@@ -4,6 +4,14 @@ import { generateWorkout, getDaysSinceLastLegDay, getDayOfWeek } from '../utils/
 import { getSettings, getHistory, getCatalog } from '../utils/storage';
 
 const MUSCLE_GROUPS = ['Biceps', 'Shoulders', 'Back', 'Chest', 'Triceps', 'Core', 'Legs'];
+const HISTORY_UNAVAILABLE_MESSAGE = 'Workout history is unavailable. Retry before generating a workout.';
+
+class HistoryLoadError extends Error {
+  constructor(cause) {
+    super(HISTORY_UNAVAILABLE_MESSAGE, { cause });
+    this.name = 'HistoryLoadError';
+  }
+}
 
 export default function Generator({ 
   timeBudget, 
@@ -15,6 +23,7 @@ export default function Generator({
   const user = useContext(AuthContext);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState(null);
+  const [canRetryHistory, setCanRetryHistory] = useState(false);
 
   const handleToggleGroup = (group) => {
     setUnrecoveredGroups((prev) => 
@@ -32,14 +41,23 @@ export default function Generator({
     setIsGenerating(true);
     setError(null);
     try {
-      const [settings, history, catalog] = await Promise.all([
+      const [settingsResult, historyResult, catalogResult] = await Promise.allSettled([
         getSettings(user.uid),
         getHistory(user.uid),
         getCatalog(user.uid)
       ]);
+      if (historyResult.status === 'rejected') throw new HistoryLoadError(historyResult.reason);
+      if (settingsResult.status === 'rejected') throw settingsResult.reason;
+      if (catalogResult.status === 'rejected') throw catalogResult.reason;
+      const settings = settingsResult.value;
+      const history = historyResult.value;
+      const catalog = catalogResult.value;
+      setCanRetryHistory(false);
       
       // Check if we have primary leg exercises
-      const hasPrimaryLegs = catalog.some(ex => ex.muscleGroup === 'Legs' && ex.tier === 3);
+      const hasPrimaryLegs = catalog.some(ex => (
+        ex.isActive !== false && ex.muscleGroup === 'Legs' && ex.tier === 3
+      ));
       
       if (hasPrimaryLegs && settings.legDayOfWeek && settings.legDayOfWeek !== 'None' && !unrecoveredGroups.includes('Legs')) {
         const daysSince = getDaysSinceLastLegDay(history);
@@ -71,7 +89,16 @@ export default function Generator({
       if (onGenerate) onGenerate(generated);
     } catch (err) {
       console.error("Error generating workout:", err);
-      setError("Failed to generate workout. Please try again.");
+      if (err instanceof HistoryLoadError) {
+        setError(HISTORY_UNAVAILABLE_MESSAGE);
+        setCanRetryHistory(true);
+      } else if (err?.name === 'InvalidCatalogExerciseError') {
+        setError(err.message);
+        setCanRetryHistory(false);
+      } else {
+        setError("Failed to generate workout. Please try again.");
+        setCanRetryHistory(false);
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -82,6 +109,11 @@ export default function Generator({
       <h2>Generate Workout</h2>
       
       {error && <div className="error-message">{error}</div>}
+      {canRetryHistory && (
+        <button type="button" onClick={handleGenerate} disabled={isGenerating}>
+          {isGenerating ? 'Retrying...' : 'Retry'}
+        </button>
+      )}
 
       <div className="slider-container">
         <label htmlFor="time-slider">

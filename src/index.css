@@ -325,6 +325,75 @@ code {
   opacity: 0.5;
 }
 
+.set-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.set-row {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.set-row.locked {
+  opacity: 0.6;
+}
+
+.set-row-heading,
+.set-inputs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.set-status {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.set-status.completed {
+  color: var(--accent);
+}
+
+.set-inputs {
+  margin-top: 10px;
+  justify-content: flex-start;
+}
+
+.set-input,
+.set-confirm {
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.set-input input {
+  width: 84px;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-h);
+  background: var(--code-bg);
+}
+
+.set-confirm {
+  display: flex;
+  align-items: center;
+}
+
+.recommendation-reason,
+.bodyweight-total {
+  margin-top: 10px;
+  font-size: 14px;
+}
+
 .start-btn,
 .finish-btn {
   background: linear-gradient(135deg, var(--accent), #d04bff);
@@ -350,6 +419,130 @@ code {
 .start-btn:active,
 .finish-btn:active {
   transform: translateY(0);
+}
+
+.workout-summary {
+  padding: 1.25rem;
+  border: 1px solid var(--border-color, #d8dee8);
+  border-radius: 0.75rem;
+}
+
+.workout-summary:focus {
+  outline: 3px solid rgba(66, 133, 244, 0.35);
+  outline-offset: 3px;
+}
+
+.summary-total {
+  font-weight: 700;
+}
+
+.refresh-warning {
+  color: #6b7280;
+}
+
+.summary-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.workout-history-section {
+  margin-top: 2rem;
+}
+
+.history-list,
+.history-exercise-list,
+.history-set-list,
+.history-legacy-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.history-list {
+  display: grid;
+  gap: 16px;
+}
+
+.history-card {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.history-card-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.history-card-heading h3,
+.history-exercise h4 {
+  margin: 0;
+  color: var(--text-h);
+}
+
+.history-exercise-list,
+.history-legacy-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.history-exercise {
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.history-exercise-summary,
+.history-simple-status,
+.history-recommendation {
+  margin-top: 6px;
+}
+
+.history-set-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.history-set-row {
+  display: grid;
+  grid-template-columns: minmax(52px, auto) minmax(0, 1fr);
+  gap: 4px 12px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--code-bg);
+}
+
+.history-set-performance {
+  overflow-wrap: anywhere;
+}
+
+.history-recommendation {
+  grid-column: 2;
+  font-size: 14px;
+}
+
+.history-exercise-unavailable,
+.history-card-unavailable > p {
+  color: var(--text);
+  font-style: italic;
+}
+
+@media (max-width: 600px) {
+  .history-set-row {
+    grid-template-columns: 1fr;
+  }
+
+  .history-recommendation {
+    grid-column: 1;
+  }
 }
 
 /* Settings View Styles */
@@ -415,6 +608,43 @@ code {
   gap: 12px;
   flex-wrap: wrap;
   align-items: center;
+}
+
+.tracking-fields {
+  display: flex;
+  flex: 1 1 100%;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+
+.tracking-field {
+  display: flex;
+  flex: 1 1 150px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.tracking-mode-field {
+  flex: 1 1 170px;
+}
+
+.tracking-field input,
+.tracking-field select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.catalog-form-error {
+  flex: 1 1 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 85, 85, 0.5);
+  border-radius: 8px;
+  background: rgba(255, 60, 60, 0.1);
+  color: #ff7777;
 }
 
 .add-form input,
@@ -541,6 +771,17 @@ code {
   gap: 12px;
   flex-wrap: wrap;
   align-items: center;
+}
+
+.edit-form .tracking-fields {
+  flex-basis: 100%;
+}
+
+@media (max-width: 600px) {
+  .tracking-field,
+  .tracking-mode-field {
+    flex-basis: 100%;
+  }
 }
 
 .edit-actions {
