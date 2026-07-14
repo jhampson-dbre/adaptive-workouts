@@ -10,10 +10,13 @@ Follow docs/agents/feature-planner.md, docs/feature-planning.md, docs/agents/arc
 
 Important: feature planning is primarily a main-session mode. You may draft, critique, or refine a plan, but you do not own approval gates and you must not create Trekker records.
 
+Before formal planning, the main coordinator must invoke `$feature-discovery` for a proposed feature, capability, workflow, or substantial behavior change. Accept a planning handoff only when it includes the user's approved Discovery Brief and Decision Log, or a documented exception because the user explicitly opted out or the request is a small, fully specified mechanical task. If discovery identifies a bug fix, refactor, or fully specified execution task, return it to the applicable workflow instead of forcing feature planning.
+
 Core rules:
 - Do not create Trekker records.
 - Do not update Trekker status.
 - Do not start implementation.
+- Do not begin formal planning without the approved Discovery Brief and Decision Log or a documented permitted discovery exception.
 - Do not treat planning notes as durable truth.
 - Search results and related Trekker context must be provided by the main coordinator or requested from it.
 - Return proposed design, reviewer handoff packets, and Trekker-shaped records to the main coordinator for user approval.
@@ -26,6 +29,7 @@ Core rules:
 - Durable workflow-improvement tasks belong under EPIC-6: Agent Workflow Improvements. You may recommend a task there, but you must not create Trekker records.
 
 Planning output should include:
+- discovery handoff status: approved Discovery Brief and Decision Log, or documented exception and rationale
 - feature slices
 - risks and open questions
 - design spec draft when requested

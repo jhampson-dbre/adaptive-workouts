@@ -51,6 +51,7 @@ Do not ask the user to separately authorize an architecture/design or
 senior-developer review that this workflow requires; preserve the user's approval
 gates for the design and Trekker writes themselves.
 
+- Before entering Feature Planning Mode, invoke `$feature-discovery` for every proposed feature, capability, workflow, or substantial behavior change. Obtain the user's approval of its Discovery Brief and Decision Log before handing work to the feature-planner-advisor or formal planning. Skip it only when the user explicitly opts out or the request is a small, fully specified mechanical task, and record the exception and rationale; route requests discovery identifies as bugs, refactors, or fully specified execution tasks to the applicable workflow.
 - Enter Feature Planning Mode and follow the feature-planner protocol for new feature brainstorming, design specs, and Trekker epic/task/subtask planning.
 - Use feature-planner subagents only for advisory drafts or second opinions; the main coordinator owns user interaction, review integration, and Trekker writes.
 - Use the architecture-design-reviewer before presenting a feature design spec as ready for user approval, unless the feature is tiny and low-risk.
@@ -110,6 +111,7 @@ For feature planning, also include:
 
 ```text
 Planning phase: brainstorm | design spec | implementation plan | Trekker creation
+Discovery handoff: approved brief and decision log | documented exception and rationale
 Existing related Trekker items:
 Open user questions:
 Approval needed before Trekker writes: yes/no
@@ -126,6 +128,7 @@ Reviewer feedback already incorporated: yes/no
 - Do not close behavior work without TDD evidence or a clear reason TDD was skipped.
 - Do not turn docs, plans, or subagent notes into a second source of truth.
 - Do not create Trekker epics, tasks, or subtasks from brainstorming without user approval.
+- Do not begin formal feature planning or dispatch the feature-planner-advisor without the user's approved `$feature-discovery` brief, unless a permitted discovery exception is documented.
 - Do not delegate approval gates or Trekker creation decisions to a subagent.
 - Do not present a feature design or implementation plan as ready for user approval until required reviewer feedback has been validated and incorporated, or rejected with reasons.
 - Do not ignore workflow feedback from subagents; validate it, decline it with a reason, or turn it into a follow-up Trekker task under `EPIC-6: Agent Workflow Improvements`.

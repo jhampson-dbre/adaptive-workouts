@@ -255,20 +255,32 @@ Codex planning is a temporary scratchpad for brainstorming and shaping the featu
 
 Feature planning is a main-session mode, not a hidden delegated workflow. The main agent may ask the feature-planner-advisor for an advisory draft, but the main agent owns the planning conversation, approval gates, review integration, and Trekker creation.
 
+Before entering formal Feature Planning Mode, invoke the repository
+`$feature-discovery` skill for every proposed feature, capability, workflow, or
+substantial behavior change. Discovery is a collaborative, pre-planning
+conversation: it produces a user-approved Discovery Brief and Decision Log before
+the feature-planner-advisor, design review, or Trekker planning begins. Skip it
+only when the user explicitly opts out or the request is a small, fully specified
+mechanical task; record the applicable exception and rationale. If discovery shows
+the request is actually a bug fix, refactor, or fully specified execution task,
+route it to that workflow instead of forcing feature planning.
+
 Planning flow:
 
-1. Search Trekker for duplicates or related work.
-2. Brainstorm and identify open questions without creating Trekker items.
-3. Draft an epic-level design spec.
-4. Run architecture/design review, validate the feedback, and either incorporate it or record why it was not accepted.
-5. Present the revised design spec to the user for approval.
-6. For larger epics, propose saving a durable spec under `docs/specs/`.
-7. Convert the approved design into an implementation plan: epic, tasks, subtasks, dependencies, and verification.
-8. Run planning conformance with the senior-developer implementation-plan reviewer, validate the feedback, and either incorporate it or record why it was not accepted.
-9. Ask for approval before creating or updating Trekker records.
-10. Create Trekker epic/task/subtask records and dependencies.
-11. Validate and capture planning-funnel workflow feedback under `EPIC-6`, or explicitly record why it is deferred.
-12. Mirror only the current session in `update_plan` after Trekker is correct.
+1. Complete `$feature-discovery` and obtain user approval of its Discovery Brief,
+   unless a documented exception applies.
+2. Search Trekker for duplicates or related work.
+3. Brainstorm and identify open questions without creating Trekker items.
+4. Draft an epic-level design spec.
+5. Run architecture/design review, validate the feedback, and either incorporate it or record why it was not accepted.
+6. Present the revised design spec to the user for approval.
+7. For larger epics, propose saving a durable spec under `docs/specs/`.
+8. Convert the approved design into an implementation plan: epic, tasks, subtasks, dependencies, and verification.
+9. Run planning conformance with the senior-developer implementation-plan reviewer, validate the feedback, and either incorporate it or record why it was not accepted.
+10. Ask for approval before creating or updating Trekker records.
+11. Create Trekker epic/task/subtask records and dependencies.
+12. Validate and capture planning-funnel workflow feedback under `EPIC-6`, or explicitly record why it is deferred.
+13. Mirror only the current session in `update_plan` after Trekker is correct.
 
 Do not create Trekker epics, tasks, or subtasks from brainstorming unless the user has approved the design and implementation plan.
 

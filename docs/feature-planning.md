@@ -2,6 +2,20 @@
 
 Use this workflow when the user wants to brainstorm, design, or plan a new feature before implementation.
 
+## Required Discovery Gate
+
+Before formal feature planning, invoke `$feature-discovery` for every proposed
+feature, capability, workflow, or substantial behavior change. The skill is a
+collaborative discovery conversation, not Trekker work or implementation. Complete
+its Discovery Brief and Decision Log, then obtain the user's explicit approval to
+hand the brief to the `feature-planner-advisor` before starting this workflow.
+
+Skip discovery only when the user explicitly opts out or the request is a small,
+fully specified mechanical task. State the exception and rationale in the planning
+conversation. If discovery identifies a bug fix, refactor, or fully specified
+execution task instead, use the applicable workflow rather than continuing with
+feature planning.
+
 Codex planning is the scratchpad. Trekker is the durable source of truth.
 
 Feature planning runs in the main agent session. A subagent may help draft or review, but the main agent owns the user conversation, approval gates, review integration, and Trekker writes.
@@ -257,6 +271,7 @@ Then use the normal TDD/subagent workflow in `docs/agent-workflow.md`.
 
 Before creating Trekker records, confirm:
 
+- `$feature-discovery` was completed and its Discovery Brief was user-approved before formal planning, or the explicit opt-out/small-mechanical exception and rationale were recorded
 - duplicate search was done
 - user approved the design spec
 - architecture/design review was run, or skipped with a reason for tiny low-risk work
