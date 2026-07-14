@@ -99,6 +99,8 @@ Use subagents deliberately:
 - Final integration: before publishing an implementation branch or epic handoff,
   merge, PR approval, or epic closure, run the independent epic branch review with
   the epic reviewer and fresh epic spec/conformance review with the spec reviewer.
+  Invoke `$epic-development-branch-completion` to coordinate this PR-stage or
+  epic-completion handoff.
 
 Parallel reviewers are allowed. Only one implementor may edit a given file set at a time. Reviewers are read-only unless the main agent explicitly asks them to prepare a patch.
 
@@ -280,6 +282,11 @@ Do not create Trekker epics, tasks, or subtasks from brainstorming unless the us
 - Never commit secrets. Production Firebase values belong in Vercel environment variables or local ignored env files.
 
 ## Branch And PR Cadence
+
+At PR stage or epic completion, invoke `$epic-development-branch-completion`. It
+checks per-task commit and `Summary:` boundaries, prepares cumulative and complete
+working-tree evidence, runs the two final-integration gates, and guides the draft-PR
+handoff while the coordinator retains Trekker, push, PR, and approval ownership.
 
 - Prefer a focused branch per task or small related task set.
 - Use the `codex/` branch prefix unless the user asks for another naming scheme.

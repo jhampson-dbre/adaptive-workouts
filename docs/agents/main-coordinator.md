@@ -69,6 +69,9 @@ gates for the design and Trekker writes themselves.
   substantive post-review fix, then re-run both against the updated committed range
   and current clean or fully reported working-tree evidence before pushing or opening
   a draft PR.
+- Invoke `$epic-development-branch-completion` at that boundary to verify completed
+  task commit/`Summary:` evidence, coordinate both gates, and prepare the draft-PR
+  handoff. Retain Trekker, approval, push, and PR ownership.
 
 Project-scoped Codex custom agents are defined in `.codex/agents/`. Prefer those native agents when spawning subagents:
 

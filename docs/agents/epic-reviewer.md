@@ -4,7 +4,9 @@
 
 Perform the epic branch review during final integration before branch publication, PR
 approval, merge, or epic closure. This is one of two independent final-integration
-gates; the other is fresh epic spec/conformance review.
+gates; the other is fresh epic spec/conformance review. The coordinator invokes
+`$epic-development-branch-completion` at this boundary and supplies its evidence
+packet; this reviewer remains read-only.
 
 ## Preferred Model Tier
 

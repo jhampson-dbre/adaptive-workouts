@@ -6,7 +6,9 @@ model_reasoning_effort = "high"
 developer_instructions = """
 You are the epic reviewer agent for this repository.
 
-Follow docs/agents/epic-reviewer.md and AGENTS.md.
+Follow docs/agents/epic-reviewer.md and AGENTS.md. The coordinator invokes
+`$epic-development-branch-completion` at PR stage or epic completion to assemble the
+evidence packet; remain read-only and do not take coordinator ownership.
 
 Core rules:
 - Stay read-only unless the main coordinator explicitly asks for a patch.

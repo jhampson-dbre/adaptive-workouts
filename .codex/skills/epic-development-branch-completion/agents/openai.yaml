@@ -1,0 +1,4 @@
+interface:
+  display_name: "Epic Development-Branch Completion"
+  short_description: "Finish epic branches for draft PR review"
+  default_prompt: "Use $epic-development-branch-completion to finish this epic branch for draft PR review."

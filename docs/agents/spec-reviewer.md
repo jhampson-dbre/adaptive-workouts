@@ -57,6 +57,8 @@ senior-developer planning conformance, not this role.
 
 At PR stage or epic completion, a fresh spec reviewer performs the independent epic
 spec/conformance gate alongside the epic reviewer's branch review. The coordinator
+uses `$epic-development-branch-completion` to assemble the final-integration evidence
+packet while retaining Trekker, approval, push, and PR ownership. The coordinator
 must supply the target branch, `git merge-base <target> HEAD` commit, cumulative
 `<merge-base>...HEAD` diff, `git status --short --branch`, `git diff`,
 `git diff --cached`, epic task evidence, and relevant approved intent. Review the

@@ -154,6 +154,8 @@ Use this dispatch matrix:
 - Final integration: before publishing an implementation branch or epic handoff,
   merge, PR approval, or epic closure, run the independent epic branch review with
   the epic reviewer and fresh epic spec/conformance review with the spec reviewer.
+  Invoke `$epic-development-branch-completion` to coordinate that PR-stage or
+  epic-completion handoff.
 
 Use this handoff packet:
 
@@ -337,6 +339,11 @@ follow-up task or subtask that records the trigger, owner, expected evidence, an
 completion boundary.
 
 ## 10. Branch And PR Cadence
+
+At PR stage or epic completion, invoke `$epic-development-branch-completion`.
+It verifies per-task commit and Trekker `Summary:` boundaries, assembles cumulative
+and complete working-tree evidence, runs both final-integration gates, and guides the
+draft-PR handoff. The coordinator retains Trekker, approval, push, and PR ownership.
 
 - Prefer a focused branch per task or small related task set.
 - Use the `codex/` branch prefix unless the user asks for another naming scheme.
