@@ -85,6 +85,9 @@ function ConfirmControl({ exercise, exerciseIndex, setIndex, started, dispatch }
   const record = exercise.setRecords[setIndex];
   const status = getSetStatus(exercise, setIndex);
   const hasConfirmedDependent = exercise.setRecords.slice(setIndex + 1).some(candidate => candidate.completed);
+  const hasValidWeightedActuals = exercise.trackingMode !== 'weighted'
+    || (Number.isFinite(record.actualWeight) && record.actualWeight >= 0
+      && Number.isInteger(record.actualReps) && record.actualReps >= 0);
   const label = `${exercise.name} exercise ${exerciseIndex + 1} set ${setIndex + 1} confirm`;
   return (
     <label className="set-confirm">
@@ -92,7 +95,7 @@ function ConfirmControl({ exercise, exerciseIndex, setIndex, started, dispatch }
         type="checkbox"
         aria-label={label}
         checked={record.completed}
-        disabled={!started || status === 'locked' || (record.completed && hasConfirmedDependent)}
+        disabled={!started || status === 'locked' || (!record.completed && !hasValidWeightedActuals) || (record.completed && hasConfirmedDependent)}
         onChange={() => dispatch({ type: 'toggleTrackedSet', exerciseIndex, setIndex })}
       />
       Confirm attempt

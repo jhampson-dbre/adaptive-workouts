@@ -119,6 +119,27 @@ test('shows live weighted backoff reasons and preserves a user override', async 
   await waitFor(() => expect(screen.queryByText('Loading history...')).toBeNull());
 });
 
+test('allows actual reps to be cleared and replaced before and after confirmation', async () => {
+  renderWithContext(<WorkoutView workout={trackedWorkout} onFinish={() => {}} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  const actualReps = screen.getByRole('spinbutton', { name: /Bench Press exercise 1 set 1 actual reps/i });
+  const confirm = screen.getByRole('checkbox', { name: /Bench Press exercise 1 set 1 confirm/i });
+
+  fireEvent.change(actualReps, { target: { value: '' } });
+  expect(actualReps.value).toBe('');
+  expect(confirm.disabled).toBe(true);
+  fireEvent.change(actualReps, { target: { value: '6' } });
+  expect(actualReps.value).toBe('6');
+  expect(confirm.disabled).toBe(false);
+
+  fireEvent.click(confirm);
+  fireEvent.change(actualReps, { target: { value: '' } });
+  expect(actualReps.value).toBe('');
+  fireEvent.change(actualReps, { target: { value: '5' } });
+  expect(actualReps.value).toBe('5');
+  await waitFor(() => expect(screen.queryByText('Loading history...')).toBeNull());
+});
+
 test('explains when a prior target ceiling caps a below-floor backoff', async () => {
   const capped = structuredClone(trackedWorkout[0]);
   capped.sets = 3;

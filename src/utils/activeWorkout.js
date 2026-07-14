@@ -10,6 +10,11 @@ function isValidActual(field, value) {
   return parsed;
 }
 
+function canConfirmWeightedSet(record) {
+  return isValidActual('actualWeight', record.actualWeight) !== null
+    && isValidActual('actualReps', record.actualReps) !== null;
+}
+
 function confirmedPrefixLength(records) {
   let length = 0;
   while (length < records.length && records[length].completed) length += 1;
@@ -105,7 +110,9 @@ export function activeWorkoutReducer(state, action) {
     const prefixLength = confirmedPrefixLength(exercise.setRecords);
     const record = exercise.setRecords[action.setIndex];
     if (!record) return state;
-    const canConfirm = !record.completed && action.setIndex === prefixLength;
+    const canConfirm = !record.completed
+      && action.setIndex === prefixLength
+      && (exercise.trackingMode !== 'weighted' || canConfirmWeightedSet(record));
     const canUnconfirm = record.completed && action.setIndex === prefixLength - 1;
     if (!canConfirm && !canUnconfirm) return state;
 
@@ -122,7 +129,8 @@ export function activeWorkoutReducer(state, action) {
 
   if (action.type === 'editWeightedActual') {
     if (exercise.trackingMode !== 'weighted' || !WEIGHTED_FIELDS.has(action.field)) return state;
-    const value = isValidActual(action.field, action.value);
+    const isTemporaryEmptyActualReps = action.field === 'actualReps' && action.value === '';
+    const value = isTemporaryEmptyActualReps ? '' : isValidActual(action.field, action.value);
     if (value === null) return state;
     const record = exercise.setRecords[action.setIndex];
     if (!record || getSetStatus(exercise, action.setIndex) === 'locked') return state;
@@ -133,7 +141,7 @@ export function activeWorkoutReducer(state, action) {
     }));
     const updatedExercise = updatedState.exercises[action.exerciseIndex];
     const prefixLength = confirmedPrefixLength(updatedExercise.setRecords);
-    if (record.completed && action.setIndex === prefixLength - 1) {
+    if (record.completed && value !== '' && action.setIndex === prefixLength - 1) {
       updatedState = replaceExercise(
         updatedState,
         action.exerciseIndex,
