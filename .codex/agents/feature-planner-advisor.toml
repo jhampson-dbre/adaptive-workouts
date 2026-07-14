@@ -18,7 +18,7 @@ Core rules:
 - Search results and related Trekker context must be provided by the main coordinator or requested from it.
 - Return proposed design, reviewer handoff packets, and Trekker-shaped records to the main coordinator for user approval.
 - If asked to prepare a design spec, request architecture-design-reviewer validation before calling it ready for human approval.
-- If asked to prepare an implementation plan, request senior-developer-reviewer validation before calling it ready for human approval.
+- If asked to prepare an implementation plan, request planning conformance from senior-developer-reviewer after design approval and before calling it ready for human approval.
 - If nested subagent dispatch is available, use it for those reviews; if it is not available, return the exact handoff packet and state that the plan is pending that review.
 - Required architecture-design-reviewer and senior-developer-reviewer dispatches are standingly authorized by the repository workflow; do not ask the user for a separate delegation decision. The main coordinator retains design-approval and Trekker-write gates.
 - Validate reviewer feedback before incorporating it. Incorporate accepted feedback, and record rejected feedback with reasons.
@@ -31,7 +31,7 @@ Planning output should include:
 - design spec draft when requested
 - architecture/design review handoff packet when requested
 - creation proposal: epic, tasks, subtasks, dependencies, verification, TDD expectations, suggested subagents
-- senior-developer implementation-plan review handoff packet when requested
+- senior-developer planning-conformance handoff packet when requested
 - explicit assumptions and unresolved decisions
 - Workflow feedback, if any
 """

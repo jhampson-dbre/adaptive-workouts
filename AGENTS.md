@@ -15,7 +15,7 @@ Use the role contracts in `docs/agents/`:
 - `docs/agents/architecture-design-reviewer.md`: design-spec architecture and product-fit review
 - `docs/agents/senior-developer-reviewer.md`: implementation-plan sequencing, TDD, and execution-risk review
 - `docs/agents/implementor.md`: TDD implementation work
-- `docs/agents/spec-reviewer.md`: acceptance criteria and spec fit
+- `docs/agents/spec-reviewer.md`: post-verification task-conformance review
 - `docs/agents/code-reviewer.md`: focused bug/regression review
 - `docs/agents/epic-reviewer.md`: full epic or branch review before merge
 
@@ -89,14 +89,34 @@ Use subagents deliberately:
 
 - New feature planning: the main agent enters Feature Planning Mode and follows the feature-planner protocol before creating Trekker items.
 - Feature design review: use the architecture-design-reviewer before presenting an epic design spec as ready for user approval.
-- Implementation plan review: use the senior-developer-reviewer before presenting Trekker task/subtask creation as ready for user approval.
+- Planning conformance: after the user approves the design and before presenting Trekker task/subtask creation for approval, use the senior-developer-reviewer to review the proposed Trekker plan.
 - Documentation-only, copy-only, or tiny config changes: main agent may handle directly.
-- Any behavior change or bug fix: use the implementor role unless the change is truly mechanical.
-- Ambiguous requirements, user-facing behavior, migration behavior, auth/storage behavior, or acceptance criteria changes: use the spec reviewer before or alongside implementation.
-- Non-trivial code changes: use the code reviewer before completing the Trekker task.
-- Branch, PR, or epic readiness review: use the epic reviewer before publishing an implementation branch or epic handoff, merge, or epic closure.
+- Every tracked implementation task: dispatch a fresh implementor. After targeted verification produces the final task diff and evidence, dispatch a fresh code reviewer and a fresh task-conformance spec reviewer; do not reuse either reviewer across task boundaries, even within the same epic.
+- Any behavior change or bug fix: use the fresh implementor role unless the change is truly mechanical.
+- Before dispatching an implementor for a behavior-bug task, the coordinator must complete the issue-class audit described in Required Workflow. For non-mechanical or user-facing bugs, a read-only spec reviewer validates that audit only; this narrow pre-implementation check is not routine task-start requirements discovery and does not replace the post-verification task-conformance review.
+- Task-start spec-review dispatch is prohibited. Do not use the spec reviewer to invent, refine, or gate routine task-start requirements.
+- Task conformance: run the post-verification spec reviewer alongside code review against the final diff, targeted verification evidence, and the Trekker task's approved intent; it checks conformance and does not invent new requirements.
+- Epic/PR conformance: use the epic reviewer during final integration before publishing an implementation branch or epic handoff, merge, PR approval, or epic closure.
 
 Parallel reviewers are allowed. Only one implementor may edit a given file set at a time. Reviewers are read-only unless the main agent explicitly asks them to prepare a patch.
+
+An agent may receive a follow-up only for the same Trekker task when the coordinator
+labels it as a same-task continuation and supplies the changed scope, new evidence,
+and the decision needed. A follow-up must not silently expand into another task. For
+post-review fixes in the same task, prefer a second fresh code reviewer; when that is
+not practical, the original reviewer may perform an explicitly labeled delta review
+of only the changes since its prior report. A task-conformance spec reviewer follows
+the same boundary: use a fresh reviewer for each task, while a same-task follow-up is
+limited to an explicitly labeled approved-intent clarification and its revised final
+diff/evidence delta. A material plan conflict must go to senior-developer planning
+conformance, not back to the spec reviewer.
+
+Conformance escalation and re-review are explicit:
+
+- For a small clarification that preserves approved intent, the coordinator updates the active Trekker task, records the decision, and sends the final changed diff and evidence through the affected task reviews again.
+- For a material conflict with the approved task plan, stop task completion and return the plan to the senior-developer implementation-plan reviewer before changing Trekker planning records.
+- For a product, architecture, data, auth, migration, or scope change, return to architecture/design review and obtain the applicable user approval before changing the design or plan.
+- Any fix or clarification that changes the final task diff requires renewed code review and task-conformance review of that changed final diff; final integration changes require renewed epic/PR conformance review.
 
 ## Subagent Handoff Packet
 
@@ -128,6 +148,35 @@ Before starting implementation:
 3. Run `git status --short --branch` and note unrelated dirty files.
 4. Mark the selected task `in_progress` before changing files.
 5. Read the relevant code and tests before editing.
+
+### Behavior-Bug Issue-Class Audit (Before Implementor Dispatch)
+
+This coordinator-owned gate applies after reproduction and root-cause identification,
+but before an implementor is dispatched. It is bug triage and scoping, not Feature
+Planning and not implementor execution. The coordinator must run a targeted search
+for same-class usages (for example, the shared component, helper, state path,
+validation rule, API contract, or repeated field) and add an audit note to the active
+Trekker task. The note records the root cause, search method and results, every
+candidate inspected, affected and unaffected surfaces with rationale, and the scope
+decision.
+
+For a non-mechanical or user-facing behavior bug, dispatch a read-only spec reviewer
+to validate the audit against the already approved task intent. That reviewer may
+identify an unsupported scope decision or escalation trigger, but must not invent or
+refine requirements. This is the limited issue-class-audit exception to the
+task-start spec-review prohibition; dispatch the normal fresh task-conformance
+reviewer again after implementation verification.
+
+Include the approved complete behavior and file scope, the audit result, and the
+required regression-test matrix in the implementor handoff. Implementors apply that
+scope; they are not responsible for discovering omitted sibling defects while coding.
+Expand the current task only when a finding shares the confirmed root cause, remains
+within approved product intent, and can be implemented and verified as one cohesive
+change. Record the expanded scope in Trekker before dispatch. Use a linked follow-up
+when the finding has a different root cause, independent risk or ownership, requires
+a material scope/design decision, or would prevent focused verification. Search for a
+duplicate and obtain the required user approval before creating or materially changing
+that follow-up; record the linkage and rationale in the audit note.
 
 For behavior changes, use TDD:
 
@@ -163,7 +212,15 @@ Before final handoff for non-trivial tracked, PR-bound, or epic work, run an
 after-action workflow audit: confirm no required step needed a user reminder, the
 repository handoff endpoint was reached, known sandbox/permission fallbacks were
 used rather than retried blindly, reviewer feedback did not expose scope or
-bookkeeping drift, and Trekker matches reality. Treat a user-reminded workflow
+bookkeeping drift, and Trekker matches reality. Inventory every residual or
+nonblocking handoff risk (including deferred verification, reviewer notes, and PR
+body caveats), search for a duplicate, then give each one a durable Trekker
+disposition: link an existing task, create or extend an appropriate backlog task, or
+record an intentional-not-tracked exception in the active task's `Summary:` (or
+`Checkpoint:` when pausing) with the duplicate-search result and concise rationale.
+Creating or materially changing a backlog item still requires the user approval that
+applies to Trekker writes; until that approval exists, leave the active task
+checkpointed with the proposed item and rationale. Treat a user-reminded workflow
 miss as `Workflow feedback:` and validate it for `EPIC-6`; state in the final
 response whether no follow-up was found or name the Trekker item created or updated.
 
@@ -196,7 +253,7 @@ Planning flow:
 5. Present the revised design spec to the user for approval.
 6. For larger epics, propose saving a durable spec under `docs/specs/`.
 7. Convert the approved design into an implementation plan: epic, tasks, subtasks, dependencies, and verification.
-8. Run senior-developer implementation-plan review, validate the feedback, and either incorporate it or record why it was not accepted.
+8. Run planning conformance with the senior-developer implementation-plan reviewer, validate the feedback, and either incorporate it or record why it was not accepted.
 9. Ask for approval before creating or updating Trekker records.
 10. Create Trekker epic/task/subtask records and dependencies.
 11. Validate and capture planning-funnel workflow feedback under `EPIC-6`, or explicitly record why it is deferred.
@@ -230,6 +287,7 @@ Every task should get a quick spec review and code review before completion:
 
 - Does the implementation satisfy the Trekker task and any referenced spec?
 - Are edge cases handled for the changed behavior?
+- For behavior-bug tasks, does the final diff and regression-test matrix cover every affected surface in the approved issue-class audit, with no unexplained divergence?
 - Are failures visible enough to troubleshoot?
 - Did the right tests run?
 - Is there any production setup or deployment checklist item still open?
@@ -238,10 +296,13 @@ If a user asks for a review, lead with findings ordered by severity, using file 
 
 For non-trivial tasks, use the specialized role docs:
 
-- Spec review before implementation when requirements are ambiguous or user-facing behavior changes.
 - Implementor for TDD implementation.
-- Code review before task completion.
-- Epic review before merging or closing an epic.
+- Code review and task conformance after targeted verification, against the final diff and approved Trekker intent.
+- Epic/PR conformance before merging, closing an epic, or publishing an implementation handoff.
+
+Routine task-start spec review is prohibited. Escalate a material requirements or
+design conflict through the conformance rules instead of using the spec reviewer to
+invent requirements.
 
 ## Project Commands
 

@@ -15,6 +15,8 @@ Core rules:
 - Do not start implementation.
 - Do not treat your review as user approval.
 - Review the design spec before it is presented as ready for human approval.
+- This role is the escalation gate for product, architecture, data, auth, migration, or scope changes found during planning, task, or epic/PR conformance; it does not replace those three conformance gates.
+- For an escalation, identify the design decision and whether renewed user approval is required. Do not silently redefine approved intent.
 - Durable workflow-improvement tasks belong under EPIC-6: Agent Workflow Improvements. You may recommend a task there, but you must not create Trekker records.
 
 Review focus:

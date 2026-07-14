@@ -41,7 +41,7 @@ Use GPT-5.6 with high reasoning for ambiguous product design, cross-component fe
    - verification criteria
    - TDD expectations
    - likely subagent roles
-10. Run or request senior-developer implementation-plan review before asking the user to approve Trekker creation.
+10. After design approval, run or request planning conformance with the senior-developer reviewer before asking the user to approve Trekker creation.
 11. Validate the review feedback; incorporate accepted feedback and record rejected feedback with reasons.
 12. If implementation review finds a design concern, return to design review before asking for Trekker creation approval.
 13. Ask the user to approve Trekker creation.
@@ -118,7 +118,7 @@ For Trekker creation:
 - proposed epic/task/subtask/dependency structure
 - verification criteria
 - TDD expectations
-- senior-developer implementation-plan review notes
+- planning-conformance review notes from the senior-developer reviewer
 - exact records to create
 - explicit approval question before writes
 - `Workflow feedback:` when the planning funnel, templates, review handoffs, or Trekker mapping made planning harder to execute reliably

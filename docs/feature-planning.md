@@ -160,9 +160,9 @@ Dependencies:
   - DEPENDENT depends on BLOCKER because ...
 ```
 
-## Phase 6. Senior Developer Implementation Review
+## Phase 6. Planning Conformance Review
 
-Before telling the user the implementation plan is ready for Trekker creation approval, run the `senior-developer-reviewer` for all new feature epics. If the `feature-planner-advisor` is drafting the implementation plan and can dispatch nested subagents, it should request this review itself; otherwise it must return a handoff packet for the main coordinator to dispatch. For tiny, low-risk plans, the main agent may perform the same checklist inline, but must say why a subagent review was skipped.
+After the user approves the design and before telling the user the implementation plan is ready for Trekker creation approval, run planning conformance with the `senior-developer-reviewer` for all new feature epics. If the `feature-planner-advisor` is drafting the implementation plan and can dispatch nested subagents, it should request this review itself; otherwise it must return a handoff packet for the main coordinator to dispatch. For tiny, low-risk plans, the main agent may perform the same checklist inline, but must say why a subagent review was skipped.
 
 Give the reviewer:
 
@@ -176,7 +176,7 @@ Give the reviewer:
 
 The main agent must validate each reviewer finding before changing the implementation plan. Valid feedback should be incorporated into the proposed Trekker records. Rejected feedback should be recorded in a short `Review notes:` section with the reason.
 
-If the reviewer raises a design concern, return to Phase 4 for a design revision and architecture/design review before updating the implementation plan again.
+If planning conformance raises a material task-plan conflict, revise the plan and repeat planning conformance before requesting Trekker-creation approval. If it raises a product, architecture, data, auth, migration, or scope change, return to Phase 4 for architecture/design review and the applicable user approval before updating the implementation plan again.
 
 ## Phase 7. Implementation Specificity Pass
 
@@ -262,7 +262,7 @@ Before creating Trekker records, confirm:
 - architecture/design review was run, or skipped with a reason for tiny low-risk work
 - reviewer feedback was validated and incorporated, or rejected with reasons
 - a durable spec file was proposed for larger epics
-- senior-developer implementation-plan review was run, or skipped with a reason for tiny low-risk work
+- planning conformance with the senior-developer implementation-plan reviewer was run, or skipped with a reason for tiny low-risk work
 - implementation-plan reviewer feedback was validated and incorporated, or rejected with reasons
 - user approved the implementation plan
 - tasks are independently completable

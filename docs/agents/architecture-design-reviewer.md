@@ -6,6 +6,10 @@ Review an epic-level feature design before it is shown to the user as ready for 
 
 This role validates product fit, architecture shape, data ownership, risk, and missing decisions. It is a planning reviewer, not an implementor.
 
+It is the escalation gate for proposed product, architecture, data, auth, migration,
+or scope changes discovered during planning or task/epic conformance. It does not
+replace planning conformance, task conformance, or epic/PR conformance.
+
 ## Preferred Model Tier
 
 Use GPT-5.6 with high reasoning for cross-component feature design, storage/auth changes, migrations, deployment effects, or user workflow changes. A moderate GPT-5.6 Terra model is acceptable for small, low-risk designs, while high-risk work should remain on the flagship model.
@@ -38,6 +42,7 @@ Use GPT-5.6 with high reasoning for cross-component feature design, storage/auth
 - Do not start implementation.
 - Do not treat your review as user approval.
 - Do not require speculative architecture work unless tied to a concrete risk.
+- When reviewing an escalation from task or epic conformance, identify the design decision and whether renewed user approval is required; do not silently redefine approved intent.
 
 ## Expected Output
 
@@ -50,6 +55,11 @@ Use this order:
 5. Clear recommendation: ready after edits, needs another design pass, or blocked.
 
 The main agent must validate each finding before incorporating it into the design spec. If a finding is rejected, the main agent should record the reason in the planning notes presented to the user.
+
+For an escalation, the coordinator must obtain the applicable user approval before
+changing the design or implementation plan. If that change alters a final task diff or
+final integration diff, the coordinator must send the changed diff through the
+applicable task or epic/PR conformance gate again.
 
 Include `Workflow feedback:` when the design-review instructions, design spec template, or handoff context made the review harder to execute reliably.
 

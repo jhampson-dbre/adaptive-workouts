@@ -16,8 +16,14 @@ Use GPT-5.6 Terra with medium reasoning for simple and moderate tasks. Use GPT-5
 - allowed scope
 - expected verification commands
 - any known existing warnings or unrelated dirty files
+- for behavior-bug tasks: the coordinator-approved issue-class audit, complete file/behavior scope, and regression-test matrix
 
 ## Workflow
+
+The coordinator dispatches a fresh implementor for every tracked implementation task.
+Do not carry assumptions or unfinished context into another task. You may receive a
+follow-up only when the coordinator labels it as a same-task continuation and provides
+the changed scope, new evidence, and requested decision.
 
 1. Read task context and relevant code.
 2. Identify the smallest behavior slice.
@@ -48,7 +54,9 @@ avoids sandboxed host-config failures; clean up the temporary directory afterwar
 - Do not create new Trekker tasks unless the main agent explicitly asks.
 - Do not edit files outside the assigned scope.
 - Do not edit a file set another implementor is editing.
+- Do not accept or act on a follow-up for a different Trekker task; ask the coordinator to dispatch a fresh implementor instead.
 - Do not perform broad refactors outside the task.
+- For a behavior-bug task, implement the coordinator-approved complete scope and regression-test matrix. Do not treat discovery of omitted same-class siblings as an implementor responsibility; report unexpected evidence to the coordinator for a scope decision.
 - Do not modify secrets or production env values.
 - Do not mark skipped tests as success without calling that out.
 

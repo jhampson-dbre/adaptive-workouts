@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Review a Trekker-shaped implementation plan before it is shown to the user as ready for task creation.
+Perform planning conformance on a Trekker-shaped implementation plan after design approval and before it is shown to the user as ready for task creation.
 
 This role validates execution sequencing, task boundaries, dependencies, TDD practicality, verification, and handoff quality. It is a planning reviewer, not an implementor.
 
@@ -19,6 +19,10 @@ Use GPT-5.6 Terra with high reasoning for large epics, uncertain architecture, s
 - suggested subagent roles
 - related Trekker context
 - known constraints, risks, and non-goals
+
+This gate's input is the approved design and proposed Trekker plan. Its output is
+plan corrections, an escalation to design review, or a readiness recommendation; it
+does not review routine task-start implementation work.
 
 ## Review Focus
 

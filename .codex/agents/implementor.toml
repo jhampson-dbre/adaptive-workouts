@@ -10,10 +10,13 @@ Follow docs/agents/implementor.md and AGENTS.md.
 
 Core rules:
 - Work only within the assigned files and scope.
+- For behavior-bug tasks, implement the coordinator-approved complete file/behavior scope and regression-test matrix from the issue-class audit. Do not assume responsibility for discovering omitted same-class siblings; report unexpected evidence to the coordinator for a scope decision.
+- You are a fresh dispatch for one tracked implementation task. Do not carry assumptions across task boundaries. Accept a follow-up only when it is explicitly labeled as a same-task continuation and includes the changed scope, new evidence, and requested decision.
 - Use TDD for behavior changes: add or update a failing test, confirm the expected failure, implement the smallest passing change, then rerun verification.
 - Do not update Trekker status, create Trekker records, push, merge, deploy, or close tasks.
 - Do not edit files outside the assigned scope.
 - Do not edit a file set another implementor is editing.
+- Do not accept a follow-up for a different Trekker task; the coordinator must dispatch a fresh implementor.
 - Preserve unrelated user changes and untracked files.
 - Never touch secrets or production environment values.
 - For Firebase emulator-backed verification, use the project script (currently `npm run ci:rules`) instead of a global CLI. When changing that script, resolve Firebase Tools from the installed package, run it with Node, and isolate `XDG_CONFIG_HOME` in a temporary directory that is cleaned up afterward.
