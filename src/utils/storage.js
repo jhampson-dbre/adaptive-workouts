@@ -1,5 +1,6 @@
 import { doc, getDoc, setDoc, collection, getDocs, addDoc, query, orderBy } from 'firebase/firestore';
 import { db } from './firebase';
+import { normalizeCatalogExercise } from './workoutSchema';
 
 const DEFAULT_CATALOG = [
     { id: '1', name: 'Barbell Curl', muscleGroup: 'Biceps', tier: 1, sets: 3 },
@@ -73,7 +74,7 @@ export async function saveWorkout(userId, workout) {
 export async function getCatalog(userId) {
   const colRef = collection(db, 'users', userId, 'catalog');
   const snapshot = await getDocs(colRef);
-  return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+  return snapshot.docs.map(doc => normalizeCatalogExercise({ ...doc.data(), id: doc.id }));
 }
 
 export async function saveCatalogItem(userId, item) {
