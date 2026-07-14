@@ -93,7 +93,7 @@ Use subagents deliberately:
 - Documentation-only, copy-only, or tiny config changes: main agent may handle directly.
 - Every tracked implementation task: dispatch a fresh implementor. After targeted verification produces the final task diff and evidence, dispatch a fresh code reviewer and a fresh task-conformance spec reviewer; do not reuse either reviewer across task boundaries, even within the same epic.
 - Any behavior change or bug fix: use the fresh implementor role unless the change is truly mechanical.
-- Before dispatching an implementor for a behavior-bug task, the coordinator must complete the issue-class audit described in Required Workflow. For non-mechanical or user-facing bugs, a read-only spec reviewer validates that audit only; this narrow pre-implementation check is not routine task-start requirements discovery and does not replace the post-verification task-conformance review.
+- Before dispatching an implementor for a behavior-bug task, reproduce the problem and identify its root cause, then use the repository `$bugfix-issue-class-audit` skill for every non-mechanical or user-facing behavior bug. A genuinely mechanical localized correction does not require the full audit when the coordinator documents why. For non-mechanical or user-facing bugs, a read-only spec reviewer validates the audit only; this narrow pre-implementation check is not routine task-start requirements discovery and does not replace the post-verification task-conformance review.
 - Task-start spec-review dispatch is prohibited. Do not use the spec reviewer to invent, refine, or gate routine task-start requirements.
 - Task conformance: run the post-verification spec reviewer alongside code review against the final diff, targeted verification evidence, and the Trekker task's approved intent; it checks conformance and does not invent new requirements.
 - Final integration: before publishing an implementation branch or epic handoff,
@@ -155,8 +155,10 @@ Before starting implementation:
 ### Behavior-Bug Issue-Class Audit (Before Implementor Dispatch)
 
 This coordinator-owned gate applies after reproduction and root-cause identification,
-but before an implementor is dispatched. It is bug triage and scoping, not Feature
-Planning and not implementor execution. The coordinator must run a targeted search
+but before an implementor is dispatched. Invoke the repository
+`$bugfix-issue-class-audit` skill for every non-mechanical or user-facing behavior
+bug; document why a genuinely mechanical bug does not need it. It is bug triage and
+scoping, not Feature Planning and not implementor execution. The coordinator must run a targeted search
 for same-class usages (for example, the shared component, helper, state path,
 validation rule, API contract, or repeated field) and add an audit note to the active
 Trekker task. The note records the root cause, search method and results, every

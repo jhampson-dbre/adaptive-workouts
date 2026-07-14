@@ -16,7 +16,7 @@ Use GPT-5.6 Terra with medium reasoning for simple and moderate tasks. Use GPT-5
 - allowed scope
 - expected verification commands
 - any known existing warnings or unrelated dirty files
-- for behavior-bug tasks: the coordinator-approved issue-class audit, complete file/behavior scope, and regression-test matrix
+- for behavior-bug tasks: the coordinator-approved `$bugfix-issue-class-audit` output, complete file/behavior scope, and regression-test matrix
 
 ## Workflow
 

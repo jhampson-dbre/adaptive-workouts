@@ -73,8 +73,11 @@ Common context sources:
 ### Behavior-Bug Issue-Class Audit (Coordinator Gate)
 
 Before dispatching an implementor for a behavior-bug task, first reproduce the
-problem and identify its root cause. Then, while the coordinator still owns scope,
-perform a targeted same-class search: inspect repeated fields, shared components,
+problem and identify its root cause. Then invoke the repository
+`$bugfix-issue-class-audit` skill while the coordinator still owns scope. Use it for
+every non-mechanical or user-facing behavior bug; for a genuinely mechanical bug,
+record why the audit is not needed. The skill directs a targeted same-class search:
+inspect repeated fields, shared components,
 helpers, state paths, validation rules, or contracts that could carry the same cause.
 This is pre-implementation bug triage/scoping, not Feature Planning and not
 implementor execution.
@@ -145,7 +148,7 @@ Use this dispatch matrix:
 - Documentation-only, copy-only, or tiny config changes: main agent may handle directly.
 - Every tracked implementation task: dispatch a fresh implementor. After targeted verification produces the final task diff and evidence, dispatch a fresh code reviewer and a fresh task-conformance spec reviewer. Do not reuse either reviewer across task boundaries, including tasks in the same epic.
 - Behavior change or bug fix: use the fresh implementor role unless the change is purely mechanical.
-- Before a behavior-bug implementor dispatch, complete and document the coordinator-owned issue-class audit. For non-mechanical or user-facing bugs, dispatch a read-only spec reviewer to validate the approved-intent scope audit; this is not routine task-start requirements discovery and does not replace post-verification task conformance.
+- Before a behavior-bug implementor dispatch, invoke `$bugfix-issue-class-audit` after reproduction and root-cause identification, then complete and document the coordinator-owned issue-class audit. For non-mechanical or user-facing bugs, dispatch a read-only spec reviewer to validate the approved-intent scope audit; this is not routine task-start requirements discovery and does not replace post-verification task conformance.
 - Task-start spec-review dispatch is prohibited. Do not use the spec reviewer to refine routine task-start requirements or to invent requirements.
 - Task conformance: run the spec reviewer alongside code review only after targeted verification; provide the final diff, verification/TDD evidence, and approved Trekker intent. The reviewer may identify nonconformance but must not invent new requirements.
 - Final integration: before publishing an implementation branch or epic handoff,

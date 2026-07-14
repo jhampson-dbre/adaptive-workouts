@@ -36,7 +36,8 @@ fact. When an approved-intent clarification is needed, label it as such; when th
 request would change approved intent, escalate it rather than treating it as a defect.
 
 The sole pre-implementation exception is a coordinator-owned issue-class audit for a
-non-mechanical or user-facing behavior bug. In that read-only dispatch, validate the
+non-mechanical or user-facing behavior bug, prepared with
+`$bugfix-issue-class-audit`. In that read-only dispatch, validate the
 documented root cause, same-class search results, affected/unaffected rationale,
 regression-test matrix, and scope decision against approved intent. Do not discover
 or refine requirements. Flag an unsupported scope decision as a clarification or

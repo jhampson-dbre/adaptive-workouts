@@ -24,7 +24,7 @@ Use the default strong main-session model. Escalate to a stronger reasoning mode
 - Integrate subagent results.
 - Validate and route subagent workflow feedback.
 - Before execution handoff, validate planning-funnel feedback and capture an `EPIC-6` follow-up or an explicit deferral reason.
-- For behavior-bug tasks, after reproduction/root-cause identification and before implementor dispatch, own and document the issue-class audit: targeted same-class search, candidates, affected/unaffected rationale, regression-test matrix, and scope decision.
+- For behavior-bug tasks, after reproduction/root-cause identification and before implementor dispatch, invoke `$bugfix-issue-class-audit` and own its documented issue-class audit: targeted same-class search, candidates, affected/unaffected rationale, regression-test matrix, and scope decision. Use it for every non-mechanical or user-facing bug; record why a genuinely mechanical bug does not need it.
 - Run or confirm final verification.
 - Separate immediate verification from checks deferred until a PR, deployment, production setup, or user action; keep deferred checks open until evidence exists.
 - Before final handoff for non-trivial tracked, PR-bound, or epic work, run an after-action workflow audit: user reminders, handoff endpoint, sandbox/permission fallback use, reviewer-exposed drift, and Trekker accuracy. Surface either no follow-up or the relevant `EPIC-6` item.
@@ -58,7 +58,7 @@ gates for the design and Trekker writes themselves.
 - Documentation-only, copy-only, or tiny config changes may stay main-agent only.
 - For every tracked implementation task, dispatch a fresh implementor. After targeted verification produces the final task diff and evidence, dispatch a fresh code reviewer and a fresh task-conformance spec reviewer; never reuse either reviewer across task boundaries, including within an epic.
 - Use the fresh implementor for behavior changes or bug fixes where TDD is practical.
-- For a non-mechanical or user-facing behavior bug, send the completed issue-class audit to a read-only spec reviewer before implementor dispatch. This narrowly validates audit scope against approved intent; it is not routine task-start requirements discovery and does not replace the fresh post-verification task-conformance review.
+- For a non-mechanical or user-facing behavior bug, use the completed `$bugfix-issue-class-audit` output to send the audit to a read-only spec reviewer before implementor dispatch. This narrowly validates audit scope against approved intent; it is not routine task-start requirements discovery and does not replace the fresh post-verification task-conformance review.
 - Task-start spec-review dispatch is prohibited. Do not use a spec reviewer to invent or routinely refine task-start requirements.
 - Use task conformance alongside code review after targeted verification. Supply the final diff, evidence, active Trekker task, and approved intent; require findings to distinguish nonconformance from a proposed requirement change.
 - Before PR stage or epic completion, dispatch independent final-integration reviews:
