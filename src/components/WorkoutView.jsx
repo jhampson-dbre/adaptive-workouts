@@ -88,6 +88,9 @@ function ConfirmControl({ exercise, exerciseIndex, setIndex, started, dispatch }
   const hasValidWeightedActuals = exercise.trackingMode !== 'weighted'
     || (Number.isFinite(record.actualWeight) && record.actualWeight >= 0
       && Number.isInteger(record.actualReps) && record.actualReps >= 0);
+  const hasValidBodyweightActuals = exercise.trackingMode !== 'bodyweight'
+    || ['fullReps', 'assistedReps', 'eccentricReps']
+      .every(field => Number.isInteger(record[field]) && record[field] >= 0);
   const label = `${exercise.name} exercise ${exerciseIndex + 1} set ${setIndex + 1} confirm`;
   return (
     <label className="set-confirm">
@@ -95,7 +98,7 @@ function ConfirmControl({ exercise, exerciseIndex, setIndex, started, dispatch }
         type="checkbox"
         aria-label={label}
         checked={record.completed}
-        disabled={!started || status === 'locked' || (!record.completed && !hasValidWeightedActuals) || (record.completed && hasConfirmedDependent)}
+        disabled={!started || status === 'locked' || (!record.completed && (!hasValidWeightedActuals || !hasValidBodyweightActuals)) || (record.completed && hasConfirmedDependent)}
         onChange={() => dispatch({ type: 'toggleTrackedSet', exerciseIndex, setIndex })}
       />
       Confirm attempt
@@ -158,7 +161,8 @@ function BodyweightSets({ exercise, exerciseIndex, started, dispatch }) {
         const status = getSetStatus(exercise, setIndex);
         const prefix = `${exercise.name} exercise ${exerciseIndex + 1} set ${setIndex + 1}`;
         const disabled = !started || status === 'locked';
-        const total = record.fullReps + record.assistedReps + record.eccentricReps;
+        const total = ['fullReps', 'assistedReps', 'eccentricReps']
+          .reduce((sum, field) => sum + (Number.isInteger(record[field]) && record[field] >= 0 ? record[field] : 0), 0);
         return (
           <section className={`set-row ${status}`} key={record.index} aria-label={prefix}>
             <div className="set-row-heading">
