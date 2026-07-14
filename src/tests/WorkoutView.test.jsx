@@ -119,6 +119,69 @@ test('shows live weighted backoff reasons and preserves a user override', async 
   await waitFor(() => expect(screen.queryByText('Loading history...')).toBeNull());
 });
 
+test('allows actual reps to be cleared and replaced before and after confirmation', async () => {
+  renderWithContext(<WorkoutView workout={trackedWorkout} onFinish={() => {}} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  const actualReps = screen.getByRole('spinbutton', { name: /Bench Press exercise 1 set 1 actual reps/i });
+  const confirm = screen.getByRole('checkbox', { name: /Bench Press exercise 1 set 1 confirm/i });
+
+  fireEvent.change(actualReps, { target: { value: '' } });
+  expect(actualReps.value).toBe('');
+  expect(confirm.disabled).toBe(true);
+  fireEvent.change(actualReps, { target: { value: '6' } });
+  expect(actualReps.value).toBe('6');
+  expect(confirm.disabled).toBe(false);
+
+  fireEvent.click(confirm);
+  fireEvent.change(actualReps, { target: { value: '' } });
+  expect(actualReps.value).toBe('');
+  fireEvent.change(actualReps, { target: { value: '5' } });
+  expect(actualReps.value).toBe('5');
+  await waitFor(() => expect(screen.queryByText('Loading history...')).toBeNull());
+});
+
+test('allows actual weight and bodyweight categories to be cleared and replaced', async () => {
+  renderWithContext(<WorkoutView workout={trackedWorkout} onFinish={() => {}} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  const actualWeight = screen.getByRole('spinbutton', { name: /Bench Press exercise 1 set 1 actual weight/i });
+  const weightedConfirm = screen.getByRole('checkbox', { name: /Bench Press exercise 1 set 1 confirm/i });
+
+  fireEvent.change(actualWeight, { target: { value: '' } });
+  expect(actualWeight.value).toBe('');
+  expect(weightedConfirm.disabled).toBe(true);
+  fireEvent.change(actualWeight, { target: { value: '95.5' } });
+  expect(actualWeight.value).toBe('95.5');
+  fireEvent.change(screen.getByRole('spinbutton', { name: /Bench Press exercise 1 set 1 actual reps/i }), { target: { value: '4' } });
+  fireEvent.click(weightedConfirm);
+  expect(screen.getByLabelText(/Bench Press exercise 1 set 2 recommendation reason/i).textContent).toMatch(/-10 lb: 4 reps, floor 6/i);
+  fireEvent.change(actualWeight, { target: { value: '' } });
+  fireEvent.change(actualWeight, { target: { value: '90' } });
+  expect(actualWeight.value).toBe('90');
+  expect(screen.getByLabelText(/Bench Press exercise 1 set 2 recommendation reason/i).textContent).toMatch(/-10 lb: 4 reps, floor 6/i);
+
+  const bodyweightConfirm = screen.getByRole('checkbox', { name: /Pull Up exercise 2 set 1 confirm/i });
+  for (const field of ['full', 'assisted', 'eccentric']) {
+    const input = screen.getByRole('spinbutton', { name: new RegExp(`Pull Up exercise 2 set 1 ${field} reps`, 'i') });
+    fireEvent.change(input, { target: { value: '4' } });
+    fireEvent.change(input, { target: { value: '' } });
+    expect(input.value).toBe('');
+    expect(bodyweightConfirm.disabled).toBe(true);
+    expect(screen.getByLabelText(/Pull Up exercise 2 set 1 total reps/i).textContent).toMatch(/^Total: \d+$/);
+    fireEvent.change(input, { target: { value: '1' } });
+    expect(input.value).toBe('1');
+  }
+  expect(bodyweightConfirm.disabled).toBe(false);
+  fireEvent.click(bodyweightConfirm);
+  const fullReps = screen.getByRole('spinbutton', { name: /Pull Up exercise 2 set 1 full reps/i });
+  fireEvent.change(fullReps, { target: { value: '' } });
+  expect(fullReps.value).toBe('');
+  expect(bodyweightConfirm.checked).toBe(true);
+  expect(bodyweightConfirm.disabled).toBe(false);
+  fireEvent.change(fullReps, { target: { value: '2' } });
+  expect(fullReps.value).toBe('2');
+  await waitFor(() => expect(screen.queryByText('Loading history...')).toBeNull());
+});
+
 test('explains when a prior target ceiling caps a below-floor backoff', async () => {
   const capped = structuredClone(trackedWorkout[0]);
   capped.sets = 3;

@@ -142,6 +142,54 @@ describe('active workout state', () => {
     expect(state.exercises[0].setRecords).toHaveLength(2);
   });
 
+  it('allows a temporary empty actual-reps edit, prevents confirming it, and recomputes after replacement', () => {
+    let state = initializeActiveWorkout([weighted('bench', 2)]);
+    state = reduce(state, editWeight(0, 0, 'actualReps', ''));
+    expect(state.exercises[0].setRecords[0].actualReps).toBe('');
+
+    state = reduce(state, toggle(0, 0));
+    expect(state.exercises[0].setRecords[0].completed).toBe(false);
+
+    state = reduce(state, editWeight(0, 0, 'actualReps', '6'));
+    state = reduce(state, toggle(0, 0));
+    expect(state.exercises[0].setRecords[0].completed).toBe(true);
+
+    state = reduce(state, editWeight(0, 0, 'actualReps', ''));
+    expect(state.exercises[0].setRecords[1].targetWeight).toBe(100);
+    state = reduce(state, editWeight(0, 0, 'actualReps', '4'));
+    expect(state.exercises[0].setRecords[1]).toMatchObject({
+      targetWeight: 90,
+      recommendationReason: { reasonCode: 'BACKOFF_BELOW_FLOOR', dropSteps: 2 },
+    });
+  });
+
+  it('allows temporary empty weight and bodyweight edits but prevents confirming them', () => {
+    let state = initializeActiveWorkout([weighted('bench', 2), bodyweight()]);
+    state = reduce(state, editWeight(0, 0, 'actualWeight', ''));
+    expect(state.exercises[0].setRecords[0].actualWeight).toBe('');
+    state = reduce(state, toggle(0, 0));
+    expect(state.exercises[0].setRecords[0].completed).toBe(false);
+
+    state = reduce(state, editWeight(0, 0, 'actualWeight', '95.5'));
+    state = reduce(state, editWeight(0, 0, 'actualReps', 4));
+    state = reduce(state, toggle(0, 0));
+    expect(state.exercises[0].setRecords[1].targetWeight).toBe(85.5);
+    state = reduce(state, editWeight(0, 0, 'actualWeight', ''));
+    expect(state.exercises[0].setRecords[1].targetWeight).toBe(85.5);
+    state = reduce(state, editWeight(0, 0, 'actualWeight', '90'));
+    expect(state.exercises[0].setRecords[1].targetWeight).toBe(80);
+
+    for (const field of ['fullReps', 'assistedReps', 'eccentricReps']) {
+      state = reduce(state, { type: 'editBodyweightActual', exerciseIndex: 1, setIndex: 0, field, value: '' });
+      expect(state.exercises[1].setRecords[0][field]).toBe('');
+      state = reduce(state, toggle(1, 0));
+      expect(state.exercises[1].setRecords[0].completed).toBe(false);
+      state = reduce(state, { type: 'editBodyweightActual', exerciseIndex: 1, setIndex: 0, field, value: 1 });
+    }
+    state = reduce(state, toggle(1, 0));
+    expect(state.exercises[1].setRecords[0].completed).toBe(true);
+  });
+
   it('tracks separate bodyweight categories, total, and a confirmed zero-rep attempt', () => {
     let state = initializeActiveWorkout([bodyweight()]);
     state = reduce(state, { type: 'editBodyweightActual', exerciseIndex: 0, setIndex: 0, field: 'fullReps', value: 3 });
