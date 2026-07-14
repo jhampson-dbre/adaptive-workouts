@@ -142,7 +142,12 @@ Subagents should return concise reports with files changed, tests run, findings,
 
 Use this dispatch matrix:
 
-- New feature planning: enter Feature Planning Mode and follow the feature-planner protocol before creating Trekker items.
+- New feature planning: before entering Feature Planning Mode, invoke
+  `$feature-discovery` for every proposed feature, capability, workflow, or
+  substantial behavior change. Require the user's approved Discovery Brief and
+  Decision Log before duplicate search or formal planning, unless an explicit user
+  opt-out or small, fully specified mechanical-task exception is documented; then
+  follow the feature-planner protocol before creating Trekker items.
 - Feature design approval: run architecture-design-reviewer before presenting an epic design spec as ready for user approval, unless the feature is tiny and low-risk.
 - Planning conformance: after design approval and before presenting the implementation plan for Trekker-creation approval, run senior-developer-reviewer, unless the plan is tiny and low-risk.
 - Documentation-only, copy-only, or tiny config changes: main agent may handle directly.
@@ -212,19 +217,29 @@ For new feature requests, use `docs/feature-planning.md`.
 
 Feature Planning Mode runs in the main agent session. A subagent may provide an advisory draft or review, but the main agent owns user interaction, approval gates, and Trekker writes.
 
+Before duplicate search or formal planning, invoke `$feature-discovery` for every
+proposed feature, capability, workflow, or substantial behavior change. Continue
+only after the user approves its Discovery Brief and Decision Log. The sole
+exceptions are an explicit user opt-out or a small, fully specified mechanical task;
+document the exception and rationale. If discovery classifies the request as a bug
+fix, refactor, or fully specified execution task, route it to the applicable
+workflow instead of Feature Planning Mode.
+
 Short version:
 
-1. Search Trekker for duplicates or related work.
-2. Brainstorm in Codex planning space only.
-3. Draft an epic-level design spec.
-4. Run architecture/design review, validate feedback, and incorporate it or record why it was rejected.
-5. Get user approval.
-6. For larger epics, propose a durable spec file under `docs/specs/`.
-7. Convert the spec into a Trekker implementation plan: epic, tasks, subtasks, dependencies, and verification.
-8. Run planning conformance with the senior-developer implementation-plan reviewer, validate feedback, and incorporate it or record why it was rejected.
-9. Get user approval to create Trekker records.
-10. Create or update Trekker.
-11. Mirror only the current session with `update_plan` after Trekker is accurate.
+1. Complete `$feature-discovery` and obtain approval of its Discovery Brief and
+   Decision Log, unless a documented exception applies.
+2. Search Trekker for duplicates or related work.
+3. Brainstorm in Codex planning space only.
+4. Draft an epic-level design spec.
+5. Run architecture/design review, validate feedback, and incorporate it or record why it was rejected.
+6. Get user approval.
+7. For larger epics, propose a durable spec file under `docs/specs/`.
+8. Convert the spec into a Trekker implementation plan: epic, tasks, subtasks, dependencies, and verification.
+9. Run planning conformance with the senior-developer implementation-plan reviewer, validate feedback, and incorporate it or record why it was rejected.
+10. Get user approval to create Trekker records.
+11. Create or update Trekker.
+12. Mirror only the current session with `update_plan` after Trekker is accurate.
 
 Do not create durable Trekker records during brainstorming unless the user explicitly approves.
 
