@@ -8,7 +8,9 @@ Before formal feature planning, invoke `$feature-discovery` for every proposed
 feature, capability, workflow, or substantial behavior change. The skill is a
 collaborative discovery conversation, not Trekker work or implementation. Complete
 its Discovery Brief and Decision Log, then obtain the user's explicit approval to
-hand the brief to the `feature-planner-advisor` before starting this workflow.
+hand the brief to the `feature-planner-advisor` before starting this workflow. The
+coordinator may inspect repository or Trekker context needed to ground discovery;
+that exploratory lookup does not replace the formal duplicate-search gate below.
 
 Skip discovery only when the user explicitly opts out or the request is a small,
 fully specified mechanical task. State the exception and rationale in the planning
@@ -35,7 +37,9 @@ the user still controls design approval and Trekker record creation.
 
 ## Phase 1. Search And Frame
 
-Search Trekker before drafting anything durable:
+After discovery approval, search Trekker before drafting anything durable. If
+repository or Trekker context was inspected to ground discovery, repeat this search
+as the formal planning gate:
 
 ```bash
 trekker search "distinctive-keyword"

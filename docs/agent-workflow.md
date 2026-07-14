@@ -145,8 +145,10 @@ Use this dispatch matrix:
 - New feature planning: before entering Feature Planning Mode, invoke
   `$feature-discovery` for every proposed feature, capability, workflow, or
   substantial behavior change. Require the user's approved Discovery Brief and
-  Decision Log before duplicate search or formal planning, unless an explicit user
-  opt-out or small, fully specified mechanical-task exception is documented; then
+  Decision Log before the formal duplicate-search gate or formal planning, unless
+  an explicit user opt-out or small, fully specified mechanical-task exception is
+  documented. Repository or Trekker context may be inspected solely to ground
+  discovery, but it does not replace the formal duplicate search; then
   follow the feature-planner protocol before creating Trekker items.
 - Feature design approval: run architecture-design-reviewer before presenting an epic design spec as ready for user approval, unless the feature is tiny and low-risk.
 - Planning conformance: after design approval and before presenting the implementation plan for Trekker-creation approval, run senior-developer-reviewer, unless the plan is tiny and low-risk.
@@ -217,19 +219,21 @@ For new feature requests, use `docs/feature-planning.md`.
 
 Feature Planning Mode runs in the main agent session. A subagent may provide an advisory draft or review, but the main agent owns user interaction, approval gates, and Trekker writes.
 
-Before duplicate search or formal planning, invoke `$feature-discovery` for every
+Before the formal duplicate-search gate or formal planning, invoke `$feature-discovery` for every
 proposed feature, capability, workflow, or substantial behavior change. Continue
 only after the user approves its Discovery Brief and Decision Log. The sole
 exceptions are an explicit user opt-out or a small, fully specified mechanical task;
 document the exception and rationale. If discovery classifies the request as a bug
 fix, refactor, or fully specified execution task, route it to the applicable
-workflow instead of Feature Planning Mode.
+workflow instead of Feature Planning Mode. Repository or Trekker context may be
+inspected solely to ground discovery; repeat the duplicate search after discovery
+as the formal planning gate.
 
 Short version:
 
 1. Complete `$feature-discovery` and obtain approval of its Discovery Brief and
    Decision Log, unless a documented exception applies.
-2. Search Trekker for duplicates or related work.
+2. Search Trekker for duplicates or related work as the formal planning gate.
 3. Brainstorm in Codex planning space only.
 4. Draft an epic-level design spec.
 5. Run architecture/design review, validate feedback, and incorporate it or record why it was rejected.

@@ -14,7 +14,9 @@ Before formal feature planning begins, the main coordinator must invoke
 `$feature-discovery` for each proposed feature, capability, workflow, or substantial
 behavior change. The coordinator collaborates with the user to complete and obtain
 approval for the skill's Discovery Brief and Decision Log, then may hand that brief
-to this advisor. Discovery may be skipped only when the user explicitly opts out or
+to this advisor. The coordinator may inspect repository or Trekker context needed
+to ground discovery; that exploratory lookup does not replace the formal
+duplicate-search gate after discovery. Discovery may be skipped only when the user explicitly opts out or
 the request is a small, fully specified mechanical task; the coordinator records the
 exception and rationale. If discovery classifies the request as a bug fix, refactor,
 or fully specified execution task, do not force feature planning.
@@ -36,7 +38,8 @@ Use GPT-5.6 with high reasoning for ambiguous product design, cross-component fe
 ## Workflow
 
 1. Confirm the approved Discovery Brief and Decision Log were provided, or that a documented discovery exception applies; otherwise return the work to the main coordinator without beginning formal planning.
-2. Search Trekker for duplicates or related work before planning.
+2. Search Trekker for duplicates or related work as the formal planning gate before
+   planning, even if exploratory context was inspected during discovery.
 3. Identify whether to extend existing work or propose new work.
 4. Brainstorm feature shape, risks, and open questions.
 5. Draft an epic-level design spec.

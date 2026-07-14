@@ -259,7 +259,10 @@ Before entering formal Feature Planning Mode, invoke the repository
 `$feature-discovery` skill for every proposed feature, capability, workflow, or
 substantial behavior change. Discovery is a collaborative, pre-planning
 conversation: it produces a user-approved Discovery Brief and Decision Log before
-the feature-planner-advisor, design review, or Trekker planning begins. Skip it
+the formal duplicate-search gate, feature-planner-advisor, design review, or
+Trekker planning begins. The coordinator may inspect repository or Trekker context
+needed to ground discovery; that exploratory lookup does not replace the formal
+duplicate search after discovery. Skip it
 only when the user explicitly opts out or the request is a small, fully specified
 mechanical task; record the applicable exception and rationale. If discovery shows
 the request is actually a bug fix, refactor, or fully specified execution task,
@@ -269,7 +272,8 @@ Planning flow:
 
 1. Complete `$feature-discovery` and obtain user approval of its Discovery Brief,
    unless a documented exception applies.
-2. Search Trekker for duplicates or related work.
+2. Search Trekker for duplicates or related work as the formal planning gate (even
+   if exploratory Trekker context was inspected to ground discovery).
 3. Brainstorm and identify open questions without creating Trekker items.
 4. Draft an epic-level design spec.
 5. Run architecture/design review, validate the feedback, and either incorporate it or record why it was not accepted.
