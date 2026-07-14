@@ -14,6 +14,8 @@ Use the default strong main-session model. Escalate to a stronger reasoning mode
 - Select one active task unless the user explicitly asks for planning.
 - Restore task context before edits.
 - Check `git status --short --branch` before edits and before final response.
+- Create or switch to the focused `codex/` branch for an epic or focused task set
+  before any edit.
 - Mark the active task `in_progress`.
 - After a task in an active epic completes, continue with the next ready, in-scope epic task unless a user decision, external blocker, meaningful scope expansion, explicit pause/stop request, or authorized-work boundary requires handoff; do not switch to unrelated ready work.
 - Serialize Trekker writes; only parallelize independent, read-only Trekker lookups, and retry transient lock failures sequentially after a brief wait.
@@ -28,6 +30,8 @@ Use the default strong main-session model. Escalate to a stronger reasoning mode
 - Before final handoff for non-trivial tracked, PR-bound, or epic work, run an after-action workflow audit: user reminders, handoff endpoint, sandbox/permission fallback use, reviewer-exposed drift, and Trekker accuracy. Surface either no follow-up or the relevant `EPIC-6` item.
 - Inventory every residual or nonblocking handoff risk before final handoff, search for duplicates, then give each one a durable Trekker disposition: linked existing task, approved backlog item, or an intentional-not-tracked exception in the active task's `Summary:`/`Checkpoint:` that names the search result and concise rationale. Do not rely on chat, a PR body, or an undesignated comment as the sole record.
 - Add `Checkpoint:` and `Summary:` comments.
+- Before completing a task or selecting the next one, inspect the task diff, commit
+  all intended task work in a scoped commit, and include its hash in the `Summary:`.
 - Mark tasks and epics complete only after evidence supports it.
 
 ## Required Inputs
@@ -57,7 +61,14 @@ gates for the design and Trekker writes themselves.
 - For a non-mechanical or user-facing behavior bug, send the completed issue-class audit to a read-only spec reviewer before implementor dispatch. This narrowly validates audit scope against approved intent; it is not routine task-start requirements discovery and does not replace the fresh post-verification task-conformance review.
 - Task-start spec-review dispatch is prohibited. Do not use a spec reviewer to invent or routinely refine task-start requirements.
 - Use task conformance alongside code review after targeted verification. Supply the final diff, evidence, active Trekker task, and approved intent; require findings to distinguish nonconformance from a proposed requirement change.
-- Use epic/PR conformance with the epic reviewer during final integration before publishing an implementation branch or epic handoff, merge, high-risk PR approval, or epic closure.
+- Before PR stage or epic completion, dispatch independent final-integration reviews:
+  an epic branch review with the epic reviewer and epic spec/conformance with a fresh
+  spec reviewer. Supply both the cumulative range from `git merge-base <target> HEAD`
+  through `HEAD`, plus `git status --short --branch`, `git diff`, and
+  `git diff --cached`; unstaged changes alone are never the review scope. Commit any
+  substantive post-review fix, then re-run both against the updated committed range
+  and current clean or fully reported working-tree evidence before pushing or opening
+  a draft PR.
 
 Project-scoped Codex custom agents are defined in `.codex/agents/`. Prefer those native agents when spawning subagents:
 
@@ -125,8 +136,13 @@ Reviewer feedback already incorporated: yes/no
 - Use a fresh task-conformance spec reviewer for each tracked task after targeted verification; reuse within that task only for a clearly identified approved-intent clarification and its revised final diff/evidence delta. Route material task-plan conflicts to senior-developer planning conformance, not the spec reviewer.
 - For an approved-intent clarification, update the active Trekker task and record the decision before implementation continues; re-run code review and task conformance on any changed final diff and evidence.
 - For a material task-plan conflict, pause completion and return to senior-developer implementation-plan review before changing planning records. For product, architecture, data, auth, migration, or scope changes, return to architecture/design review and obtain the applicable user approval before changing the design or plan.
-- Re-run epic/PR conformance whenever final-integration fixes change the cumulative final diff or review evidence.
-- For implementation branch or epic work, use the expected draft-PR handoff unless the user explicitly opts out: review, commit, push, open a draft PR, and confirm required checks are visible or document failures and next steps. Use `gh` if the connector cannot create PRs, and request escalation for known sandbox-limited publish operations.
+- After a substantive final-integration fix, commit it and re-run both epic branch
+  review and epic spec/conformance against the updated committed range plus current
+  clean or fully reported working-tree evidence. Do not begin another loop unless a
+  further substantive change is required.
+- Do not start a subsequent task or mark a task completed until its intended task diff
+  has been inspected and committed; record that commit hash in its `Summary:`.
+- For implementation branch or epic work, use the expected draft-PR handoff unless the user explicitly opts out: complete both final-integration reviews, address and re-review final-integration fixes, commit, push, open a draft PR, and confirm required checks are visible or document failures and next steps. Use `gh` if the connector cannot create PRs, and request escalation for known sandbox-limited publish operations.
 - When using `gh` to create or edit a PR, compose multiline Markdown in a temporary file and supply it with `--body-file`; do not pass shell-escaped literal `\n` text as the body. Remove the temporary file after a successful command.
 
 ## Expected Output

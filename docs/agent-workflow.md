@@ -36,6 +36,9 @@ git status --short --branch
 trekker task update TREK-ID -s in_progress
 ```
 
+Before any edit, create or switch to the focused `codex/` branch for the task or
+epic. Confirm that branch and any unrelated dirty files with the status command.
+
 If another task is already `in_progress`, decide whether it is the same work. If it is unrelated, tell the user before switching focus.
 
 After completing a task in an active epic, continue with the next ready,
@@ -145,7 +148,9 @@ Use this dispatch matrix:
 - Before a behavior-bug implementor dispatch, complete and document the coordinator-owned issue-class audit. For non-mechanical or user-facing bugs, dispatch a read-only spec reviewer to validate the approved-intent scope audit; this is not routine task-start requirements discovery and does not replace post-verification task conformance.
 - Task-start spec-review dispatch is prohibited. Do not use the spec reviewer to refine routine task-start requirements or to invent requirements.
 - Task conformance: run the spec reviewer alongside code review only after targeted verification; provide the final diff, verification/TDD evidence, and approved Trekker intent. The reviewer may identify nonconformance but must not invent new requirements.
-- Epic/PR conformance: use the epic reviewer in final integration before publishing an implementation branch or epic handoff, merge, PR approval, or epic closure.
+- Final integration: before publishing an implementation branch or epic handoff,
+  merge, PR approval, or epic closure, run the independent epic branch review with
+  the epic reviewer and fresh epic spec/conformance review with the spec reviewer.
 
 Use this handoff packet:
 
@@ -183,14 +188,18 @@ Keep the three conformance gates separate:
 
 - **Planning conformance** is the senior-developer review after design approval and before Trekker creation. Its input is the approved design and proposed Trekker plan; its output is plan corrections or an escalation.
 - **Task conformance** is the spec-reviewer check after targeted verification, alongside code review. Its input is the active Trekker task, final task diff, and verification evidence; its output is a conformance finding against approved intent, not a newly invented requirement.
-- **Epic/PR conformance** is the epic-reviewer check during final integration. Its input is the cumulative diff, Trekker evidence, and PR/branch state; its output is release/merge readiness and cross-task conformance findings.
+- **Final integration** has two independent gates: the epic-reviewer's branch review
+  and a fresh spec reviewer's epic spec/conformance review. Both inspect the committed
+  cumulative range, complete working-tree evidence, Trekker evidence, and PR/branch
+  state; together they produce release/merge readiness and cross-task conformance
+  findings.
 
 Route findings by impact:
 
 - A small clarification consistent with approved intent: the coordinator updates the active Trekker task and records the decision, then re-runs the affected reviews on the changed final diff and evidence.
 - A material task-plan conflict: pause completion and return to senior-developer implementation-plan review before changing planning records.
 - A product, architecture, data, auth, migration, or scope change: return to architecture/design review and obtain the applicable user approval before updating the design or plan.
-- Any change after task or final-integration review requires a new review of the changed final diff; use code review plus task conformance for task changes, and epic/PR conformance for final-integration changes.
+- Any change after task or final-integration review requires a new review of the changed final diff; use code review plus task conformance for task changes, and after committing a substantive final-integration fix, rerun both final-integration gates.
 
 ## 7. Plan New Features
 
@@ -268,12 +277,19 @@ If complete:
 
 ```bash
 git status --short --branch
+git diff -- <task files>
+git add <intended task files>
+git commit -m "<scoped task summary>"
 trekker comment add TREK-ID -a "codex" -c "Summary: ..."
 trekker task update TREK-ID -s completed
 trekker ready
 ```
 
-The `Summary:` comment should say what changed, what was verified, and any residual risk. If the work exposed friction in the agent workflow, include the validated feedback or the follow-up Trekker id.
+Before that commit, inspect the task diff and confirm only intended task work is
+staged. Each completed task must have its own scoped commit before selecting the next
+task. The `Summary:` comment must include that commit hash, what changed, what was
+verified, and any residual risk. If the work exposed friction in the agent workflow,
+include the validated feedback or the follow-up Trekker id.
 
 Before a final handoff for non-trivial tracked, PR-bound, or epic work, inventory
 each residual or nonblocking handoff risk. This includes deferred verification,
@@ -322,11 +338,24 @@ completion boundary.
 - Prefer a focused branch per task or small related task set.
 - Use the `codex/` branch prefix unless the user asks for another naming scheme.
 - Keep branch scope aligned with Trekker scope.
-- For implementation branch or epic work, the default review handoff is a draft PR unless the user explicitly opts out. Before handing it back, complete the required code or epic review, commit and push the intended changes, open the draft PR, and confirm required checks are visible. Fix CI-only failures that are in scope; otherwise document the failure and exact next step.
+- Create or switch to the focused branch before editing an epic or focused task set.
+- Before PR stage or epic completion, dispatch two independent final-integration
+  reviews: the epic reviewer for branch review and a fresh spec reviewer for epic
+  spec/conformance. Each receives the cumulative range from
+  `git merge-base <target> HEAD` through `HEAD`, plus `git status --short --branch`,
+  `git diff`, and `git diff --cached`; no reviewer may assume that unstaged changes
+  are the complete epic.
+- If either review requires a substantive final-integration fix, commit that intended
+  post-review work first. Rerun both reviews on the updated committed cumulative range
+  and current clean or fully reported working-tree evidence; only a further
+  substantive change begins another review loop.
+- For implementation branch or epic work, the default review handoff is a draft PR unless the user explicitly opts out. Before handing it back, complete both final-integration reviews, commit and push the intended changes, open the draft PR, and confirm required checks are visible. Fix CI-only failures that are in scope; otherwise document the failure and exact next step.
 - Use `gh` for PR creation when the GitHub connector lacks PR-create permission. Request escalation up front for known sandbox-limited git or `gh` publish operations instead of repeating failed attempts.
 - For `gh pr create` or `gh pr edit`, write multiline Markdown into a temporary file and use `--body-file <path>`. Do not put escaped `\n` sequences in a command-line body argument: GitHub will render them literally. Remove the temporary file after the command succeeds.
 - Run the code reviewer before marking a non-trivial task complete.
-- Run the epic reviewer before publishing an epic or branch handoff, merging an epic branch, closing an epic, or merging a high-risk PR.
+- Run both final-integration gates—the epic branch review and fresh epic
+  spec/conformance review—before publishing an epic or branch handoff, merging an
+  epic branch, closing an epic, or merging a high-risk PR.
 - Do not merge or deploy unless the user asked for that action.
 
 ## 11. Review Checklist

@@ -52,6 +52,20 @@ final diff/evidence delta, provided the coordinator supplies the changed scope, 
 evidence, and requested decision. A material task-plan conflict belongs in
 senior-developer planning conformance, not this role.
 
+## Epic Final-Integration Conformance
+
+At PR stage or epic completion, a fresh spec reviewer performs the independent epic
+spec/conformance gate alongside the epic reviewer's branch review. The coordinator
+must supply the target branch, `git merge-base <target> HEAD` commit, cumulative
+`<merge-base>...HEAD` diff, `git status --short --branch`, `git diff`,
+`git diff --cached`, epic task evidence, and relevant approved intent. Review the
+committed cumulative range and complete uncommitted integration patch together; do
+not assume unstaged changes are the complete epic. If a substantive final-integration
+fix is required, require the coordinator to commit it, then require both this gate
+and the epic branch review again against the updated range and current clean or fully
+reported working-tree evidence before PR publication or epic completion. Another loop
+is needed only after a further substantive change.
+
 ## Hard Constraints
 
 - Do not update Trekker status.
