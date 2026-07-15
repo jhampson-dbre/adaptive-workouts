@@ -82,6 +82,22 @@ Acceptance criteria:
 Open questions:
 ```
 
+When a feature creates, reads, writes, migrates, reuses, or changes persisted timing
+or duration data, append a `Persisted duration contract` table. Enumerate every
+existing and proposed duration field in the affected storage and compatibility
+boundary, using separate rows when semantics differ. Each row must identify the
+field and full persisted path, schema/app versions that read or write it, storage
+unit, input/storage/display rounding or precision policy, nullability and the
+meaning of null/missing/zero/sentinels, cross-version read and legacy-unit detection
+behavior, and write/migration coexistence behavior. Mixed legacy and current units
+must have deterministic interpretation and conversion rules; otherwise the design
+remains blocked rather than passing the decision to implementation.
+
+```text
+| Field / persisted path | Reader/writer versions | Storage unit | Input/storage/display rounding or precision | Null/missing/zero/sentinel semantics | Cross-version reads / legacy-unit detection | Writes / migration / coexistence |
+| --- | --- | --- | --- | --- | --- | --- |
+```
+
 ## Implementation Plan Template
 
 ```text
@@ -126,6 +142,7 @@ Dependencies:
 - Do not treat planning notes as the durable source of truth after Trekker is populated.
 - Do not skip duplicate search.
 - Do not create vague tasks without verification criteria.
+- Do not present a timing design for approval without a complete persisted-duration contract that resolves unit, rounding/precision, nullability/absence, and cross-version compatibility for every affected persisted duration field.
 - Do not start implementation until planning Task 1 is completed and the user then gives separate fresh explicit approval to continue.
 
 ## Expected Output

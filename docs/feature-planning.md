@@ -100,6 +100,31 @@ Open questions:
 
 Treat this as the proposed Trekker epic. It may live only in the conversation until approved, but every approved feature plan must save the final spec under `docs/specs/YYYY-MM-DD-feature-name.md` or another agreed durable path during planning Task 1.
 
+For any design that creates, reads, writes, migrates, reuses, or changes persisted
+timing or duration data, add a `Persisted duration contract` table to the design
+spec. Enumerate every existing and proposed duration field in the affected storage
+and compatibility boundary; do not group fields whose semantics differ. For each
+field, record:
+
+- field name and full persisted path
+- schema/app versions that read or write it
+- storage unit
+- rounding or precision policy at input, storage, and display boundaries
+- nullability and the meaning of null, missing, zero, and any sentinel value
+- cross-version read behavior, including how legacy units are detected or known
+- write and migration behavior, including whether old and new versions can safely
+  coexist
+
+```text
+| Field / persisted path | Reader/writer versions | Storage unit | Input/storage/display rounding or precision | Null/missing/zero/sentinel semantics | Cross-version reads / legacy-unit detection | Writes / migration / coexistence |
+| --- | --- | --- | --- | --- | --- | --- |
+```
+
+The contract must resolve mixed-unit semantics explicitly (for example, a legacy
+minutes field and a newer seconds field must not share an unresolved field name or
+conversion rule). If compatibility cannot be made deterministic, keep it as a
+blocking open question rather than deferring the decision to implementation.
+
 ## Phase 4. Architecture / Design Review
 
 Before telling the user the design is ready for approval, run the `architecture-design-reviewer` for all new feature epics. If the `feature-planner-advisor` is drafting the spec and can dispatch nested subagents, it should request this review itself; otherwise it must return a handoff packet for the main coordinator to dispatch. For very small, low-risk feature tweaks, the main agent may perform the same checklist inline, but must say why a subagent review was skipped.
@@ -342,6 +367,7 @@ Across the approval, record-creation, and Task 1 completion stages, confirm:
 - subtasks are concrete
 - each task has verification criteria
 - implementation-specificity choices, permitted discretion, deferred checks, and completion boundaries are explicit where relevant
+- timing designs include a complete persisted-duration contract covering field/path, unit, rounding/precision, nullability/absence semantics, and cross-version read/write/migration compatibility
 - deferred checks name their trigger, evidence, owner, and whether they need a follow-up task or subtask
 - behavior tasks have TDD expectations
 - execution can resume from Trekker alone

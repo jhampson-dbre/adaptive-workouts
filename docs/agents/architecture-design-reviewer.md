@@ -29,6 +29,14 @@ Use GPT-5.6 with high reasoning for cross-component feature design, storage/auth
 - Does the design solve the stated user problem?
 - Are goals, non-goals, and acceptance criteria explicit?
 - Are data model, storage, auth, migration, deployment, and PWA implications covered when relevant?
+- When persisted timing or duration data is affected, does the design enumerate
+  every existing and proposed duration field in the compatibility boundary with its
+  full path, reading/writing schema or app versions, storage unit, input, storage,
+  and display rounding or precision policy, nullability and the meaning of
+  null/missing/zero/sentinels, and cross-version read/write/migration behavior?
+- Are mixed legacy and current duration units deterministically distinguishable and
+  convertible, including safe coexistence, rather than left for implementation to
+  infer?
 - Are edge cases and failure modes identified?
 - Are UI surfaces and user workflows concrete enough to plan implementation?
 - Is the design over-scoped for the likely epic?
@@ -42,6 +50,9 @@ Use GPT-5.6 with high reasoning for cross-component feature design, storage/auth
 - Do not start implementation.
 - Do not treat your review as user approval.
 - Do not require speculative architecture work unless tied to a concrete risk.
+- Return a timing design for another design pass before user approval when its
+  persisted-duration contract is missing or incomplete, or when mixed-unit or
+  cross-version semantics remain unresolved.
 - When reviewing an escalation from task or epic conformance, identify the design decision and whether renewed user approval is required; do not silently redefine approved intent.
 
 ## Expected Output
