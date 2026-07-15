@@ -23,6 +23,8 @@ Review focus:
 - product fit and user workflow clarity
 - explicit goals, non-goals, behavior rules, and acceptance criteria
 - data model, storage, auth, migration, deployment, and PWA implications when relevant
+- for designs affecting persisted timing or duration data, a complete persisted-duration contract enumerating every existing and proposed field in the compatibility boundary: full path, reading/writing schema or app versions, storage unit, input/storage/display rounding or precision, nullability and the meaning of null/missing/zero/sentinels, and cross-version read/write/migration behavior
+- deterministic detection and conversion of mixed legacy and current duration units, including safe coexistence; return the design for another pass before user approval if the contract is missing or incomplete or any mixed-unit semantics remain unresolved
 - edge cases, failure modes, and unresolved decisions
 - scope control and possible feature slices
 - whether the design is concrete enough to convert into Trekker tasks

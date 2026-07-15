@@ -20,7 +20,14 @@ feature planning.
 
 Codex planning is the scratchpad. Trekker is the durable source of truth.
 
-Feature planning runs in the main agent session. A subagent may help draft or review, but the main agent owns the user conversation, approval gates, review integration, and Trekker writes.
+Feature planning runs in the main agent session. After discovery approval, the main
+coordinator must enter actual Codex Plan Mode before new-feature design or formal
+planning begins. In this document, "Feature Planning Mode" means that actual Codex
+Plan Mode state through implementation-plan approval and the user's authorization
+for Trekker creation and Task 1. Before any Trekker write, branch creation, spec
+persistence, commit, or Task 1 execution, the coordinator must transition to write-
+capable Default mode. A subagent may help draft or review, but the main agent owns
+the user conversation, approval gates, review integration, and Trekker writes.
 
 Architecture/design and senior-developer reviews required by this workflow are
 standingly authorized dispatches. The main coordinator should request them before
@@ -31,7 +38,7 @@ the user still controls design approval and Trekker record creation.
 
 - Preserve the creative design loop before committing to tracking.
 - Avoid duplicate Trekker work.
-- Turn approved feature designs into Trekker epics, tasks, subtasks, dependencies, and verification criteria.
+- Turn approved feature designs into Trekker epics, tasks, subtasks, dependencies, and verification criteria, beginning with a mandatory planning Task 1.
 - Keep execution Trekker-driven after planning.
 - Validate plans with specialized reviewer feedback before asking for human approval.
 
@@ -98,9 +105,32 @@ Acceptance criteria:
 Open questions:
 ```
 
-Treat this as the proposed Trekker epic. It may live only in the conversation until approved.
+Treat this as the proposed Trekker epic. It may live only in the conversation until approved, but every approved feature plan must save the final spec under `docs/specs/YYYY-MM-DD-feature-name.md` or another agreed durable path during planning Task 1.
 
-For larger epics, propose saving a durable design document under `docs/specs/YYYY-MM-DD-feature-name.md` or another agreed path, then reference it from the Trekker epic after approval. For small features, conversation-only design is acceptable.
+For any design that creates, reads, writes, migrates, reuses, or changes persisted
+timing or duration data, add a `Persisted duration contract` table to the design
+spec. Enumerate every existing and proposed duration field in the affected storage
+and compatibility boundary; do not group fields whose semantics differ. For each
+field, record:
+
+- field name and full persisted path
+- schema/app versions that read or write it
+- storage unit
+- rounding or precision policy at input, storage, and display boundaries
+- nullability and the meaning of null, missing, zero, and any sentinel value
+- cross-version read behavior, including how legacy units are detected or known
+- write and migration behavior, including whether old and new versions can safely
+  coexist
+
+```text
+| Field / persisted path | Reader/writer versions | Storage unit | Input/storage/display rounding or precision | Null/missing/zero/sentinel semantics | Cross-version reads / legacy-unit detection | Writes / migration / coexistence |
+| --- | --- | --- | --- | --- | --- | --- |
+```
+
+The contract must resolve mixed-unit semantics explicitly (for example, a legacy
+minutes field and a newer seconds field must not share an unresolved field name or
+conversion rule). If compatibility cannot be made deterministic, keep it as a
+blocking open question rather than deferring the decision to implementation.
 
 ## Phase 4. Architecture / Design Review
 
@@ -133,6 +163,21 @@ After design approval, convert the spec into Trekker-shaped work:
 - likely subagent roles per task
 - TDD expectations per task
 
+Every feature implementation plan starts with this planning boundary task:
+
+```text
+Task 1: Establish the epic feature branch and durable approved spec
+  - create or switch to the focused `codex/` epic feature branch
+  - save the user-approved design and implementation plan at the agreed spec path
+  - commit only the approved planning artifact(s) in a scoped planning commit
+  - record the branch name, spec path, and planning commit hash on the Trekker epic
+  - add the Task 1 `Summary:` and mark Task 1 completed
+```
+
+Task 2 is the first implementation task and depends on Task 1. The implementation
+plan must state that Task 2 and all later implementation remain `todo` until the
+user gives a separate, fresh, explicit approval to continue after Task 1 completes.
+
 For each verification criterion, label it as one of:
 
 - immediate: can be run before the task is handed off
@@ -162,8 +207,17 @@ Epic:
   Description:
   Acceptance criteria:
   Design reference:
+  Feature branch: recorded by Task 1
+  Approved spec path: recorded by Task 1
+  Planning commit: recorded by Task 1
 
 Tasks:
+  - Title: Establish the epic feature branch and durable approved spec
+    Description: Create/switch branch, save and commit spec, and record branch/spec/planning-commit references on the epic.
+    Depends on: none
+    Verification: branch, committed spec, epic references, and Task 1 Summary agree
+    TDD expectation: none; planning artifact only
+    Suggested subagents: none unless explicitly useful
   - Title:
     Description:
     Depends on:
@@ -220,9 +274,19 @@ Do not create or update Trekker records until the user approves the implementati
 
 Approval gate 2: ask the user to approve Trekker record creation.
 
+This approval authorizes creation of the approved Trekker plan and execution of
+planning Task 1 only. State explicitly that it does not authorize Task 2 or any
+feature implementation. Codex Plan Mode remains active through this approval, then
+ends. The coordinator must transition to write-capable Default mode before creating
+or updating Trekker records or performing any Task 1 filesystem or Git action.
+
 ## Phase 9. Create Trekker Records
 
 After approval:
+
+Transition out of Codex Plan Mode into write-capable Default mode before running
+any command below. Do not perform Trekker writes, create or switch branches, persist
+the spec, commit, or execute Task 1 while still in Plan Mode.
 
 ```bash
 trekker epic create -t "Epic title" -d "Approved design summary"
@@ -245,20 +309,45 @@ Add comments to the epic or first task when needed to preserve:
 - known non-goals
 - unresolved risks
 
-## Phase 10. Sync Session Plan
+The epic must preserve the focused branch name, durable spec path, and planning
+commit hash. These references are mandatory rather than optional comments.
+
+## Phase 10. Complete Planning Task 1
+
+In write-capable Default mode, execute only Task 1:
+
+1. Create or switch to the focused `codex/` epic feature branch.
+2. Save the approved design and implementation plan at the agreed durable spec path.
+3. Commit the planning artifact(s) in a scoped commit.
+4. Record the branch name, spec path, and planning commit hash on the epic.
+5. Add a `Summary:` with the same references and mark only Task 1 completed.
+
+Task 1 completion is the explicit end of the overall discovery, design, and formal-
+planning handoff, even though actual Codex Plan Mode ended after the approval gate.
+It is not the start of feature implementation.
+
+## Phase 11. Sync Session Plan
 
 Before mirroring the implementation plan into execution, validate any planning-funnel
 workflow feedback. Capture durable follow-ups under `EPIC-6` now, or explicitly
-record why the feedback is deferred. Only then hand the approved, tracked plan to
-execution.
+record why the feedback is deferred. Only then prepare the approved, tracked plan
+for a resumable handoff.
 
 Only after Trekker is accurate, mirror the immediate work in Codex `update_plan`.
 
 Trekker wins if the session plan and Trekker ever diverge.
 
-## Phase 11. Execution Handoff
+## Phase 12. Approval-Bounded Execution Handoff
 
-Execution starts from Trekker:
+Leave Task 2 and every later implementation task `todo`, and leave the epic open.
+Ask the user for a fresh, explicit approval to continue. Approval of the design,
+implementation plan, Trekker writes, or Task 1 does not satisfy this execution gate.
+
+Without approval, stop with a fully resumable Trekker handoff containing the branch,
+spec, planning commit, dependencies, Task 1 `Summary:`, later `todo` tasks, and open
+epic status. Do not mark Task 2 or any implementation task `in_progress`.
+
+Only after the fresh continuation approval does execution start from Trekker:
 
 ```bash
 trekker ready
@@ -271,27 +360,32 @@ trekker task update TREK-ID -s in_progress
 
 Then use the normal TDD/subagent workflow in `docs/agent-workflow.md`.
 
-## Planning Review Checklist
+## Planning Completion Checklist
 
-Before creating Trekker records, confirm:
+Across the approval, record-creation, and Task 1 completion stages, confirm:
 
 - `$feature-discovery` was completed and its Discovery Brief was user-approved before formal planning, or the explicit opt-out/small-mechanical exception and rationale were recorded
 - duplicate search was done
 - user approved the design spec
 - architecture/design review was run, or skipped with a reason for tiny low-risk work
 - reviewer feedback was validated and incorporated, or rejected with reasons
-- a durable spec file was proposed for larger epics
+- a durable spec path was chosen for the approved feature plan
 - planning conformance with the senior-developer implementation-plan reviewer was run, or skipped with a reason for tiny low-risk work
 - implementation-plan reviewer feedback was validated and incorporated, or rejected with reasons
 - user approved the implementation plan
+- the plan-approval grant is explicitly limited to Trekker creation and planning Task 1
+- Codex Plan Mode ended after approval and the coordinator transitioned to write-capable Default mode before every Trekker, filesystem, branch, spec, commit, or Task 1 mutation
+- the implementation plan begins with Task 1 for the branch, durable approved spec, scoped planning commit, and epic references
 - tasks are independently completable
 - dependencies encode ordering
 - subtasks are concrete
 - each task has verification criteria
 - implementation-specificity choices, permitted discretion, deferred checks, and completion boundaries are explicit where relevant
+- timing designs include a complete persisted-duration contract covering field/path, unit, rounding/precision, nullability/absence semantics, and cross-version read/write/migration compatibility
 - deferred checks name their trigger, evidence, owner, and whether they need a follow-up task or subtask
 - behavior tasks have TDD expectations
 - execution can resume from Trekker alone
+- only Task 1 was executed during planning; Task 2 and later tasks remain `todo`, the epic remains open, and fresh explicit continuation approval is still required
 - reviewer or planner workflow feedback has been validated and either incorporated into the workflow, linked to a Trekker follow-up, or declined with a reason
 
 ## Planning Funnel Self-Improvement
