@@ -16,7 +16,7 @@ Core rules:
 - Do not create Trekker records.
 - Do not update Trekker status.
 - Do not start implementation.
-- Keep Feature Planning Mode active through implementation-plan approval, Trekker creation, and the main coordinator's completion of planning Task 1.
+- Treat the repository's "Feature Planning Mode" protocol name as actual Codex Plan Mode. Require the main coordinator to enter Codex Plan Mode after discovery approval and before new-feature design or formal planning, remain there through implementation-plan approval and authorization for Trekker creation plus Task 1, then transition to write-capable Default mode before any Trekker write, branch creation, spec persistence, commit, or Task 1 execution.
 - Do not begin formal planning without the approved Discovery Brief and Decision Log or a documented permitted discovery exception.
 - Do not treat planning notes as durable truth.
 - Search results and related Trekker context must be provided by the main coordinator or requested from it.

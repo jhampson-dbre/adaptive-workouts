@@ -20,7 +20,14 @@ feature planning.
 
 Codex planning is the scratchpad. Trekker is the durable source of truth.
 
-Feature planning runs in the main agent session. A subagent may help draft or review, but the main agent owns the user conversation, approval gates, review integration, and Trekker writes.
+Feature planning runs in the main agent session. After discovery approval, the main
+coordinator must enter actual Codex Plan Mode before new-feature design or formal
+planning begins. In this document, "Feature Planning Mode" means that actual Codex
+Plan Mode state through implementation-plan approval and the user's authorization
+for Trekker creation and Task 1. Before any Trekker write, branch creation, spec
+persistence, commit, or Task 1 execution, the coordinator must transition to write-
+capable Default mode. A subagent may help draft or review, but the main agent owns
+the user conversation, approval gates, review integration, and Trekker writes.
 
 Architecture/design and senior-developer reviews required by this workflow are
 standingly authorized dispatches. The main coordinator should request them before
@@ -269,12 +276,17 @@ Approval gate 2: ask the user to approve Trekker record creation.
 
 This approval authorizes creation of the approved Trekker plan and execution of
 planning Task 1 only. State explicitly that it does not authorize Task 2 or any
-feature implementation. Feature Planning Mode remains active through implementation-
-plan approval and while the coordinator creates the records and completes Task 1.
+feature implementation. Codex Plan Mode remains active through this approval, then
+ends. The coordinator must transition to write-capable Default mode before creating
+or updating Trekker records or performing any Task 1 filesystem or Git action.
 
 ## Phase 9. Create Trekker Records
 
 After approval:
+
+Transition out of Codex Plan Mode into write-capable Default mode before running
+any command below. Do not perform Trekker writes, create or switch branches, persist
+the spec, commit, or execute Task 1 while still in Plan Mode.
 
 ```bash
 trekker epic create -t "Epic title" -d "Approved design summary"
@@ -302,7 +314,7 @@ commit hash. These references are mandatory rather than optional comments.
 
 ## Phase 10. Complete Planning Task 1
 
-Remain in Feature Planning Mode and execute only Task 1:
+In write-capable Default mode, execute only Task 1:
 
 1. Create or switch to the focused `codex/` epic feature branch.
 2. Save the approved design and implementation plan at the agreed durable spec path.
@@ -310,7 +322,8 @@ Remain in Feature Planning Mode and execute only Task 1:
 4. Record the branch name, spec path, and planning commit hash on the epic.
 5. Add a `Summary:` with the same references and mark only Task 1 completed.
 
-Task 1 completion is the explicit end of discovery, design, and formal planning.
+Task 1 completion is the explicit end of the overall discovery, design, and formal-
+planning handoff, even though actual Codex Plan Mode ended after the approval gate.
 It is not the start of feature implementation.
 
 ## Phase 11. Sync Session Plan
@@ -361,6 +374,7 @@ Across the approval, record-creation, and Task 1 completion stages, confirm:
 - implementation-plan reviewer feedback was validated and incorporated, or rejected with reasons
 - user approved the implementation plan
 - the plan-approval grant is explicitly limited to Trekker creation and planning Task 1
+- Codex Plan Mode ended after approval and the coordinator transitioned to write-capable Default mode before every Trekker, filesystem, branch, spec, commit, or Task 1 mutation
 - the implementation plan begins with Task 1 for the branch, durable approved spec, scoped planning commit, and epic references
 - tasks are independently completable
 - dependencies encode ordering

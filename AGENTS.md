@@ -87,7 +87,7 @@ Do not let subagents edit their own role contracts unless the main coordinator e
 
 Use subagents deliberately:
 
-- New feature planning: the main agent enters Feature Planning Mode and follows the feature-planner protocol before creating Trekker items.
+- New feature planning: after discovery approval, the main agent enters actual Codex Plan Mode and follows the feature-planner protocol before creating Trekker items.
 - Feature design review: use the architecture-design-reviewer before presenting an epic design spec as ready for user approval.
 - Planning conformance: after the user approves the design and before presenting Trekker task/subtask creation for approval, use the senior-developer-reviewer to review the proposed Trekker plan.
 - Documentation-only, copy-only, or tiny config changes: main agent may handle directly.
@@ -255,9 +255,16 @@ Use `docs/feature-planning.md` for new feature work.
 
 Codex planning is a temporary scratchpad for brainstorming and shaping the feature. Trekker is the durable source of truth after the user approves the plan.
 
-Feature planning is a main-session mode, not a hidden delegated workflow. The main agent may ask the feature-planner-advisor for an advisory draft, but the main agent owns the planning conversation, approval gates, review integration, and Trekker creation.
+Feature planning is a main-session workflow, not a hidden delegated workflow. In
+this repository, "Feature Planning Mode" means the main coordinator is actually in
+Codex Plan Mode through implementation-plan approval and the user's authorization
+for Trekker creation and Task 1. The coordinator must then transition to write-
+capable Default mode before any Trekker write, branch creation, spec persistence,
+commit, or Task 1 execution. The main agent may ask the feature-planner-advisor for
+an advisory draft, but the main agent owns the planning conversation, approval
+gates, review integration, and Trekker creation.
 
-Before entering formal Feature Planning Mode, invoke the repository
+Before entering Codex Plan Mode for formal feature planning, invoke the repository
 `$feature-discovery` skill for every proposed feature, capability, workflow, or
 substantial behavior change. Discovery is a collaborative, pre-planning
 conversation: it produces a user-approved Discovery Brief and Decision Log before
@@ -284,18 +291,19 @@ Planning flow:
    will save its spec there during planning Task 1.
 8. Convert the approved design into an implementation plan: epic, tasks, subtasks, dependencies, and verification. Task 1 must create or switch to the focused `codex/` epic feature branch, save and commit the approved spec, and record the branch name, spec path, and planning commit hash on the epic.
 9. Run planning conformance with the senior-developer implementation-plan reviewer, validate the feedback, and either incorporate it or record why it was not accepted.
-10. Ask for approval before creating or updating Trekker records.
-11. Create Trekker epic/task/subtask records and dependencies.
-12. Stay in Plan Mode and execute only Task 1. Complete it with its scoped planning commit and `Summary:`, and record the branch/spec/planning-commit references on the epic. Task 1 completion is the explicit end of discovery, design, and planning.
-13. Validate and capture planning-funnel workflow feedback under `EPIC-6`, or explicitly record why it is deferred.
-14. Leave Task 2 and every later implementation task `todo`, leave the epic open, and hand off from Trekker. Ask for a fresh explicit user approval to continue before starting or marking Task 2 (or any implementation task) `in_progress`.
-15. Mirror only the current session in `update_plan` after Trekker is correct.
+10. While still in Codex Plan Mode, ask the user to approve the implementation plan and authorize Trekker creation plus planning Task 1 only.
+11. After approval, transition out of Codex Plan Mode into write-capable Default mode before any Trekker write, branch creation, spec persistence, commit, or Task 1 execution.
+12. In Default mode, create Trekker epic/task/subtask records and dependencies.
+13. In Default mode, execute only Task 1. Complete it with its scoped planning commit and `Summary:`, and record the branch/spec/planning-commit references on the epic. Task 1 completion is the explicit end of the overall discovery, design, and planning handoff, although Codex Plan Mode ended after approval in step 10.
+14. Validate and capture planning-funnel workflow feedback under `EPIC-6`, or explicitly record why it is deferred.
+15. Leave Task 2 and every later implementation task `todo`, leave the epic open, and hand off from Trekker. Ask for a fresh explicit user approval to continue before starting or marking Task 2 (or any implementation task) `in_progress`.
+16. Mirror only the current session in `update_plan` after Trekker is correct.
 
 Do not create Trekker epics, tasks, or subtasks from brainstorming unless the user has approved the design and implementation plan.
-Approval of the implementation plan and Trekker writes authorizes planning Task 1
-only; it is not approval to implement the feature. Without the separate continuation
-approval, the branch, committed spec, epic references, task statuses, and Task 1
-`Summary:` must make the handoff fully resumable without chat context.
+Approval of the implementation plan plus authorization for Trekker creation and
+planning Task 1 does not authorize feature implementation. Without the separate
+continuation approval, the branch, committed spec, epic references, task statuses,
+and Task 1 `Summary:` must make the handoff fully resumable without chat context.
 
 ## Repo Safety
 

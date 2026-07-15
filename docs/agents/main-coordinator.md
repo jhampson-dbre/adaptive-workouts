@@ -52,10 +52,10 @@ Do not ask the user to separately authorize an architecture/design or
 senior-developer review that this workflow requires; preserve the user's approval
 gates for the design and Trekker writes themselves.
 
-- Before entering Feature Planning Mode, invoke `$feature-discovery` for every proposed feature, capability, workflow, or substantial behavior change. Obtain the user's approval of its Discovery Brief and Decision Log before the formal duplicate-search gate, handing work to the feature-planner-advisor, or formal planning. Repository or Trekker context may be inspected solely to ground discovery, but that exploratory lookup does not replace the formal duplicate search. Skip it only when the user explicitly opts out or the request is a small, fully specified mechanical task, and record the exception and rationale; route requests discovery identifies as bugs, refactors, or fully specified execution tasks to the applicable workflow.
-- Enter Feature Planning Mode and follow the feature-planner protocol for new feature brainstorming, design specs, and Trekker epic/task/subtask planning.
-- Remain in Feature Planning Mode through implementation-plan approval, Trekker creation, and completion of planning Task 1. Task 1 creates or switches to the focused epic feature branch, saves and commits the approved spec, and records the branch/spec/planning-commit references on the epic.
-- Execute only Task 1 under the planning approval. Its completion ends discovery, design, and planning; leave Task 2 and later tasks `todo` and the epic open until the user gives fresh explicit approval to continue.
+- Before entering Codex Plan Mode for formal feature planning, invoke `$feature-discovery` for every proposed feature, capability, workflow, or substantial behavior change. Obtain the user's approval of its Discovery Brief and Decision Log before the formal duplicate-search gate, handing work to the feature-planner-advisor, or formal planning. Repository or Trekker context may be inspected solely to ground discovery, but that exploratory lookup does not replace the formal duplicate search. Skip it only when the user explicitly opts out or the request is a small, fully specified mechanical task, and record the exception and rationale; route requests discovery identifies as bugs, refactors, or fully specified execution tasks to the applicable workflow.
+- After discovery approval, enter actual Codex Plan Mode before new-feature design or formal planning and follow the feature-planner protocol. The repository's "Feature Planning Mode" protocol name means Codex Plan Mode through implementation-plan approval and authorization for Trekker creation plus Task 1.
+- After that approval, transition out of Codex Plan Mode into write-capable Default mode before any Trekker write, branch creation, spec persistence, commit, or Task 1 execution.
+- In Default mode, create the approved Trekker records and execute only Task 1. Task 1 creates or switches to the focused epic feature branch, saves and commits the approved spec, and records the branch/spec/planning-commit references on the epic. Its completion ends the overall discovery, design, and planning handoff; leave Task 2 and later tasks `todo` and the epic open until the user gives fresh explicit approval to continue.
 - Use feature-planner subagents only for advisory drafts or second opinions; the main coordinator owns user interaction, review integration, and Trekker writes.
 - Use the architecture-design-reviewer before presenting a feature design spec as ready for user approval, unless the feature is tiny and low-risk.
 - Use planning conformance with the senior-developer-reviewer after design approval and before presenting a Trekker-shaped implementation plan as ready for user approval, unless the plan is tiny and low-risk.
@@ -113,11 +113,19 @@ must not be asked to discover omitted same-class siblings during coding.
 For feature planning, also include:
 
 ```text
-Planning phase: brainstorm | design spec | implementation plan | Trekker creation
+Planning phase: brainstorm | design spec | implementation plan | plan approval and Task 1 authorization | Trekker creation | Task 1 execution | Task 1 completion | continuation approval
+Codex mode: Plan Mode through approval | Default for Trekker creation and Task 1 | Default awaiting continuation approval
+Mode transition state: pending before writes | completed before writes
 Discovery handoff: approved brief and decision log | documented exception and rationale
 Existing related Trekker items:
 Open user questions:
 Approval needed before Trekker writes: yes/no
+Planning Task 1 state: not started | in_progress | completed
+Feature branch:
+Approved spec path:
+Planning commit:
+Continuation approval: not requested | pending | granted
+First implementation task and status:
 Advisory only: yes/no
 Review stage: design | implementation-plan | none
 Reviewer feedback already incorporated: yes/no
