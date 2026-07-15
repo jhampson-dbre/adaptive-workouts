@@ -47,6 +47,8 @@ hand back only for a user decision, external blocker, meaningful scope expansion
 explicit pause/stop request, or authorized-work boundary. Do not select an
 unrelated ready task merely because it appears in `trekker ready`; state why work
 stopped or continued in the final handoff and after-action audit.
+For a newly planned feature, completion of planning Task 1 is an authorized-work
+boundary: later tasks require fresh explicit user approval before they may start.
 
 ## 3. Inspect Before Editing
 
@@ -238,14 +240,21 @@ Short version:
 4. Draft an epic-level design spec.
 5. Run architecture/design review, validate feedback, and incorporate it or record why it was rejected.
 6. Get user approval.
-7. For larger epics, propose a durable spec file under `docs/specs/`.
+7. Choose a durable spec file under `docs/specs/` for every approved feature plan.
 8. Convert the spec into a Trekker implementation plan: epic, tasks, subtasks, dependencies, and verification.
 9. Run planning conformance with the senior-developer implementation-plan reviewer, validate feedback, and incorporate it or record why it was rejected.
 10. Get user approval to create Trekker records.
 11. Create or update Trekker.
-12. Mirror only the current session with `update_plan` after Trekker is accurate.
+12. While still in Feature Planning Mode, execute and complete only Task 1: create or switch to the focused epic feature branch, save and commit the approved spec, and record the branch name, spec path, and planning commit hash on the epic.
+13. Treat Task 1 completion as the end of discovery, design, and planning.
+14. Leave later tasks `todo` and the epic open; require a fresh explicit user approval before Task 2 or any implementation task starts or becomes `in_progress`.
+15. Mirror only the current session with `update_plan` after Trekker is accurate.
 
 Do not create durable Trekker records during brainstorming unless the user explicitly approves.
+Implementation-plan/Trekker approval authorizes Task 1 only, not feature
+implementation. If the user does not approve continuation, preserve a resumable
+handoff in Trekker with the Task 1 `Summary:`, branch/spec/planning-commit references,
+dependencies, later `todo` tasks, and the open epic.
 
 ## 8. Verify
 

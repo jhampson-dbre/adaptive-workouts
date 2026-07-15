@@ -216,8 +216,10 @@ Before marking complete:
 When the active task belongs to an epic, continue with the next ready, in-scope
 task in that epic unless a user decision, external blocker, meaningful scope
 expansion, explicit pause/stop request, or authorized-work boundary requires a
-handoff. Do not switch to an unrelated ready task merely because it appears in
-`trekker ready`.
+handoff. The new-feature planning boundary below is such an authorized-work
+boundary: after planning Task 1, do not continue to Task 2 without fresh explicit
+user approval. Do not switch to an unrelated ready task merely because it appears
+in `trekker ready`.
 
 Before final handoff for non-trivial tracked, PR-bound, or epic work, run an
 after-action workflow audit: confirm no required step needed a user reminder, the
@@ -278,15 +280,22 @@ Planning flow:
 4. Draft an epic-level design spec.
 5. Run architecture/design review, validate the feedback, and either incorporate it or record why it was not accepted.
 6. Present the revised design spec to the user for approval.
-7. For larger epics, propose saving a durable spec under `docs/specs/`.
-8. Convert the approved design into an implementation plan: epic, tasks, subtasks, dependencies, and verification.
+7. Choose the durable spec path under `docs/specs/`; every approved feature plan
+   will save its spec there during planning Task 1.
+8. Convert the approved design into an implementation plan: epic, tasks, subtasks, dependencies, and verification. Task 1 must create or switch to the focused `codex/` epic feature branch, save and commit the approved spec, and record the branch name, spec path, and planning commit hash on the epic.
 9. Run planning conformance with the senior-developer implementation-plan reviewer, validate the feedback, and either incorporate it or record why it was not accepted.
 10. Ask for approval before creating or updating Trekker records.
 11. Create Trekker epic/task/subtask records and dependencies.
-12. Validate and capture planning-funnel workflow feedback under `EPIC-6`, or explicitly record why it is deferred.
-13. Mirror only the current session in `update_plan` after Trekker is correct.
+12. Stay in Plan Mode and execute only Task 1. Complete it with its scoped planning commit and `Summary:`, and record the branch/spec/planning-commit references on the epic. Task 1 completion is the explicit end of discovery, design, and planning.
+13. Validate and capture planning-funnel workflow feedback under `EPIC-6`, or explicitly record why it is deferred.
+14. Leave Task 2 and every later implementation task `todo`, leave the epic open, and hand off from Trekker. Ask for a fresh explicit user approval to continue before starting or marking Task 2 (or any implementation task) `in_progress`.
+15. Mirror only the current session in `update_plan` after Trekker is correct.
 
 Do not create Trekker epics, tasks, or subtasks from brainstorming unless the user has approved the design and implementation plan.
+Approval of the implementation plan and Trekker writes authorizes planning Task 1
+only; it is not approval to implement the feature. Without the separate continuation
+approval, the branch, committed spec, epic references, task statuses, and Task 1
+`Summary:` must make the handoff fully resumable without chat context.
 
 ## Repo Safety
 

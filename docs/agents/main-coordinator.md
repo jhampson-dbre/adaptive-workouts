@@ -18,6 +18,7 @@ Use the default strong main-session model. Escalate to a stronger reasoning mode
   before any edit.
 - Mark the active task `in_progress`.
 - After a task in an active epic completes, continue with the next ready, in-scope epic task unless a user decision, external blocker, meaningful scope expansion, explicit pause/stop request, or authorized-work boundary requires handoff; do not switch to unrelated ready work.
+- Treat completion of a new feature's planning Task 1 as an authorized-work boundary; do not continue to Task 2 without fresh explicit user approval.
 - Serialize Trekker writes; only parallelize independent, read-only Trekker lookups, and retry transient lock failures sequentially after a brief wait.
 - Decide which specialized subagents are useful.
 - Provide each subagent clear inputs and boundaries.
@@ -53,6 +54,8 @@ gates for the design and Trekker writes themselves.
 
 - Before entering Feature Planning Mode, invoke `$feature-discovery` for every proposed feature, capability, workflow, or substantial behavior change. Obtain the user's approval of its Discovery Brief and Decision Log before the formal duplicate-search gate, handing work to the feature-planner-advisor, or formal planning. Repository or Trekker context may be inspected solely to ground discovery, but that exploratory lookup does not replace the formal duplicate search. Skip it only when the user explicitly opts out or the request is a small, fully specified mechanical task, and record the exception and rationale; route requests discovery identifies as bugs, refactors, or fully specified execution tasks to the applicable workflow.
 - Enter Feature Planning Mode and follow the feature-planner protocol for new feature brainstorming, design specs, and Trekker epic/task/subtask planning.
+- Remain in Feature Planning Mode through implementation-plan approval, Trekker creation, and completion of planning Task 1. Task 1 creates or switches to the focused epic feature branch, saves and commits the approved spec, and records the branch/spec/planning-commit references on the epic.
+- Execute only Task 1 under the planning approval. Its completion ends discovery, design, and planning; leave Task 2 and later tasks `todo` and the epic open until the user gives fresh explicit approval to continue.
 - Use feature-planner subagents only for advisory drafts or second opinions; the main coordinator owns user interaction, review integration, and Trekker writes.
 - Use the architecture-design-reviewer before presenting a feature design spec as ready for user approval, unless the feature is tiny and low-risk.
 - Use planning conformance with the senior-developer-reviewer after design approval and before presenting a Trekker-shaped implementation plan as ready for user approval, unless the plan is tiny and low-risk.
@@ -130,6 +133,8 @@ Reviewer feedback already incorporated: yes/no
 - Do not create Trekker epics, tasks, or subtasks from brainstorming without user approval.
 - Do not begin formal feature planning or dispatch the feature-planner-advisor without the user's approved `$feature-discovery` brief, unless a permitted discovery exception is documented.
 - Do not delegate approval gates or Trekker creation decisions to a subagent.
+- Do not treat design, implementation-plan, Trekker-write, or planning Task 1 approval as authorization to implement. Before starting or marking Task 2 or any implementation task `in_progress`, obtain a separate fresh explicit user approval to continue.
+- Without continuation approval, preserve a chat-independent Trekker handoff with the open epic, later `todo` tasks, dependencies, Task 1 `Summary:`, and epic references for the feature branch, durable spec, and planning commit.
 - Do not present a feature design or implementation plan as ready for user approval until required reviewer feedback has been validated and incorporated, or rejected with reasons.
 - Do not ignore workflow feedback from subagents; validate it, decline it with a reason, or turn it into a follow-up Trekker task under `EPIC-6: Agent Workflow Improvements`.
 - Do not create or materially change a backlog item for a residual risk without the user approval required for Trekker writes. If approval is pending, checkpoint the active task with the proposed item, duplicate-search result, owner, trigger, and rationale.

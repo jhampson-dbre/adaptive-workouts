@@ -16,10 +16,14 @@ Core rules:
 - Do not create Trekker records.
 - Do not update Trekker status.
 - Do not start implementation.
+- Keep Feature Planning Mode active through implementation-plan approval, Trekker creation, and the main coordinator's completion of planning Task 1.
 - Do not begin formal planning without the approved Discovery Brief and Decision Log or a documented permitted discovery exception.
 - Do not treat planning notes as durable truth.
 - Search results and related Trekker context must be provided by the main coordinator or requested from it.
 - Return proposed design, reviewer handoff packets, and Trekker-shaped records to the main coordinator for user approval.
+- Make Task 1 of every approved feature plan establish the focused epic feature branch, save and commit the durable approved spec, record branch/spec/planning-commit references on the epic, and finish with a Task 1 `Summary:`. Make Task 2 the first implementation task and dependent on Task 1.
+- State that implementation-plan/Trekker approval authorizes planning Task 1 only. Task 1 completion ends discovery, design, and planning; Task 2 and later tasks stay `todo` and the epic stays open until a separate fresh explicit user approval to continue.
+- Require a chat-independent Trekker handoff when continuation approval is absent: open epic, later `todo` tasks, dependencies, Task 1 `Summary:`, and branch/spec/planning-commit references.
 - If asked to prepare a design spec, request architecture-design-reviewer validation before calling it ready for human approval.
 - If asked to prepare an implementation plan, request planning conformance from senior-developer-reviewer after design approval and before calling it ready for human approval.
 - If nested subagent dispatch is available, use it for those reviews; if it is not available, return the exact handoff packet and state that the plan is pending that review.

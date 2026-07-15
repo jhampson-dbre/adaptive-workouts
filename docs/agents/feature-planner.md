@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Guide new feature planning from brainstorm to approved design spec to Trekker epic/task/subtask creation plan.
+Guide new feature planning from brainstorm to approved design spec, Trekker epic/task/subtask creation, and completion of the mandatory planning Task 1 boundary.
 
 This is primarily a main-session protocol, not a default subagent. The main agent should adopt Feature Planning Mode for interactive planning with the user. The native `feature-planner-advisor` Codex agent may provide an advisory draft or second opinion, but it must not own approval gates or Trekker writes.
 
 When the `feature-planner-advisor` drafts a design or implementation plan, it should request the appropriate reviewer before marking the plan ready for human approval. If nested subagent dispatch is not available, it must return a reviewer handoff packet and mark the plan as pending review by the main coordinator.
 
-The feature planner uses Codex planning as a temporary scratchpad. Trekker becomes the durable source of truth only after user approval.
+The feature planner uses Codex planning as a temporary scratchpad. Trekker becomes the durable source of truth only after user approval. Feature Planning Mode remains active through implementation-plan approval, Trekker creation, and completion of planning Task 1.
 
 Before formal feature planning begins, the main coordinator must invoke
 `$feature-discovery` for each proposed feature, capability, workflow, or substantial
@@ -31,7 +31,7 @@ Use GPT-5.6 with high reasoning for ambiguous product design, cross-component fe
 - current Trekker search results for related work
 - relevant existing specs or project context
 - constraints, non-goals, or product preferences
-- whether the user wants a durable spec file or conversation-only planning
+- agreed durable spec path for planning Task 1
 - whether this is main-session planning or an advisory subagent draft
 - approved Discovery Brief and Decision Log, or the documented discovery exception
 
@@ -46,7 +46,7 @@ Use GPT-5.6 with high reasoning for ambiguous product design, cross-component fe
 6. Run or request architecture/design review before asking the user to approve the design.
 7. Validate the review feedback; incorporate accepted feedback and record rejected feedback with reasons.
 8. Ask the user to approve or revise the design.
-9. For larger epics, propose saving a durable design spec under `docs/specs/YYYY-MM-DD-feature-name.md`.
+9. Choose a durable design spec path under `docs/specs/YYYY-MM-DD-feature-name.md` (or another agreed path) for every approved feature plan.
 10. Convert the approved design into an implementation plan:
    - epic
    - tasks
@@ -58,8 +58,11 @@ Use GPT-5.6 with high reasoning for ambiguous product design, cross-component fe
 11. After design approval, run or request planning conformance with the senior-developer reviewer before asking the user to approve Trekker creation.
 12. Validate the review feedback; incorporate accepted feedback and record rejected feedback with reasons.
 13. If implementation review finds a design concern, return to design review before asking for Trekker creation approval.
-14. Ask the user to approve Trekker creation.
-15. After approval, provide exact Trekker records to create. If running as a subagent, do not create them.
+14. Ensure the plan starts with Task 1: create or switch to the focused epic feature branch, save and commit the approved spec, record branch/spec/planning-commit references on the epic, and complete Task 1 with a `Summary:`. Task 2 is the first implementation task and depends on Task 1.
+15. Ask the user to approve Trekker creation and execution of planning Task 1 only; state that feature implementation requires a later, fresh approval.
+16. After approval, provide exact Trekker records to create. If running as a subagent, do not create them.
+17. The main coordinator remains in Plan Mode, creates the records, and executes only Task 1. Task 1 completion explicitly ends discovery, design, and planning.
+18. Leave Task 2 and later tasks `todo` and the epic open. Require separate fresh explicit user approval before starting or marking any implementation task `in_progress`; otherwise preserve a fully resumable Trekker handoff.
 
 ## Design Spec Template
 
@@ -86,8 +89,17 @@ Epic:
   Title:
   Description:
   Acceptance:
+  Feature branch: recorded by Task 1
+  Approved spec path: recorded by Task 1
+  Planning commit: recorded by Task 1
 
 Tasks:
+  - Title: Establish the epic feature branch and durable approved spec
+    Description: Create/switch branch, save and commit spec, and record branch/spec/planning-commit references on the epic.
+    Depends on: none
+    Verification: branch, committed spec, epic references, and Task 1 Summary agree
+    TDD expectation: none; planning artifact only
+    Suggested subagents: none unless explicitly useful
   - Title:
     Description:
     Depends on:
@@ -105,13 +117,16 @@ Dependencies:
 - Do not create Trekker records during brainstorming.
 - Do not begin formal planning without an approved Discovery Brief and Decision Log, unless the main coordinator documented an explicit user opt-out or small, fully specified mechanical-task exception.
 - Do not create Trekker records before user approval of the design and implementation plan.
+- Do not omit mandatory planning Task 1 or make the durable approved spec optional based on epic size.
+- Do not treat implementation-plan, Trekker-write, or Task 1 approval as permission to start Task 2 or implementation.
+- Do not mark Task 2 or any implementation task `in_progress` without a separate fresh explicit user approval after Task 1 completes.
 - If running as a subagent, do not create Trekker records at all; return the proposed records to the main agent.
 - Do not own approval gates when running as a subagent.
 - Do not create workflow-improvement tasks directly when running as a subagent. Report `Workflow feedback:` and, if useful, recommend a follow-up task under `EPIC-6: Agent Workflow Improvements`.
 - Do not treat planning notes as the durable source of truth after Trekker is populated.
 - Do not skip duplicate search.
 - Do not create vague tasks without verification criteria.
-- Do not start implementation while still in planning mode unless the user explicitly switches modes.
+- Do not start implementation until planning Task 1 is completed and the user then gives separate fresh explicit approval to continue.
 
 ## Expected Output
 
@@ -136,6 +151,7 @@ For Trekker creation:
 - planning-conformance review notes from the senior-developer reviewer
 - exact records to create
 - explicit approval question before writes
+- explicit statement that this approval covers Trekker writes and planning Task 1 only, followed by a separate continuation-approval handoff after Task 1
 - `Workflow feedback:` when the planning funnel, templates, review handoffs, or Trekker mapping made planning harder to execute reliably
 
 Workflow feedback should recommend `EPIC-6: Agent Workflow Improvements` for durable follow-up tasks. Use a `[Planning]` prefix for planning-funnel issues.
