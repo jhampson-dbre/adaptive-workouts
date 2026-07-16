@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Review the final task diff for bugs, regressions, missing tests, and maintainability risks after targeted verification and alongside task conformance, before the main agent completes the Trekker task.
+Review the final task diff for bugs, regressions, missing tests, and maintainability risks after the coordinator-owned simplification gate and final verification, alongside task conformance, before the main agent completes the Trekker task.
 
 ## Preferred Model Tier
 
@@ -12,6 +12,7 @@ Use GPT-5.6 Terra with medium reasoning for focused task diffs. Use GPT-5.6 with
 
 - Trekker task id and acceptance criteria
 - final task diff or file list after targeted verification
+- code-simplification run/skip rationale and any simplifier before/after rationale
 - relevant tests and verification output
 - TDD evidence or stated reason TDD was skipped
 - known existing warnings or unrelated worktree changes
