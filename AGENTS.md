@@ -15,6 +15,7 @@ Use the role contracts in `docs/agents/`:
 - `docs/agents/architecture-design-reviewer.md`: design-spec architecture and product-fit review
 - `docs/agents/senior-developer-reviewer.md`: implementation-plan sequencing, TDD, and execution-risk review
 - `docs/agents/implementor.md`: TDD implementation work
+- `docs/agents/code-simplifier.md`: behavior-preserving simplification of the green task diff
 - `docs/agents/spec-reviewer.md`: post-verification task-conformance review
 - `docs/agents/code-reviewer.md`: focused bug/regression review
 - `docs/agents/epic-reviewer.md`: full epic or branch review before merge
@@ -22,6 +23,7 @@ Use the role contracts in `docs/agents/`:
 Native Codex custom agents live in `.codex/agents/`:
 
 - `.codex/agents/implementor.toml`
+- `.codex/agents/code-simplifier.toml`
 - `.codex/agents/spec-reviewer.toml`
 - `.codex/agents/code-reviewer.toml`
 - `.codex/agents/epic-reviewer.toml`
@@ -91,7 +93,7 @@ Use subagents deliberately:
 - Feature design review: use the architecture-design-reviewer before presenting an epic design spec as ready for user approval.
 - Planning conformance: after the user approves the design and before presenting Trekker task/subtask creation for approval, use the senior-developer-reviewer to review the proposed Trekker plan.
 - Documentation-only, copy-only, or tiny config changes: main agent may handle directly.
-- Every tracked implementation task: dispatch a fresh implementor. After targeted verification produces the final task diff and evidence, dispatch a fresh code reviewer and a fresh task-conformance spec reviewer; do not reuse either reviewer across task boundaries, even within the same epic.
+- Every tracked implementation task: dispatch a fresh implementor. After the implementor produces a green diff, invoke `$code-simplification` and dispatch a fresh code simplifier for non-trivial code changes. The coordinator then runs final targeted and proportionate broader verification before dispatching a fresh code reviewer and a fresh task-conformance spec reviewer; do not reuse either reviewer across task boundaries, even within the same epic.
 - Any behavior change or bug fix: use the fresh implementor role unless the change is truly mechanical.
 - Before dispatching an implementor for a behavior-bug task, reproduce the problem and identify its root cause, then use the repository `$bugfix-issue-class-audit` skill for every non-mechanical or user-facing behavior bug. A genuinely mechanical localized correction does not require the full audit when the coordinator documents why. For non-mechanical or user-facing bugs, a read-only spec reviewer validates the audit only; this narrow pre-implementation check is not routine task-start requirements discovery and does not replace the post-verification task-conformance review.
 - Task-start spec-review dispatch is prohibited. Do not use the spec reviewer to invent, refine, or gate routine task-start requirements.
@@ -103,6 +105,19 @@ Use subagents deliberately:
   epic-completion handoff.
 
 Parallel reviewers are allowed. Only one implementor may edit a given file set at a time. Reviewers are read-only unless the main agent explicitly asks them to prepare a patch.
+
+The code-simplification gate is coordinator-owned. Its default scope is only code
+modified by the active task in the current session, and the handoff must explicitly
+authorize every editable file. Repository-wide simplification requires separate,
+explicit authorization. Every non-trivial green code diff requires a fresh
+code-simplifier dispatch, even when it may return no edits. Pre-dispatch skip is allowed
+only for documentation/copy-only work or tiny mechanical configuration changes. No
+meaningful simplification opportunity is a valid no-edit simplifier result, not a
+pre-dispatch skip. Simplifier edits become part of the final task diff and require
+final verification plus fresh code and task-conformance reviews. After substantive
+review-driven fixes, rerun simplification only when those fixes materially reshape or
+reintroduce complexity, and at most once after review per task. Simplifier edits and
+reviewer requests to re-verify do not by themselves start another simplification loop.
 
 An agent may receive a follow-up only for the same Trekker task when the coordinator
 labels it as a same-task continuation and supplies the changed scope, new evidence,
@@ -121,6 +136,7 @@ Conformance escalation and re-review are explicit:
 - For a material conflict with the approved task plan, stop task completion and return the plan to the senior-developer implementation-plan reviewer before changing Trekker planning records.
 - For a product, architecture, data, auth, migration, or scope change, return to architecture/design review and obtain the applicable user approval before changing the design or plan.
 - Any fix or clarification that changes the final task diff requires renewed code review and task-conformance review of that changed final diff; after committing a substantive final-integration change, rerun both the epic branch review and fresh epic spec/conformance review.
+- A substantive review-driven task fix gets the single allowed post-review simplification rerun only when complexity was materially reintroduced or reshaped. Whether run or skipped, record the rationale; then verify and review the changed final diff again.
 
 ## Subagent Handoff Packet
 
@@ -401,6 +417,7 @@ See also:
 - `docs/agents/architecture-design-reviewer.md`
 - `docs/agents/senior-developer-reviewer.md`
 - `docs/agents/implementor.md`
+- `docs/agents/code-simplifier.md`
 - `docs/agents/spec-reviewer.md`
 - `docs/agents/code-reviewer.md`
 - `docs/agents/epic-reviewer.md`
