@@ -31,8 +31,8 @@ the changed scope, new evidence, and requested decision.
 4. Run the targeted test and confirm the failure is expected.
 5. Implement the smallest passing change.
 6. Run targeted tests.
-7. Run broader verification if the change touches shared behavior, UI flow, storage, auth, deployment, or PWA behavior.
-8. Report results to the main agent.
+7. Run enough broader verification to establish a green implementor handoff when the change touches shared behavior, UI flow, storage, auth, deployment, or PWA behavior.
+8. Report the green diff and evidence to the main agent for the coordinator-owned code-simplification gate. The coordinator owns final verification after any simplifier edits.
 
 For Firebase emulator-backed verification, use the project script (currently
 `npm run ci:rules`) instead of a global Firebase CLI. If adding or changing such a

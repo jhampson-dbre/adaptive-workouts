@@ -18,6 +18,7 @@ Use the default strong main-session model. Escalate to a stronger reasoning mode
   before any edit.
 - Mark the active task `in_progress`.
 - After a task in an active epic completes, continue with the next ready, in-scope epic task unless a user decision, external blocker, meaningful scope expansion, explicit pause/stop request, or authorized-work boundary requires handoff; do not switch to unrelated ready work.
+- Treat completion of a new feature's planning Task 1 as an authorized-work boundary; do not continue to Task 2 without fresh explicit user approval.
 - Serialize Trekker writes; only parallelize independent, read-only Trekker lookups, and retry transient lock failures sequentially after a brief wait.
 - Decide which specialized subagents are useful.
 - Provide each subagent clear inputs and boundaries.
@@ -51,13 +52,15 @@ Do not ask the user to separately authorize an architecture/design or
 senior-developer review that this workflow requires; preserve the user's approval
 gates for the design and Trekker writes themselves.
 
-- Before entering Feature Planning Mode, invoke `$feature-discovery` for every proposed feature, capability, workflow, or substantial behavior change. Obtain the user's approval of its Discovery Brief and Decision Log before the formal duplicate-search gate, handing work to the feature-planner-advisor, or formal planning. Repository or Trekker context may be inspected solely to ground discovery, but that exploratory lookup does not replace the formal duplicate search. Skip it only when the user explicitly opts out or the request is a small, fully specified mechanical task, and record the exception and rationale; route requests discovery identifies as bugs, refactors, or fully specified execution tasks to the applicable workflow.
-- Enter Feature Planning Mode and follow the feature-planner protocol for new feature brainstorming, design specs, and Trekker epic/task/subtask planning.
+- Before entering Codex Plan Mode for formal feature planning, invoke `$feature-discovery` for every proposed feature, capability, workflow, or substantial behavior change. Obtain the user's approval of its Discovery Brief and Decision Log before the formal duplicate-search gate, handing work to the feature-planner-advisor, or formal planning. Repository or Trekker context may be inspected solely to ground discovery, but that exploratory lookup does not replace the formal duplicate search. Skip it only when the user explicitly opts out or the request is a small, fully specified mechanical task, and record the exception and rationale; route requests discovery identifies as bugs, refactors, or fully specified execution tasks to the applicable workflow.
+- After discovery approval, enter actual Codex Plan Mode before new-feature design or formal planning and follow the feature-planner protocol. The repository's "Feature Planning Mode" protocol name means Codex Plan Mode through implementation-plan approval and authorization for Trekker creation plus Task 1.
+- After that approval, transition out of Codex Plan Mode into write-capable Default mode before any Trekker write, branch creation, spec persistence, commit, or Task 1 execution.
+- In Default mode, create the approved Trekker records and execute only Task 1. Task 1 creates or switches to the focused epic feature branch, saves and commits the approved spec, and records the branch/spec/planning-commit references on the epic. Its completion ends the overall discovery, design, and planning handoff; leave Task 2 and later tasks `todo` and the epic open until the user gives fresh explicit approval to continue.
 - Use feature-planner subagents only for advisory drafts or second opinions; the main coordinator owns user interaction, review integration, and Trekker writes.
 - Use the architecture-design-reviewer before presenting a feature design spec as ready for user approval, unless the feature is tiny and low-risk.
 - Use planning conformance with the senior-developer-reviewer after design approval and before presenting a Trekker-shaped implementation plan as ready for user approval, unless the plan is tiny and low-risk.
 - Documentation-only, copy-only, or tiny config changes may stay main-agent only.
-- For every tracked implementation task, dispatch a fresh implementor. After targeted verification produces the final task diff and evidence, dispatch a fresh code reviewer and a fresh task-conformance spec reviewer; never reuse either reviewer across task boundaries, including within an epic.
+- For every tracked implementation task, dispatch a fresh implementor. When it reports a green diff, invoke `$code-simplification` and dispatch a fresh code simplifier for non-trivial code changes. After simplification, run final targeted and proportionate broader verification, then dispatch a fresh code reviewer and a fresh task-conformance spec reviewer; never reuse either reviewer across task boundaries, including within an epic.
 - Use the fresh implementor for behavior changes or bug fixes where TDD is practical.
 - For a non-mechanical or user-facing behavior bug, use the completed `$bugfix-issue-class-audit` output to send the audit to a read-only spec reviewer before implementor dispatch. This narrowly validates audit scope against approved intent; it is not routine task-start requirements discovery and does not replace the fresh post-verification task-conformance review.
 - Task-start spec-review dispatch is prohibited. Do not use a spec reviewer to invent or routinely refine task-start requirements.
@@ -77,6 +80,7 @@ gates for the design and Trekker writes themselves.
 Project-scoped Codex custom agents are defined in `.codex/agents/`. Prefer those native agents when spawning subagents:
 
 - `implementor`
+- `code-simplifier`
 - `spec-reviewer`
 - `code-reviewer`
 - `epic-reviewer`
@@ -110,11 +114,19 @@ must not be asked to discover omitted same-class siblings during coding.
 For feature planning, also include:
 
 ```text
-Planning phase: brainstorm | design spec | implementation plan | Trekker creation
+Planning phase: brainstorm | design spec | implementation plan | plan approval and Task 1 authorization | Trekker creation | Task 1 execution | Task 1 completion | continuation approval
+Codex mode: Plan Mode through approval | Default for Trekker creation and Task 1 | Default awaiting continuation approval
+Mode transition state: pending before writes | completed before writes
 Discovery handoff: approved brief and decision log | documented exception and rationale
 Existing related Trekker items:
 Open user questions:
 Approval needed before Trekker writes: yes/no
+Planning Task 1 state: not started | in_progress | completed
+Feature branch:
+Approved spec path:
+Planning commit:
+Continuation approval: not requested | pending | granted
+First implementation task and status:
 Advisory only: yes/no
 Review stage: design | implementation-plan | none
 Reviewer feedback already incorporated: yes/no
@@ -130,12 +142,17 @@ Reviewer feedback already incorporated: yes/no
 - Do not create Trekker epics, tasks, or subtasks from brainstorming without user approval.
 - Do not begin formal feature planning or dispatch the feature-planner-advisor without the user's approved `$feature-discovery` brief, unless a permitted discovery exception is documented.
 - Do not delegate approval gates or Trekker creation decisions to a subagent.
+- Do not treat design, implementation-plan, Trekker-write, or planning Task 1 approval as authorization to implement. Before starting or marking Task 2 or any implementation task `in_progress`, obtain a separate fresh explicit user approval to continue.
+- Without continuation approval, preserve a chat-independent Trekker handoff with the open epic, later `todo` tasks, dependencies, Task 1 `Summary:`, and epic references for the feature branch, durable spec, and planning commit.
 - Do not present a feature design or implementation plan as ready for user approval until required reviewer feedback has been validated and incorporated, or rejected with reasons.
 - Do not ignore workflow feedback from subagents; validate it, decline it with a reason, or turn it into a follow-up Trekker task under `EPIC-6: Agent Workflow Improvements`.
 - Do not create or materially change a backlog item for a residual risk without the user approval required for Trekker writes. If approval is pending, checkpoint the active task with the proposed item, duplicate-search result, owner, trigger, and rationale.
 - Do not select a residual-risk disposition before searching for duplicates. Only the coordinator records the intentional-not-tracked `Summary:`/`Checkpoint:` exception or writes Trekker backlog items.
 - Do not create separate planning-process or execution-process epics for workflow feedback unless the user explicitly asks.
 - Do not assign overlapping file sets to multiple implementors at the same time.
+- Own the `$code-simplification` gate. Explicitly list the current-session task files the simplifier may edit; never imply repository-wide scope. Record the run or the permitted skip rationale, the simplifier's before/after rationale, and its verification evidence.
+- Simplifier edits enter the final task diff. Run final targeted and proportionate broader verification after them, then send the changed diff and evidence to fresh code and task-conformance reviewers.
+- After substantive review-driven fixes, allow at most one additional simplifier dispatch per task, and only if the fixes materially reshape or reintroduce complexity. Record why it ran or was skipped. Do not rerun merely because the simplifier edited code or a reviewer requested verification.
 - Do not dispatch a behavior-bug implementor before the issue-class audit is recorded. Expand the active task only for same-root-cause findings that remain within approved intent and are cohesive to implement and verify; record the expansion before dispatch. For a different root cause, independent risk or ownership, material scope/design decision, or loss of focused verification, use a linked follow-up after duplicate search and required approval, and record the rationale in the audit.
 - Do not reuse an implementor or code reviewer for a different Trekker task. A same-task follow-up must be labeled as such and include the changed scope, new evidence, and requested decision.
 - Prefer a second fresh code reviewer after review-driven fixes. If that is not practical, explicitly request a delta review from the original reviewer, limited to changes since its prior report.
