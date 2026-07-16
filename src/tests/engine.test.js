@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { generateWorkout, getDaysSinceLastLegDay } from '../utils/engine';
 import { isValidV2ExerciseOccurrence } from '../utils/workoutSchema';
 
@@ -88,6 +88,411 @@ describe('Generator Engine', () => {
         vi.clearAllMocks();
         vi.useFakeTimers();
         vi.setSystemTime(new Date('2026-06-30T10:00:00Z'));
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    describe('diversity-first floating selection', () => {
+        const exercise = (id, muscleGroup, tier, sets = 1, extra = {}) => ({
+            id, name: id, muscleGroup, tier, sets, ...extra,
+        });
+        const legacyWorkout = (date, ...ids) => ({
+            date,
+            exercises: ids.map(id => ({ id })),
+        });
+        const ids = workout => workout.map(item => item.id);
+
+        it('replaces a second Back exercise with eligible older Chest work', () => {
+            const catalog = [
+                exercise('shoulder', 'Shoulders', 1),
+                exercise('back-oldest', 'Back', 3),
+                exercise('back-second', 'Back', 3),
+                exercise('chest', 'Chest', 3),
+            ];
+            const history = [
+                legacyWorkout('2026-06-20T10:00:00Z', 'back-oldest'),
+                legacyWorkout('2026-06-21T10:00:00Z', 'back-second'),
+                legacyWorkout('2026-06-22T10:00:00Z', 'chest'),
+            ];
+
+            expect(ids(generateWorkout(5.25, [], false, catalog, history, { staleThreshold: 5 })))
+                .toEqual(['shoulder', 'back-oldest', 'chest']);
+        });
+
+        it('keeps scanning when the oldest diverse unit does not fit', () => {
+            const catalog = [
+                exercise('pivot', 'Biceps', 1),
+                exercise('large', 'Chest', 3, 3),
+                exercise('small', 'Core', 3),
+            ];
+            expect(ids(generateWorkout(3.5, [], false, catalog, [], { staleThreshold: 5 })))
+                .toEqual(['pivot', 'small']);
+        });
+
+        it('puts an age-two duplicate before an age-one unrepresented unit', () => {
+            vi.setSystemTime(new Date('2026-06-30T12:00:00-05:00'));
+            const catalog = [
+                exercise('back-old', 'Back', 3),
+                exercise('back-age-two', 'Back', 3),
+                exercise('chest-age-one', 'Chest', 3),
+                exercise('core-age-zero', 'Core', 3),
+            ];
+            const history = [
+                legacyWorkout('2026-06-20T12:00:00-05:00', 'back-old'),
+                legacyWorkout('2026-06-28T12:00:00-05:00', 'back-age-two'),
+                legacyWorkout('2026-06-29T12:00:00-05:00', 'chest-age-one'),
+                legacyWorkout('2026-06-30T12:00:00-05:00', 'core-age-zero'),
+            ];
+
+            expect(ids(generateWorkout(7, [], false, catalog, history, { staleThreshold: 5 })))
+                .toEqual(['back-old', 'back-age-two', 'chest-age-one', 'core-age-zero']);
+        });
+
+        it('treats exact stale threshold as closed and threshold plus one as bypass-eligible', () => {
+            vi.setSystemTime(new Date('2026-06-30T12:00:00-05:00'));
+            const required = exercise('required', 'Back', 3);
+            const reset = exercise('reset', 'Reset', 4);
+            const exact = exercise('exact', 'Exact', 4);
+            const stale = exercise('stale', 'Stale', 4);
+            const commonHistory = [
+                legacyWorkout('2026-06-28T12:00:00-05:00', 'required'),
+                legacyWorkout('2026-06-29T12:00:00-05:00', 'reset'),
+            ];
+            const exactHistory = [
+                legacyWorkout('2026-06-25T12:00:00-05:00', 'exact'),
+                ...commonHistory,
+            ];
+            const staleHistory = [
+                legacyWorkout('2026-06-24T12:00:00-05:00', 'stale'),
+                ...commonHistory,
+            ];
+
+            expect(ids(generateWorkout(1.75, [], false, [exact, required, reset], exactHistory, { staleThreshold: 5 })))
+                .toEqual(['required']);
+            expect(ids(generateWorkout(1.75, [], false, [stale, required, reset], staleHistory, { staleThreshold: 5 })))
+                .toEqual(['stale']);
+        });
+
+        it('orders Tier 3 and an open Tier 4 promotion strictly oldest-first', () => {
+            const catalog = [exercise('tier3', 'Chest', 3), exercise('tier4', 'Core', 4)];
+            const history = [
+                legacyWorkout('2026-06-20T10:00:00Z', 'tier4'),
+                legacyWorkout('2026-06-22T10:00:00Z', 'tier3'),
+            ];
+            // The Tier 4 reset closes ordinary promotion, but it is stale and bypasses the quota.
+            expect(ids(generateWorkout(3.5, [], false, catalog, history, { staleThreshold: 5 })))
+                .toEqual(['tier4', 'tier3']);
+        });
+
+        it('reconstructs closed, open, reset-boundary, and empty-set quota states', () => {
+            const catalog = [
+                exercise('core', 'Core', 4),
+                exercise('chest', 'Chest', 3),
+                exercise('back', 'Back', 3),
+            ];
+            const settings = { staleThreshold: 50 };
+            const noReset = [
+                legacyWorkout('2026-06-19T10:00:00Z', 'back'),
+                legacyWorkout('2026-06-21T10:00:00Z', 'chest'),
+            ];
+            expect(ids(generateWorkout(1.75, [], false, catalog, noReset, settings))).toEqual(['core']);
+
+            const closed = [
+                legacyWorkout('2026-06-19T10:00:00Z', 'back'),
+                legacyWorkout('2026-06-20T10:00:00Z', 'core'),
+                legacyWorkout('2026-06-21T10:00:00Z', 'chest'),
+            ];
+            expect(ids(generateWorkout(1.75, [], false, catalog, closed, settings))).toEqual(['back']);
+
+            const open = [
+                ...closed,
+                legacyWorkout('2026-06-22T10:00:00Z', 'back'),
+            ];
+            expect(ids(generateWorkout(1.75, [], false, catalog, open, settings))).toEqual(['core']);
+
+            const sameWorkout = [completedV2Workout('2026-06-20T10:00:00Z', [
+                simpleV2Occurrence(catalog[0], true),
+                simpleV2Occurrence(catalog[1], true),
+                simpleV2Occurrence(catalog[2], true),
+            ])];
+            expect(ids(generateWorkout(1.75, [], false, catalog, sameWorkout, settings))).toEqual(['chest']);
+            expect(ids(generateWorkout(1.75, ['Chest', 'Back'], false, catalog, closed, settings)))
+                .toEqual(['core']);
+        });
+
+        it('compares quota timestamps by epoch and requires strictly later Tier 3 credit', () => {
+            const catalog = [exercise('core', 'Core', 4), exercise('chest', 'Chest', 3)];
+            const sameEpoch = [
+                completedV2Workout('2026-06-20T10:00:00Z', [simpleV2Occurrence(catalog[0], true)]),
+                completedV2Workout('2026-06-20T05:00:00-05:00', [simpleV2Occurrence(catalog[1], true)]),
+            ];
+            expect(ids(generateWorkout(1.75, [], false, catalog, sameEpoch, { staleThreshold: 50 })))
+                .toEqual(['chest']);
+            sameEpoch.push(completedV2Workout(
+                '2026-06-20T05:00:01-05:00',
+                [simpleV2Occurrence(catalog[1], true)],
+            ));
+            expect(ids(generateWorkout(1.75, [], false, catalog, sameEpoch, { staleThreshold: 50 })))
+                .toEqual(['core']);
+        });
+
+        it('ignores skipped and malformed V2 occurrences when reconstructing quota state', () => {
+            const catalog = [exercise('core', 'Core', 4), exercise('chest', 'Chest', 3)];
+            const malformed = { ...simpleV2Occurrence(catalog[0], true), prescribedSetCount: 99 };
+            const history = [
+                completedV2Workout('2026-06-20T10:00:00Z', [simpleV2Occurrence(catalog[0], false)]),
+                completedV2Workout('2026-06-21T10:00:00Z', [malformed]),
+                legacyWorkout('2026-06-22T10:00:00Z', 'chest'),
+            ];
+            expect(ids(generateWorkout(1.75, [], false, catalog, history, { staleThreshold: 50 })))
+                .toEqual(['core']);
+        });
+
+        it('allows never-performed and stale Tier 4 units to bypass a closed quota', () => {
+            const catalog = [
+                exercise('reset', 'Reset', 4),
+                exercise('never', 'Never', 4),
+                exercise('stale', 'Stale', 4),
+                exercise('required', 'Required', 3),
+            ];
+            const history = [
+                legacyWorkout('2026-06-28T10:00:00Z', 'required'),
+                legacyWorkout('2026-06-29T10:00:00Z', 'reset'),
+                legacyWorkout('2026-06-20T10:00:00Z', 'stale'),
+            ];
+            expect(ids(generateWorkout(5.25, [], false, catalog, history, { staleThreshold: 5 })))
+                .toEqual(['never', 'required', 'stale']);
+        });
+
+        it('promotes only one Tier 4 unit but does not let a non-fitting unit consume the slot', () => {
+            const catalog = [
+                exercise('large', 'Large', 4, 4),
+                exercise('core', 'Core', 4),
+                exercise('calves', 'Calves', 4),
+                exercise('chest', 'Chest', 3),
+            ];
+            const history = [
+                legacyWorkout('2026-06-10T10:00:00Z', 'large'),
+                legacyWorkout('2026-06-11T10:00:00Z', 'core'),
+                legacyWorkout('2026-06-12T10:00:00Z', 'calves'),
+                legacyWorkout('2026-06-13T10:00:00Z', 'chest'),
+            ];
+            expect(ids(generateWorkout(5.25, [], false, catalog, history, { staleThreshold: 5 })))
+                .toEqual(['core', 'chest', 'calves']);
+        });
+
+        it('keeps a quota-closed oldest Tier 4 representative for Phase 2', () => {
+            const catalog = [
+                exercise('old-tier4', 'Chest', 4),
+                exercise('new-tier3', 'Chest', 3),
+                exercise('required', 'Back', 3),
+                exercise('reset', 'Reset', 4),
+            ];
+            const history = [
+                legacyWorkout('2026-06-20T12:00:00-05:00', 'old-tier4'),
+                legacyWorkout('2026-06-24T12:00:00-05:00', 'required'),
+                legacyWorkout('2026-06-25T12:00:00-05:00', 'reset'),
+                legacyWorkout('2026-06-26T12:00:00-05:00', 'new-tier3'),
+            ];
+
+            expect(ids(generateWorkout(3.5, [], false, catalog, history, { staleThreshold: 50 })))
+                .toEqual(['required', 'old-tier4']);
+        });
+
+        it('keeps the next oldest Tier 4 representative for Phase 2 after promotion is consumed', () => {
+            const catalog = [
+                exercise('promoted', 'Core', 4),
+                exercise('old-tier4', 'Chest', 4),
+                exercise('new-tier3', 'Chest', 3),
+                exercise('required', 'Back', 3),
+            ];
+            const history = [
+                legacyWorkout('2026-06-10T12:00:00-05:00', 'promoted'),
+                legacyWorkout('2026-06-11T12:00:00-05:00', 'old-tier4'),
+                legacyWorkout('2026-06-12T12:00:00-05:00', 'new-tier3'),
+                legacyWorkout('2026-06-13T12:00:00-05:00', 'required'),
+            ];
+
+            expect(ids(generateWorkout(5.25, [], false, catalog, history, { staleThreshold: 5 })))
+                .toEqual(['promoted', 'required', 'old-tier4']);
+        });
+
+        it('reconsiders a fitting Tier 3 exposed by a non-fitting closed-quota Tier 4', () => {
+            const catalog = [
+                exercise('old-tier4', 'Chest', 4, 2),
+                exercise('new-tier3', 'Chest', 3),
+                exercise('blocking-required', 'Back', 3, 2),
+                exercise('reset', 'Reset', 4),
+            ];
+            const history = [
+                legacyWorkout('2026-06-20T12:00:00-05:00', 'old-tier4'),
+                legacyWorkout('2026-06-24T12:00:00-05:00', 'blocking-required'),
+                legacyWorkout('2026-06-25T12:00:00-05:00', 'reset'),
+                legacyWorkout('2026-06-26T12:00:00-05:00', 'new-tier3'),
+            ];
+
+            expect(ids(generateWorkout(
+                1.75,
+                ['Reset'],
+                false,
+                catalog,
+                history,
+                { staleThreshold: 50 },
+            ))).toEqual(['new-tier3']);
+        });
+
+        it('reconsiders a fitting Tier 3 exposed after the promotion slot is consumed', () => {
+            const catalog = [
+                exercise('promoted', 'Core', 4),
+                exercise('old-tier4', 'Chest', 4, 2),
+                exercise('new-tier3', 'Chest', 3),
+            ];
+            const history = [
+                legacyWorkout('2026-06-10T12:00:00-05:00', 'promoted'),
+                legacyWorkout('2026-06-11T12:00:00-05:00', 'old-tier4'),
+                legacyWorkout('2026-06-12T12:00:00-05:00', 'new-tier3'),
+            ];
+
+            expect(ids(generateWorkout(3.5, [], false, catalog, history, { staleThreshold: 5 })))
+                .toEqual(['promoted', 'new-tier3']);
+        });
+
+        it('puts closed older Tier 4 fallback before duplicates, but older duplicates before recent Tier 4', () => {
+            const catalog = [
+                exercise('back-old', 'Back', 3),
+                exercise('back-duplicate', 'Back', 3),
+                exercise('core-old', 'Core', 4),
+                exercise('recent-tier4', 'Recent', 4),
+            ];
+            const history = [
+                legacyWorkout('2026-06-20T10:00:00Z', 'core-old'),
+                legacyWorkout('2026-06-21T10:00:00Z', 'back-old'),
+                legacyWorkout('2026-06-22T10:00:00Z', 'back-duplicate'),
+                legacyWorkout('2026-06-30T09:00:00Z', 'recent-tier4'),
+            ];
+            expect(ids(generateWorkout(7, [], false, catalog, history, { staleThreshold: 50 })))
+                .toEqual(['back-old', 'core-old', 'back-duplicate', 'recent-tier4']);
+        });
+
+        it('prefers recent unrepresented groups before recent duplicates', () => {
+            const catalog = [
+                exercise('back-old', 'Back', 3),
+                exercise('back-recent', 'Back', 3),
+                exercise('chest-recent', 'Chest', 3),
+            ];
+            const history = [
+                legacyWorkout('2026-06-20T10:00:00Z', 'back-old'),
+                legacyWorkout('2026-06-30T08:00:00Z', 'back-recent'),
+                legacyWorkout('2026-06-30T09:00:00Z', 'chest-recent'),
+            ];
+            expect(ids(generateWorkout(5.25, [], false, catalog, history, { staleThreshold: 5 })))
+                .toEqual(['back-old', 'chest-recent', 'back-recent']);
+        });
+
+        it('recomputes recent representation after each selected unit', () => {
+            const catalog = [
+                exercise('chest-first', 'Chest', 3),
+                exercise('chest-second', 'Chest', 3),
+                exercise('core', 'Core', 3),
+            ];
+            const history = [
+                legacyWorkout('2026-06-29T07:00:00Z', 'chest-first'),
+                legacyWorkout('2026-06-29T08:00:00Z', 'chest-second'),
+                legacyWorkout('2026-06-29T09:00:00Z', 'core'),
+            ];
+            expect(ids(generateWorkout(5.25, [], false, catalog, history, { staleThreshold: 5 })))
+                .toEqual(['chest-first', 'core', 'chest-second']);
+        });
+
+        it('keeps the required Tier 3 set independent of the current fit budget', () => {
+            const catalog = [
+                exercise('core', 'Core', 4),
+                exercise('large-required', 'Chest', 3, 3),
+                exercise('small-required', 'Back', 3),
+            ];
+            const history = [
+                legacyWorkout('2026-06-20T10:00:00Z', 'core'),
+                legacyWorkout('2026-06-21T10:00:00Z', 'small-required'),
+            ];
+            expect(ids(generateWorkout(1.75, [], false, catalog, history, { staleThreshold: 50 })))
+                .toEqual(['small-required']);
+        });
+
+        it('recalculates required Tier 3 groups for leg reservation and recovery filters', () => {
+            const catalog = [exercise('core', 'Core', 4), exercise('legs', 'Legs', 3)];
+            const history = [legacyWorkout('2026-06-20T10:00:00Z', 'core')];
+            const settings = { staleThreshold: 50, legDayOfWeek: 'Monday' };
+
+            expect(ids(generateWorkout(1.75, [], false, catalog, history, settings))).toEqual(['core']);
+            expect(ids(generateWorkout(1.75, ['Legs'], false, catalog, history, { staleThreshold: 50 })))
+                .toEqual(['core']);
+            expect(ids(generateWorkout(1.75, [], false, catalog, history, { staleThreshold: 50 })))
+                .toEqual(['legs']);
+        });
+
+        it('treats surviving linked candidates atomically with freshest-member recency and all-group representation', () => {
+            const catalog = [
+                exercise('mixed-tier3', 'Chest', 3, 1, { linkedTo: 'mixed-tier4' }),
+                exercise('mixed-tier4', 'Core', 4),
+                exercise('chest-duplicate', 'Chest', 3),
+                exercise('filtered-partner', 'Back', 3, 1, { linkedTo: 'inactive' }),
+                exercise('inactive', 'Arms', 3, 1, { isActive: false }),
+            ];
+            const history = [
+                legacyWorkout('2026-06-20T10:00:00Z', 'mixed-tier3'),
+                legacyWorkout('2026-06-30T09:00:00Z', 'mixed-tier4'),
+                legacyWorkout('2026-06-22T10:00:00Z', 'chest-duplicate'),
+            ];
+            expect(ids(generateWorkout(7, [], false, catalog, history, { staleThreshold: 5 })))
+                .toEqual(['filtered-partner', 'chest-duplicate', 'mixed-tier3', 'mixed-tier4']);
+        });
+
+        it('emits the chosen Tier 1 pivot before an earlier-catalog linked partner', () => {
+            const catalog = [
+                exercise('partner', 'Chest', 3, 1, { linkedTo: 'pivot' }),
+                exercise('pivot', 'Biceps', 1),
+            ];
+
+            expect(ids(generateWorkout(3.5, [], false, catalog, [], { staleThreshold: 5 })))
+                .toEqual(['pivot', 'partner']);
+        });
+
+        it('uses V2 snapshots and current-catalog legacy lookup for quota classification', () => {
+            const catalog = [exercise('changed', 'Chest', 3), exercise('required', 'Back', 3), exercise('core', 'Core', 4)];
+            const v2Snapshot = exercise('changed', 'Old Group', 4);
+            const v2History = [
+                legacyWorkout('2026-06-10T10:00:00Z', 'core'),
+                completedV2Workout('2026-06-20T10:00:00Z', [simpleV2Occurrence(v2Snapshot, true)]),
+                legacyWorkout('2026-06-21T10:00:00Z', 'required'),
+            ];
+            expect(ids(generateWorkout(1.75, [], false, catalog, v2History, { staleThreshold: 50 })))
+                .toEqual(['changed']);
+
+            const legacyHistory = [
+                legacyWorkout('2026-06-10T10:00:00Z', 'core'),
+                legacyWorkout('2026-06-20T10:00:00Z', 'changed'),
+                legacyWorkout('2026-06-21T10:00:00Z', 'required'),
+            ];
+            expect(ids(generateWorkout(1.75, [], false, catalog, legacyHistory, { staleThreshold: 50 })))
+                .toEqual(['core']);
+        });
+
+        it('is deterministic for unordered malformed history and equal-recency catalog ties', () => {
+            const catalog = [exercise('first', 'A', 3), exercise('second', 'B', 3), exercise('third', 'C', 4)];
+            const history = [
+                { date: 'bad', exercises: [{ id: 'third' }] },
+                legacyWorkout('2026-06-20T10:00:00Z', 'second'),
+                { date: '2026-06-20T10:00:00Z', exercises: null },
+                legacyWorkout('2026-06-20T10:00:00Z', 'first'),
+            ];
+            const reversed = [...history].reverse();
+            expect(ids(generateWorkout(5.25, ['C'], false, catalog, history, { staleThreshold: 50 })))
+                .toEqual(ids(generateWorkout(5.25, ['C'], false, catalog, reversed, { staleThreshold: 50 })));
+            expect(ids(generateWorkout(5.25, ['C'], false, catalog, history, { staleThreshold: 50 })).slice(0, 2))
+                .toEqual(['first', 'second']);
+        });
     });
 
     it('respects time budget and excludes unrecovered groups', () => {
