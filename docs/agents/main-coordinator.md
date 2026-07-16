@@ -60,7 +60,7 @@ gates for the design and Trekker writes themselves.
 - Use the architecture-design-reviewer before presenting a feature design spec as ready for user approval, unless the feature is tiny and low-risk.
 - Use planning conformance with the senior-developer-reviewer after design approval and before presenting a Trekker-shaped implementation plan as ready for user approval, unless the plan is tiny and low-risk.
 - Documentation-only, copy-only, or tiny config changes may stay main-agent only.
-- For every tracked implementation task, dispatch a fresh implementor. After targeted verification produces the final task diff and evidence, dispatch a fresh code reviewer and a fresh task-conformance spec reviewer; never reuse either reviewer across task boundaries, including within an epic.
+- For every tracked implementation task, dispatch a fresh implementor. When it reports a green diff, invoke `$code-simplification` and dispatch a fresh code simplifier for non-trivial code changes. After simplification, run final targeted and proportionate broader verification, then dispatch a fresh code reviewer and a fresh task-conformance spec reviewer; never reuse either reviewer across task boundaries, including within an epic.
 - Use the fresh implementor for behavior changes or bug fixes where TDD is practical.
 - For a non-mechanical or user-facing behavior bug, use the completed `$bugfix-issue-class-audit` output to send the audit to a read-only spec reviewer before implementor dispatch. This narrowly validates audit scope against approved intent; it is not routine task-start requirements discovery and does not replace the fresh post-verification task-conformance review.
 - Task-start spec-review dispatch is prohibited. Do not use a spec reviewer to invent or routinely refine task-start requirements.
@@ -80,6 +80,7 @@ gates for the design and Trekker writes themselves.
 Project-scoped Codex custom agents are defined in `.codex/agents/`. Prefer those native agents when spawning subagents:
 
 - `implementor`
+- `code-simplifier`
 - `spec-reviewer`
 - `code-reviewer`
 - `epic-reviewer`
@@ -149,6 +150,9 @@ Reviewer feedback already incorporated: yes/no
 - Do not select a residual-risk disposition before searching for duplicates. Only the coordinator records the intentional-not-tracked `Summary:`/`Checkpoint:` exception or writes Trekker backlog items.
 - Do not create separate planning-process or execution-process epics for workflow feedback unless the user explicitly asks.
 - Do not assign overlapping file sets to multiple implementors at the same time.
+- Own the `$code-simplification` gate. Explicitly list the current-session task files the simplifier may edit; never imply repository-wide scope. Record the run or the permitted skip rationale, the simplifier's before/after rationale, and its verification evidence.
+- Simplifier edits enter the final task diff. Run final targeted and proportionate broader verification after them, then send the changed diff and evidence to fresh code and task-conformance reviewers.
+- After substantive review-driven fixes, allow at most one additional simplifier dispatch per task, and only if the fixes materially reshape or reintroduce complexity. Record why it ran or was skipped. Do not rerun merely because the simplifier edited code or a reviewer requested verification.
 - Do not dispatch a behavior-bug implementor before the issue-class audit is recorded. Expand the active task only for same-root-cause findings that remain within approved intent and are cohesive to implement and verify; record the expansion before dispatch. For a different root cause, independent risk or ownership, material scope/design decision, or loss of focused verification, use a linked follow-up after duplicate search and required approval, and record the rationale in the audit.
 - Do not reuse an implementor or code reviewer for a different Trekker task. A same-task follow-up must be labeled as such and include the changed scope, new evidence, and requested decision.
 - Prefer a second fresh code reviewer after review-driven fixes. If that is not practical, explicitly request a delta review from the original reviewer, limited to changes since its prior report.
