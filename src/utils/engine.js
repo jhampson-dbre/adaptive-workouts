@@ -141,7 +141,7 @@ function formAtomicUnits(candidates, lastDates, today, catalogIndexes) {
     return units;
 }
 
-function getTier4QuotaState(history, catalogMap, requiredTier3Groups) {
+function isTier4QuotaOpen(history, catalogMap, requiredTier3Groups) {
     let resetBoundary = -Infinity;
     const performed = [];
 
@@ -160,17 +160,14 @@ function getTier4QuotaState(history, catalogMap, requiredTier3Groups) {
     }
 
     if (resetBoundary === -Infinity || requiredTier3Groups.size === 0) {
-        return { isOpen: true, resetBoundary };
+        return true;
     }
     const credited = new Set(
         performed
             .filter(item => item.tier === 3 && item.time > resetBoundary && requiredTier3Groups.has(item.muscleGroup))
             .map(item => item.muscleGroup),
     );
-    return {
-        isOpen: [...requiredTier3Groups].every(group => credited.has(group)),
-        resetBoundary,
-    };
+    return [...requiredTier3Groups].every(group => credited.has(group));
 }
 
 function selectDiverseUnits({ units, representedGroups, remainingTime, quotaOpen, staleThreshold }) {
@@ -187,20 +184,24 @@ function selectDiverseUnits({ units, representedGroups, remainingTime, quotaOpen
     };
     const representativeUnits = predicate => {
         const representatives = new Set();
+        const groupsWithRepresentative = new Set();
         const ordered = [...remaining].filter(predicate).sort(compareAtomicUnits);
-        const groups = new Set(ordered.flatMap(unit => [...unit.groups]).filter(group => !representedGroups.has(group)));
-        for (const group of groups) {
-            const representative = ordered.find(unit => unit.groups.has(group));
-            if (representative) representatives.add(representative);
+        for (const unit of ordered) {
+            for (const group of unit.groups) {
+                if (representedGroups.has(group) || groupsWithRepresentative.has(group)) continue;
+                representatives.add(unit);
+                groupsWithRepresentative.add(group);
+            }
         }
         return [...representatives].sort(compareAtomicUnits);
     };
     const discardNonFitting = unit => remaining.delete(unit);
+    const isOlderDiverse = unit => unit.age > 1 && coversUnrepresented(unit);
 
     let tier4Promoted = false;
     const runDiversityPhase = () => {
         while (true) {
-            const representatives = representativeUnits(unit => unit.age > 1 && coversUnrepresented(unit));
+            const representatives = representativeUnits(isOlderDiverse);
             const candidate = representatives.find(unit => (
                 !unit.isTier4
                 || (!tier4Promoted && (quotaOpen || unit.neverPerformed || unit.age > staleThreshold))
@@ -218,7 +219,7 @@ function selectDiverseUnits({ units, representedGroups, remainingTime, quotaOpen
     runDiversityPhase();
 
     while (true) {
-        const representatives = representativeUnits(unit => unit.age > 1 && coversUnrepresented(unit));
+        const representatives = representativeUnits(isOlderDiverse);
         const candidate = representatives.find(unit => unit.isTier4);
         if (!candidate) break;
         if (!fits(candidate)) {
@@ -481,7 +482,7 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
             .filter(candidate => candidate.tier === 3)
             .map(candidate => candidate.muscleGroup),
     );
-    const { isOpen: quotaOpen } = getTier4QuotaState(history, catalogMap, requiredTier3Groups);
+    const quotaOpen = isTier4QuotaOpen(history, catalogMap, requiredTier3Groups);
     const selectedUnits = selectDiverseUnits({
         units: atomicUnits,
         representedGroups,
