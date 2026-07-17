@@ -359,6 +359,16 @@ describe('active workout timing state machine', () => {
       completed: true, workDurationSeconds: 2, actualRestSeconds: null,
     });
     expect(state.exercises[0].setRecords[1]._activeRest).toBeUndefined();
+    expect(state.exercises[0].completed).toBe(true);
+  });
+
+  it('keeps simple occurrence completion compatible with confirmed timed sets', () => {
+    let state = startWorkout(initializeActiveWorkout([timedSimple()]));
+    state = startSet(state, 0, 0, 2_000);
+    state = confirmSet(state, 0, 0, 3_000);
+    expect(state.exercises[0].completed).toBe(true);
+    state = undoSet(state, 0, 0);
+    expect(state.exercises[0].completed).toBe(false);
   });
 
   it('undoes only the latest live-rest prefix, relocks weighted next, and gives reconfirmed rest a new identity', () => {

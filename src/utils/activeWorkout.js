@@ -132,8 +132,21 @@ export function initializeActiveWorkout(exercises) {
   const cloned = structuredClone(exercises);
   for (const exercise of cloned) {
     if (!Object.hasOwn(exercise, 'trackingMode')) exercise.trackingMode = 'simple';
-    if (exercise.trackingMode === 'simple' && typeof exercise.completed !== 'boolean') {
-      exercise.completed = false;
+    if (exercise.trackingMode === 'simple') {
+      if (typeof exercise.completed !== 'boolean') exercise.completed = false;
+      if (!Array.isArray(exercise.setRecords)) {
+        const count = Number.isInteger(exercise.prescribedSetCount)
+          ? exercise.prescribedSetCount
+          : exercise.sets;
+        const setCount = Math.max(1, count || 1);
+        exercise.setRecords = Array.from({ length: setCount }, (_, index) => ({
+          index,
+          completed: exercise.completed && index === 0,
+          plannedRestSeconds: index === setCount - 1 ? null : 60,
+          workDurationSeconds: null,
+          actualRestSeconds: null,
+        }));
+      }
     }
     if (exercise.trackingMode === 'weighted' && Array.isArray(exercise.setRecords)) {
       exercise.setRecords = exercise.setRecords.map(record => ({
@@ -223,6 +236,12 @@ export function activeWorkoutReducer(state, action) {
         recomputeImmediateNext(updated.exercises[action.exerciseIndex], action.setIndex),
       );
     }
+    if (exercise.trackingMode === 'simple') {
+      updated = replaceExercise(updated, action.exerciseIndex, {
+        ...updated.exercises[action.exerciseIndex],
+        completed: true,
+      });
+    }
     return {
       ...updated,
       activeWorkTimer: null,
@@ -255,6 +274,12 @@ export function activeWorkoutReducer(state, action) {
         action.exerciseIndex,
         relockImmediateNext(updated.exercises[action.exerciseIndex], action.setIndex),
       );
+    }
+    if (exercise.trackingMode === 'simple') {
+      updated = replaceExercise(updated, action.exerciseIndex, {
+        ...updated.exercises[action.exerciseIndex],
+        completed: updated.exercises[action.exerciseIndex].setRecords.some(item => item.completed),
+      });
     }
     return updated;
   }
