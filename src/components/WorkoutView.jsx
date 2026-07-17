@@ -17,6 +17,10 @@ function deepFreeze(value) {
 
 const formatTime = totalSeconds => `${Math.floor(totalSeconds / 60)}:${(totalSeconds % 60).toString().padStart(2, '0')}`;
 
+const refreshRepeatedLiveMessage = (current, message) => (
+  current === message ? `${message}\u2060` : message
+);
+
 function playRestCue() {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   if (!AudioContextClass) return;
@@ -223,7 +227,10 @@ export default function WorkoutView({ workout, onFinish }) {
       try { navigator.vibrate?.(200); } catch { /* supplementary alert */ }
       playRestCue();
     }));
-    if (completedRests.length) setStatusMessage(completedRests.join(' '));
+    if (completedRests.length) {
+      const message = completedRests.join(' ');
+      setStatusMessage(current => refreshRepeatedLiveMessage(current, message));
+    }
   }, [activeWorkout.exercises, now]);
 
   useEffect(() => {

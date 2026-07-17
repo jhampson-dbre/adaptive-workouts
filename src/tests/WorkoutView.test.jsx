@@ -227,7 +227,12 @@ test('visible rest alerts fire once per rest identity and reconfirming creates o
     fireEvent.click(screen.getByRole('button', { name: /Undo set 1/i }));
     fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
     fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+    const announcementBeforeRealert = screen.getByRole('status').textContent;
     act(() => vi.advanceTimersByTime(2000));
+    const announcementAfterRealert = screen.getByRole('status').textContent;
+    expect(announcementAfterRealert).not.toBe(announcementBeforeRealert);
+    expect(announcementAfterRealert.replace(/\u2060+$/u, '')).toBe(announcementBeforeRealert);
+    expect(announcementAfterRealert).toMatch(/Plank set 1 rest is complete/i);
     expect(vibrate).toHaveBeenCalledTimes(2);
     expect(AudioContextMock).toHaveBeenCalledTimes(2);
     expect(oscillatorStart).toHaveBeenCalledTimes(2);

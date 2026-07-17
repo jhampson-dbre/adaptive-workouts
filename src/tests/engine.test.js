@@ -470,6 +470,32 @@ describe('Generator Engine', () => {
             expect(ids(generateWorkout(1.75, [], false, catalog, v2History, { staleThreshold: 50 })))
                 .toEqual(['changed']);
 
+            const v3History = [
+                legacyWorkout('2026-06-10T10:00:00Z', 'core'),
+                {
+                    schemaVersion: 3,
+                    status: 'completed',
+                    date: '2026-06-20T10:00:00Z',
+                    actualDurationSeconds: 60,
+                    exercises: [{
+                        ...v2Snapshot,
+                        occurrenceId: 'changed:0',
+                        trackingMode: 'simple',
+                        prescribedSetCount: v2Snapshot.sets,
+                        setRecords: [{
+                            index: 0,
+                            completed: true,
+                            plannedRestSeconds: null,
+                            workDurationSeconds: 1,
+                            actualRestSeconds: null,
+                        }],
+                    }],
+                },
+                legacyWorkout('2026-06-21T10:00:00Z', 'required'),
+            ];
+            expect(ids(generateWorkout(1.75, [], false, catalog, v3History, { staleThreshold: 50 })))
+                .toEqual(['changed']);
+
             const legacyHistory = [
                 legacyWorkout('2026-06-10T10:00:00Z', 'core'),
                 legacyWorkout('2026-06-20T10:00:00Z', 'changed'),
