@@ -118,6 +118,41 @@ test('announces every rest that completes on the same shared tick', () => {
   }
 });
 
+test('retires an overdue rest announcement when the next set starts', () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
+  renderWorkout([timedWorkout[0]]);
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+  act(() => vi.advanceTimersByTime(2000));
+  expect(screen.getByRole('status').textContent).toMatch(/Plank set 1 rest is complete/i);
+
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i }));
+
+  expect(screen.getByRole('status').textContent).toBe('');
+});
+
+test('retiring one duplicate-name rest announcement preserves the other occurrence', () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
+  const duplicate = {
+    ...timedWorkout[0], occurrenceId: 'plank:1',
+    setRecords: timedWorkout[0].setRecords.map(record => ({ ...record })),
+  };
+  renderWorkout([timedWorkout[0], duplicate]);
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank, 0 of 2 confirmed.*expand/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 2 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 2 set 1 confirm/i }));
+  act(() => vi.advanceTimersByTime(2000));
+  expect(screen.getByRole('status').textContent.match(/Plank set 1 rest is complete/gi)).toHaveLength(2);
+
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i }));
+
+  expect(screen.getByRole('status').textContent).toBe('Plank set 1 rest is complete. Overtime has started.');
+});
+
 test('blocks global concurrent work and Finish with a semantic status', () => {
   vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
   renderWorkout(timedWorkout);
@@ -236,6 +271,8 @@ test('visible rest alerts fire once per rest identity and reconfirming creates o
     expect(vibrate).toHaveBeenCalledTimes(2);
     expect(AudioContextMock).toHaveBeenCalledTimes(2);
     expect(oscillatorStart).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i }));
+    expect(screen.getByRole('status').textContent).toBe('');
   } finally {
     Object.defineProperty(window, 'AudioContext', { configurable: true, value: originalAudioContext });
     if (originalVibrate) Object.defineProperty(navigator, 'vibrate', originalVibrate);

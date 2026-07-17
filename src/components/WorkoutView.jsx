@@ -21,6 +21,10 @@ const refreshRepeatedLiveMessage = (current, message) => (
   current === message ? `${message}\u2060` : message
 );
 
+const normalizeLiveMessage = message => message.replace(/\u2060+$/u, '');
+
+const joinRestAnnouncements = announcements => [...announcements.values()].join(' ');
+
 function playRestCue() {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   if (!AudioContextClass) return;
@@ -190,6 +194,7 @@ export default function WorkoutView({ workout, onFinish }) {
   const headerRefs = useRef([]);
   const startRefs = useRef({});
   const alertedRestsRef = useRef(new Set());
+  const restAnnouncementsRef = useRef(new Map());
   const saveInFlightRef = useRef(false);
   const savedDocumentRef = useRef(null);
   const saveCompletedRef = useRef(false);
@@ -218,17 +223,26 @@ export default function WorkoutView({ workout, onFinish }) {
 
   useEffect(() => {
     if (document.visibilityState !== 'visible') return;
-    const completedRests = [];
+    const activeRestIds = new Set();
+    const completedRestAnnouncements = new Map();
     activeWorkout.exercises.forEach(exercise => exercise.setRecords.forEach((record, setIndex) => {
+      if (record._activeRest) activeRestIds.add(record._activeRest.id);
       if (!record._activeRest || alertedRestsRef.current.has(record._activeRest.id)) return;
       if (calculateElapsedSeconds(record._activeRest.startedAt, now) < record.plannedRestSeconds) return;
       alertedRestsRef.current.add(record._activeRest.id);
-      completedRests.push(`${exercise.name} set ${setIndex + 1} rest is complete. Overtime has started.`);
+      completedRestAnnouncements.set(
+        record._activeRest.id,
+        `${exercise.name} set ${setIndex + 1} rest is complete. Overtime has started.`,
+      );
       try { navigator.vibrate?.(200); } catch { /* supplementary alert */ }
       playRestCue();
     }));
-    if (completedRests.length) {
-      const message = completedRests.join(' ');
+    restAnnouncementsRef.current.forEach((_, restId) => {
+      if (!activeRestIds.has(restId)) restAnnouncementsRef.current.delete(restId);
+    });
+    if (completedRestAnnouncements.size) {
+      restAnnouncementsRef.current = completedRestAnnouncements;
+      const message = joinRestAnnouncements(completedRestAnnouncements);
       setStatusMessage(current => refreshRepeatedLiveMessage(current, message));
     }
   }, [activeWorkout.exercises, now]);
@@ -252,6 +266,15 @@ export default function WorkoutView({ workout, onFinish }) {
   }, 0);
 
   const handleStartSet = (exerciseIndex, setIndex) => {
+    const priorRestId = activeWorkout.exercises[exerciseIndex]?.setRecords[setIndex - 1]?._activeRest?.id;
+    if (priorRestId && restAnnouncementsRef.current.has(priorRestId)) {
+      const currentRestMessage = joinRestAnnouncements(restAnnouncementsRef.current);
+      restAnnouncementsRef.current.delete(priorRestId);
+      const remainingRestMessage = joinRestAnnouncements(restAnnouncementsRef.current);
+      setStatusMessage(current => (
+        normalizeLiveMessage(current) === currentRestMessage ? remainingRestMessage : current
+      ));
+    }
     setExpanded(current => ({ ...current, [exerciseIndex]: true }));
     dispatch({ type: 'startSet', exerciseIndex, setIndex, timestamp: Date.now() });
   };
