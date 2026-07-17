@@ -70,6 +70,54 @@ test('times work inline, confirms a set, and exposes persistent overtime when co
   expect(screen.getByRole('status').textContent).toMatch(/Plank set 1 rest is complete/i);
 });
 
+test('announces every rest that completes on the same shared tick', () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
+  const vibrate = vi.fn();
+  const oscillatorStart = vi.fn();
+  const AudioContextMock = vi.fn(function AudioContextMock() {
+    return {
+      currentTime: 0,
+      destination: {},
+      createOscillator: () => ({ connect: vi.fn(), start: oscillatorStart, stop: vi.fn(), addEventListener: vi.fn() }),
+      createGain: () => ({ connect: vi.fn(), gain: { setValueAtTime: vi.fn() } }),
+    };
+  });
+  const originalAudioContext = window.AudioContext;
+  const originalVibrate = Object.getOwnPropertyDescriptor(navigator, 'vibrate');
+  Object.defineProperty(window, 'AudioContext', { configurable: true, value: AudioContextMock });
+  Object.defineProperty(navigator, 'vibrate', { configurable: true, value: vibrate });
+  const row = {
+    ...timedWorkout[0], id: 'row', occurrenceId: 'row:1', name: 'Row', muscleGroup: 'Back',
+    setRecords: timedWorkout[0].setRecords.map(record => ({ ...record })),
+  };
+  try {
+    renderWorkout([timedWorkout[0], row]);
+    fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+    fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Row.*expand/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Row exercise 2 set 1 start/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Row exercise 2 set 1 confirm/i }));
+
+    act(() => vi.advanceTimersByTime(2000));
+
+    const announcement = 'Plank set 1 rest is complete. Overtime has started. Row set 1 rest is complete. Overtime has started.';
+    expect(screen.getByRole('status').textContent).toBe(announcement);
+    expect(vibrate).toHaveBeenCalledTimes(2);
+    expect(AudioContextMock).toHaveBeenCalledTimes(2);
+    expect(oscillatorStart).toHaveBeenCalledTimes(2);
+    act(() => vi.advanceTimersByTime(2000));
+    expect(screen.getByRole('status').textContent).toBe(announcement);
+    expect(vibrate).toHaveBeenCalledTimes(2);
+    expect(AudioContextMock).toHaveBeenCalledTimes(2);
+    expect(oscillatorStart).toHaveBeenCalledTimes(2);
+  } finally {
+    Object.defineProperty(window, 'AudioContext', { configurable: true, value: originalAudioContext });
+    if (originalVibrate) Object.defineProperty(navigator, 'vibrate', originalVibrate);
+    else delete navigator.vibrate;
+  }
+});
+
 test('blocks global concurrent work and Finish with a semantic status', () => {
   vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
   renderWorkout(timedWorkout);

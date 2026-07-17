@@ -214,14 +214,16 @@ export default function WorkoutView({ workout, onFinish }) {
 
   useEffect(() => {
     if (document.visibilityState !== 'visible') return;
+    const completedRests = [];
     activeWorkout.exercises.forEach(exercise => exercise.setRecords.forEach((record, setIndex) => {
       if (!record._activeRest || alertedRestsRef.current.has(record._activeRest.id)) return;
       if (calculateElapsedSeconds(record._activeRest.startedAt, now) < record.plannedRestSeconds) return;
       alertedRestsRef.current.add(record._activeRest.id);
-      setStatusMessage(`${exercise.name} set ${setIndex + 1} rest is complete. Overtime has started.`);
+      completedRests.push(`${exercise.name} set ${setIndex + 1} rest is complete. Overtime has started.`);
       try { navigator.vibrate?.(200); } catch { /* supplementary alert */ }
       playRestCue();
     }));
+    if (completedRests.length) setStatusMessage(completedRests.join(' '));
   }, [activeWorkout.exercises, now]);
 
   useEffect(() => {
