@@ -1,6 +1,6 @@
 import { doc, getDoc, setDoc, collection, getDocs, addDoc, query, orderBy } from 'firebase/firestore';
 import { db } from './firebase';
-import { normalizeCatalogExercise } from './workoutSchema';
+import { normalizeCatalogExercise, normalizeWorkoutSettings } from './workoutSchema';
 
 const DEFAULT_CATALOG = [
     { id: '1', name: 'Barbell Curl', muscleGroup: 'Biceps', tier: 1, sets: 3 },
@@ -52,7 +52,9 @@ export async function migrateLocalData(userId) {
 export async function getSettings(userId) {
   const docRef = doc(db, 'users', userId);
   const docSnap = await getDoc(docRef);
-  return docSnap.exists() ? docSnap.data() : { warmupTime: 10, staleThreshold: 5, legDayOfWeek: 'None' };
+  return normalizeWorkoutSettings(docSnap.exists()
+    ? docSnap.data()
+    : { warmupTime: 10, staleThreshold: 5, legDayOfWeek: 'None' });
 }
 
 export async function saveSettings(userId, settings) {

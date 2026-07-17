@@ -1,4 +1,5 @@
 import { calculateBackoffRecommendation } from './progression';
+import { calculateElapsedSeconds } from './workoutTiming';
 
 const WEIGHTED_FIELDS = new Set(['actualWeight', 'actualReps']);
 const BODYWEIGHT_FIELDS = new Set(['fullReps', 'assistedReps', 'eccentricReps']);
@@ -37,6 +38,50 @@ function replaceRecord(state, exerciseIndex, setIndex, update) {
   const setRecords = source.setRecords.slice();
   setRecords[setIndex] = update(setRecords[setIndex]);
   return replaceExercise(state, exerciseIndex, { ...source, setRecords });
+}
+
+function isTimestamp(value) {
+  return Number.isFinite(value);
+}
+
+function timerId(kind, sequence) {
+  return `${kind}-${sequence}`;
+}
+
+function canConfirmSet(exercise, record) {
+  if (exercise.trackingMode === 'simple') return true;
+  if (exercise.trackingMode === 'weighted') return canConfirmWeightedSet(record);
+  if (exercise.trackingMode === 'bodyweight') return canConfirmBodyweightSet(record);
+  return false;
+}
+
+function closePriorRest(state, exerciseIndex, setIndex, timestamp) {
+  if (setIndex === 0) return state;
+  const previous = state.exercises[exerciseIndex]?.setRecords?.[setIndex - 1];
+  if (!previous?._activeRest) return state;
+  return replaceRecord(state, exerciseIndex, setIndex - 1, record => {
+    const { _activeRest, ...rest } = record;
+    return {
+      ...rest,
+      actualRestSeconds: calculateElapsedSeconds(_activeRest.startedAt, timestamp),
+    };
+  });
+}
+
+function stripActiveFields(value) {
+  if (Array.isArray(value)) return value.map(stripActiveFields);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !key.startsWith('_active'))
+    .map(([key, nested]) => [key, stripActiveFields(nested)]));
+}
+
+function deepFreeze(value) {
+  Object.freeze(value);
+  for (const nested of Object.values(value)) {
+    if (nested && typeof nested === 'object' && !Object.isFrozen(nested)) deepFreeze(nested);
+  }
+  return value;
 }
 
 function recomputeImmediateNext(exercise, sourceIndex) {
@@ -87,8 +132,21 @@ export function initializeActiveWorkout(exercises) {
   const cloned = structuredClone(exercises);
   for (const exercise of cloned) {
     if (!Object.hasOwn(exercise, 'trackingMode')) exercise.trackingMode = 'simple';
-    if (exercise.trackingMode === 'simple' && typeof exercise.completed !== 'boolean') {
-      exercise.completed = false;
+    if (exercise.trackingMode === 'simple') {
+      if (typeof exercise.completed !== 'boolean') exercise.completed = false;
+      if (!Array.isArray(exercise.setRecords)) {
+        const count = Number.isInteger(exercise.prescribedSetCount)
+          ? exercise.prescribedSetCount
+          : exercise.sets;
+        const setCount = Math.max(1, count || 1);
+        exercise.setRecords = Array.from({ length: setCount }, (_, index) => ({
+          index,
+          completed: exercise.completed && index === 0,
+          plannedRestSeconds: index === setCount - 1 ? null : 60,
+          workDurationSeconds: null,
+          actualRestSeconds: null,
+        }));
+      }
     }
     if (exercise.trackingMode === 'weighted' && Array.isArray(exercise.setRecords)) {
       exercise.setRecords = exercise.setRecords.map(record => ({
@@ -97,20 +155,143 @@ export function initializeActiveWorkout(exercises) {
       }));
     }
   }
-  return { exercises: cloned };
+  return {
+    exercises: cloned,
+    workoutStartedAt: null,
+    activeWorkTimer: null,
+    _nextTimerId: 1,
+  };
 }
 
 export function activeWorkoutReducer(state, action) {
+  if (action.type === 'startWorkout') {
+    if (state.workoutStartedAt !== null || !isTimestamp(action.timestamp)) return state;
+    return { ...state, workoutStartedAt: action.timestamp };
+  }
+
   const exercise = state.exercises[action.exerciseIndex];
   if (!exercise) return state;
 
+  if (action.type === 'startSet') {
+    if (state.workoutStartedAt === null || state.activeWorkTimer || !isTimestamp(action.timestamp)) {
+      return state;
+    }
+    const record = exercise.setRecords?.[action.setIndex];
+    if (!record || getSetStatus(exercise, action.setIndex) !== 'ready') return state;
+    const withClosedRest = closePriorRest(state, action.exerciseIndex, action.setIndex, action.timestamp);
+    const sequence = withClosedRest._nextTimerId;
+    return {
+      ...withClosedRest,
+      activeWorkTimer: {
+        id: timerId('work', sequence),
+        occurrenceId: exercise.occurrenceId,
+        exerciseIndex: action.exerciseIndex,
+        setIndex: action.setIndex,
+        startedAt: action.timestamp,
+      },
+      _nextTimerId: sequence + 1,
+    };
+  }
+
+  if (action.type === 'cancelSet') {
+    const timer = state.activeWorkTimer;
+    if (!timer || timer.exerciseIndex !== action.exerciseIndex || timer.setIndex !== action.setIndex) {
+      return state;
+    }
+    return { ...state, activeWorkTimer: null };
+  }
+
+  if (action.type === 'confirmSet') {
+    const timer = state.activeWorkTimer;
+    const record = exercise.setRecords?.[action.setIndex];
+    if (!isTimestamp(action.timestamp)
+      || !timer
+      || timer.exerciseIndex !== action.exerciseIndex
+      || timer.setIndex !== action.setIndex
+      || !record
+      || record.completed
+      || action.setIndex !== confirmedPrefixLength(exercise.setRecords)
+      || !canConfirmSet(exercise, record)) {
+      return state;
+    }
+
+    const isFinal = action.setIndex === exercise.setRecords.length - 1;
+    const sequence = state._nextTimerId;
+    let updated = replaceRecord(state, action.exerciseIndex, action.setIndex, current => ({
+      ...current,
+      completed: true,
+      workDurationSeconds: calculateElapsedSeconds(timer.startedAt, action.timestamp),
+      actualRestSeconds: null,
+      ...(isFinal ? {} : {
+        _activeRest: {
+          id: timerId('rest', sequence),
+          startedAt: action.timestamp,
+        },
+      }),
+    }));
+    if (exercise.trackingMode === 'weighted') {
+      updated = replaceExercise(
+        updated,
+        action.exerciseIndex,
+        recomputeImmediateNext(updated.exercises[action.exerciseIndex], action.setIndex),
+      );
+    }
+    if (exercise.trackingMode === 'simple') {
+      updated = replaceExercise(updated, action.exerciseIndex, {
+        ...updated.exercises[action.exerciseIndex],
+        completed: true,
+      });
+    }
+    return {
+      ...updated,
+      activeWorkTimer: null,
+      _nextTimerId: isFinal ? sequence : sequence + 1,
+    };
+  }
+
+  if (action.type === 'undoSet') {
+    const record = exercise.setRecords?.[action.setIndex];
+    const prefixLength = Array.isArray(exercise.setRecords)
+      ? confirmedPrefixLength(exercise.setRecords)
+      : 0;
+    if (!record?.completed
+      || action.setIndex !== prefixLength - 1
+      || record.actualRestSeconds !== null) {
+      return state;
+    }
+    let updated = replaceRecord(state, action.exerciseIndex, action.setIndex, current => {
+      const { _activeRest, ...rest } = current;
+      return {
+        ...rest,
+        completed: false,
+        workDurationSeconds: null,
+        actualRestSeconds: null,
+      };
+    });
+    if (exercise.trackingMode === 'weighted') {
+      updated = replaceExercise(
+        updated,
+        action.exerciseIndex,
+        relockImmediateNext(updated.exercises[action.exerciseIndex], action.setIndex),
+      );
+    }
+    if (exercise.trackingMode === 'simple') {
+      updated = replaceExercise(updated, action.exerciseIndex, {
+        ...updated.exercises[action.exerciseIndex],
+        completed: updated.exercises[action.exerciseIndex].setRecords.some(item => item.completed),
+      });
+    }
+    return updated;
+  }
+
   if (action.type === 'toggleSimpleExercise') {
-    if (exercise.trackingMode !== 'simple') return state;
+    if (state.workoutStartedAt !== null || exercise.trackingMode !== 'simple') return state;
     return replaceExercise(state, action.exerciseIndex, { ...exercise, completed: !exercise.completed });
   }
 
   if (action.type === 'toggleTrackedSet') {
-    if (exercise.trackingMode !== 'weighted' && exercise.trackingMode !== 'bodyweight') return state;
+    if (state.workoutStartedAt !== null
+      || (exercise.trackingMode !== 'weighted' && exercise.trackingMode !== 'bodyweight')) return state;
     const prefixLength = confirmedPrefixLength(exercise.setRecords);
     const record = exercise.setRecords[action.setIndex];
     if (!record) return state;
@@ -169,6 +350,34 @@ export function activeWorkoutReducer(state, action) {
   }
 
   return state;
+}
+
+export function resolveFinishCandidate(state, timestamp) {
+  if (state.activeWorkTimer) {
+    return {
+      status: 'blocked-active-work',
+      activeWorkTimer: { ...state.activeWorkTimer },
+    };
+  }
+  if (state.workoutStartedAt === null || !isTimestamp(timestamp)) {
+    return { status: 'blocked-not-started' };
+  }
+
+  const exercises = state.exercises.map(exercise => ({
+    ...exercise,
+    setRecords: exercise.setRecords?.map(record => {
+      if (!record._activeRest) return record;
+      return {
+        ...record,
+        actualRestSeconds: calculateElapsedSeconds(record._activeRest.startedAt, timestamp),
+      };
+    }),
+  }));
+  const candidate = stripActiveFields({
+    actualDurationSeconds: calculateElapsedSeconds(state.workoutStartedAt, timestamp),
+    exercises,
+  });
+  return { status: 'ready', candidate: deepFreeze(candidate) };
 }
 
 export function getSetStatus(exercise, setIndex) {

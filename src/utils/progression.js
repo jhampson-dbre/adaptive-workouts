@@ -1,6 +1,8 @@
 import {
   isValidV2ExerciseOccurrence,
   isValidV2WorkoutEnvelope,
+  isValidV3ExerciseOccurrence,
+  isValidV3WorkoutDocument,
   isValidWeightedCatalogConfig,
 } from './workoutSchema';
 
@@ -31,9 +33,19 @@ function validateCurrentExercise(exercise) {
   }
 }
 
+function isEligibleProgressionWorkout(workout) {
+  return isValidV2WorkoutEnvelope(workout) || isValidV3WorkoutDocument(workout);
+}
+
+function isValidProgressionOccurrence(workout, occurrence) {
+  return workout.schemaVersion === 3
+    ? isValidV3ExerciseOccurrence(occurrence)
+    : isValidV2ExerciseOccurrence(occurrence);
+}
+
 function findNewestAnchor(exerciseId, history) {
   const candidates = history
-    .filter(entry => isValidV2WorkoutEnvelope(entry) && isNonEmptyString(entry.id))
+    .filter(entry => isEligibleProgressionWorkout(entry) && isNonEmptyString(entry.id))
     .slice()
     .sort((left, right) => {
       const dateDifference = Date.parse(right.date) - Date.parse(left.date);
@@ -46,7 +58,7 @@ function findNewestAnchor(exerciseId, history) {
     const occurrence = workout.exercises.find(candidate => (
       candidate?.id === exerciseId
       && candidate.trackingMode === 'weighted'
-      && isValidV2ExerciseOccurrence(candidate)
+      && isValidProgressionOccurrence(workout, candidate)
       && candidate.setRecords[0].completed === true
     ));
     if (occurrence) return { workout, occurrence };
