@@ -17,6 +17,7 @@ const isNonEmptyString = value => typeof value === 'string' && value.trim().leng
 const isFiniteNonnegative = value => Number.isFinite(value) && value >= 0;
 const isNonnegativeInteger = value => Number.isInteger(value) && value >= 0;
 const isPositiveInteger = value => Number.isInteger(value) && value > 0;
+const isValidPlannedRestSeconds = value => Number.isInteger(value) && value >= 5 && value <= 600;
 
 export function normalizeCatalogExercise(exercise) {
   if (!isObject(exercise) || hasOwn(exercise, 'trackingMode')) return exercise;
@@ -157,6 +158,72 @@ export function isValidV2ExerciseOccurrence(exercise) {
     ));
 }
 
+function hasValidV3Timing(record, index, recordCount, { allowLiveRest }) {
+  if (!isObject(record)
+    || record.index !== index
+    || typeof record.completed !== 'boolean'
+    || (record.completed
+      ? !isNonnegativeInteger(record.workDurationSeconds)
+      : record.workDurationSeconds !== null)) {
+    return false;
+  }
+
+  const isFinalSet = index === recordCount - 1;
+  if (isFinalSet) {
+    return record.plannedRestSeconds === null && record.actualRestSeconds === null;
+  }
+  if (!isValidPlannedRestSeconds(record.plannedRestSeconds)) return false;
+  if (!record.completed) return record.actualRestSeconds === null;
+  return isNonnegativeInteger(record.actualRestSeconds)
+    || (allowLiveRest && record.actualRestSeconds === null);
+}
+
+export function isValidV3ExerciseOccurrence(exercise, { allowLiveRest = false } = {}) {
+  if (!hasValidExerciseIdentity(exercise)
+    || !isNonEmptyString(exercise.occurrenceId)
+    || !TRACKING_MODES.includes(exercise.trackingMode)
+    || !Number.isInteger(exercise.sets)
+    || exercise.sets < 1
+    || exercise.sets > 10
+    || exercise.prescribedSetCount !== exercise.sets
+    || !Array.isArray(exercise.setRecords)
+    || exercise.setRecords.length !== exercise.prescribedSetCount
+    || !hasContiguousConfirmedPrefix(exercise.setRecords)
+    || exercise.setRecords.some((record, index) => (
+      !hasValidV3Timing(record, index, exercise.setRecords.length, { allowLiveRest })
+    ))) {
+    return false;
+  }
+
+  if (allowLiveRest) {
+    const liveRestIndexes = exercise.setRecords
+      .map((record, index) => (record.completed && record.actualRestSeconds === null
+        && index < exercise.setRecords.length - 1 ? index : -1))
+      .filter(index => index >= 0);
+    const lastCompletedIndex = exercise.setRecords.reduce((lastIndex, record, index) => (
+      record.completed ? index : lastIndex
+    ), -1);
+    if (liveRestIndexes.length > 1
+      || (liveRestIndexes.length === 1 && liveRestIndexes[0] !== lastCompletedIndex)) {
+      return false;
+    }
+  }
+
+  if (exercise.trackingMode === 'simple') return !hasOwn(exercise, 'completed');
+  if (exercise.trackingMode === 'weighted') {
+    return isValidWeightedCatalogConfig(exercise)
+      && exercise.setRecords.every((record, index) => (
+        record.targetReps === exercise.targetReps
+        && isValidWeightedSetRecord(record, index)
+      ));
+  }
+  return isValidBodyweightCatalogConfig(exercise)
+    && exercise.setRecords.every((record, index) => (
+      record.targetReps === exercise.targetReps
+      && isValidBodyweightSetRecord(record, index)
+    ));
+}
+
 export function isLegacyWorkoutDocument(workout) {
   return isObject(workout) && !hasOwn(workout, 'schemaVersion');
 }
@@ -176,6 +243,27 @@ export function isValidV2WorkoutDocument(workout) {
     && workout.exercises.every(isValidV2ExerciseOccurrence);
 }
 
+export function isValidV3WorkoutEnvelope(workout) {
+  return isObject(workout)
+    && workout.schemaVersion === 3
+    && workout.status === 'completed'
+    && isNonEmptyString(workout.date)
+    && Number.isFinite(Date.parse(workout.date))
+    && isNonnegativeInteger(workout.actualDurationSeconds)
+    && !hasOwn(workout, 'actualDuration')
+    && Array.isArray(workout.exercises);
+}
+
+export function isValidV3WorkoutDocument(workout) {
+  if (!isValidV3WorkoutEnvelope(workout)
+    || !workout.exercises.every(exercise => isValidV3ExerciseOccurrence(exercise))
+    || !hasConfirmedWork(workout.exercises)) {
+    return false;
+  }
+  const occurrenceIds = workout.exercises.map(exercise => exercise.occurrenceId);
+  return new Set(occurrenceIds).size === occurrenceIds.length;
+}
+
 export function isMalformedV2WorkoutDocument(workout) {
   return isObject(workout)
     && hasOwn(workout, 'schemaVersion')
@@ -184,13 +272,18 @@ export function isMalformedV2WorkoutDocument(workout) {
 
 export function classifyWorkoutDocument(workout) {
   if (isLegacyWorkoutDocument(workout)) return 'legacy';
-  return isValidV2WorkoutDocument(workout) ? 'valid-v2' : 'malformed-v2';
+  if (isValidV2WorkoutDocument(workout)) return 'valid-v2';
+  if (isValidV3WorkoutDocument(workout)) return 'valid-v3';
+  return 'malformed-versioned';
 }
 
 export function hasConfirmedWork(exercises) {
   return Array.isArray(exercises) && exercises.some(exercise => {
-    if (exercise.trackingMode === 'simple') return exercise.completed === true;
-    return Array.isArray(exercise.setRecords) && exercise.setRecords.some(record => record.completed === true);
+    if (exercise.trackingMode === 'simple' && exercise.completed === true) return true;
+    if (Array.isArray(exercise.setRecords)) {
+      return exercise.setRecords.some(record => record.completed === true);
+    }
+    return false;
   });
 }
 
@@ -198,9 +291,12 @@ export function wasPerformed(workout, occurrence) {
   if (isLegacyWorkoutDocument(workout)) {
     return occurrence !== null && typeof occurrence === 'object' && !Array.isArray(occurrence);
   }
-  if (!isValidV2WorkoutEnvelope(workout) || !isValidV2ExerciseOccurrence(occurrence)) {
-    return false;
+  if (workout?.schemaVersion === 3) {
+    return isValidV3WorkoutDocument(workout)
+      && isValidV3ExerciseOccurrence(occurrence)
+      && occurrence.setRecords.some(record => record.completed === true);
   }
+  if (!isValidV2WorkoutEnvelope(workout) || !isValidV2ExerciseOccurrence(occurrence)) return false;
   if (occurrence.trackingMode === 'simple') return occurrence.completed === true;
   return occurrence.setRecords.some(record => record.completed === true);
 }
@@ -289,6 +385,71 @@ function snapshotOccurrence(source) {
   return snapshot;
 }
 
+function snapshotV3Timing(record) {
+  return {
+    index: record.index,
+    completed: record.completed,
+    plannedRestSeconds: record.plannedRestSeconds,
+    workDurationSeconds: record.workDurationSeconds,
+    actualRestSeconds: record.actualRestSeconds,
+  };
+}
+
+function snapshotV3Occurrence(source) {
+  if (!isObject(source)) throw new TypeError('Invalid exercise occurrence');
+
+  const snapshot = {
+    id: source.id,
+    occurrenceId: source.occurrenceId,
+    name: source.name,
+    muscleGroup: source.muscleGroup,
+    tier: source.tier,
+    trackingMode: source.trackingMode,
+    sets: source.sets,
+    prescribedSetCount: source.prescribedSetCount,
+  };
+  copyOptionalExerciseFields(source, snapshot);
+
+  if (source.trackingMode === 'simple') {
+    snapshot.setRecords = Array.isArray(source.setRecords)
+      ? source.setRecords.map(snapshotV3Timing)
+      : source.setRecords;
+    return snapshot;
+  }
+
+  if (source.trackingMode === 'weighted') {
+    Object.assign(snapshot, {
+      startingWeight: source.startingWeight,
+      targetReps: source.targetReps,
+      floorReps: source.floorReps,
+      weightStep: source.weightStep,
+      setRecords: Array.isArray(source.setRecords) ? source.setRecords.map(record => ({
+        ...snapshotV3Timing(record),
+        targetWeight: record.targetWeight,
+        targetReps: record.targetReps,
+        actualWeight: record.actualWeight,
+        actualReps: record.actualReps,
+        recommendationReason: snapshotRecommendationReason(record.recommendationReason, record.index),
+      })) : source.setRecords,
+    });
+    return snapshot;
+  }
+
+  if (source.trackingMode === 'bodyweight') {
+    Object.assign(snapshot, {
+      targetReps: source.targetReps,
+      setRecords: Array.isArray(source.setRecords) ? source.setRecords.map(record => ({
+        ...snapshotV3Timing(record),
+        targetReps: record.targetReps,
+        fullReps: record.fullReps,
+        assistedReps: record.assistedReps,
+        eccentricReps: record.eccentricReps,
+      })) : source.setRecords,
+    });
+  }
+  return snapshot;
+}
+
 export function buildCompletedWorkoutDocument(workout) {
   if (!isObject(workout) || !Array.isArray(workout.exercises)) {
     throw new TypeError('Invalid completed workout input');
@@ -304,5 +465,22 @@ export function buildCompletedWorkoutDocument(workout) {
 
   if (!isValidV2WorkoutDocument(document)) throw new TypeError('Invalid completed workout data');
   if (!hasConfirmedWork(document.exercises)) throw new TypeError('A workout must contain confirmed work');
+  return document;
+}
+
+export function buildCompletedV3WorkoutDocument(workout) {
+  if (!isObject(workout) || !Array.isArray(workout.exercises)) {
+    throw new TypeError('Invalid completed workout input');
+  }
+
+  const document = {
+    schemaVersion: 3,
+    status: 'completed',
+    date: workout.date,
+    actualDurationSeconds: workout.actualDurationSeconds,
+    exercises: workout.exercises.map(snapshotV3Occurrence),
+  };
+
+  if (!isValidV3WorkoutDocument(document)) throw new TypeError('Invalid completed workout data');
   return document;
 }
