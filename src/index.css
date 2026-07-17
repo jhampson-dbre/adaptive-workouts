@@ -625,6 +625,13 @@ code {
   font-size: 14px;
 }
 
+.history-set-timing {
+  grid-column: 2;
+  margin-top: 4px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
 .history-exercise-unavailable,
 .history-card-unavailable > p {
   color: var(--text);
@@ -636,7 +643,8 @@ code {
     grid-template-columns: 1fr;
   }
 
-  .history-recommendation {
+  .history-recommendation,
+  .history-set-timing {
     grid-column: 1;
   }
 }

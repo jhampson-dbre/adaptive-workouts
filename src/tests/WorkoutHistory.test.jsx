@@ -54,6 +54,22 @@ function workout(overrides = {}) {
   };
 }
 
+function v3Workout(overrides = {}) {
+  return {
+    id: 'workout-v3', schemaVersion: 3, status: 'completed', date: '2026-07-16T12:00:00.000Z',
+    actualDurationSeconds: 125,
+    exercises: [{
+      id: 'plank', occurrenceId: 'plank:0', name: 'Plank', muscleGroup: 'Core', tier: 1,
+      trackingMode: 'simple', sets: 2, prescribedSetCount: 2,
+      setRecords: [
+        { index: 0, completed: true, plannedRestSeconds: 60, workDurationSeconds: 12, actualRestSeconds: 70 },
+        { index: 1, completed: false, plannedRestSeconds: null, workDurationSeconds: null, actualRestSeconds: null },
+      ],
+    }],
+    ...overrides,
+  };
+}
+
 test('renders loading, error, empty, and a semantic read-only history section', () => {
   const { rerender } = render(<WorkoutHistory loading history={[]} />);
   expect(screen.getByRole('region', { name: 'Workout History' })).toBeDefined();
@@ -91,6 +107,7 @@ test('renders valid v2 modes and hides unconfirmed tracked performance', () => {
   expect(screen.getByText(/Target: 8 reps.*Not confirmed/)).toBeDefined();
   expect(screen.queryByText(/77 full|66 assisted|55 eccentric/)).toBeNull();
   expect(screen.getByText('Not confirmed', { selector: '.history-simple-status' })).toBeDefined();
+  expect(screen.queryByText(/Work:/)).toBeNull();
 });
 
 test('shows confirmed bodyweight categories and totals', () => {
@@ -169,4 +186,24 @@ test('treats a non-array history result as empty instead of crashing', () => {
   expect(screen.getByText('No workouts logged yet.')).toBeDefined();
   rerender(<WorkoutHistory history={{ bad: true }} />);
   expect(screen.getByText('No workouts logged yet.')).toBeDefined();
+});
+
+test('renders valid v3 total and per-set work, planned rest, actual rest, and overtime', () => {
+  render(<WorkoutHistory history={[v3Workout()]} />);
+
+  expect(screen.getByText('Duration: 2:05')).toBeDefined();
+  expect(screen.getByText('Work: 0:12 · Planned rest: 1:00 · Actual rest: 1:10 · Overtime: 0:10')).toBeDefined();
+  expect(screen.getByText('Work: Not confirmed · Planned rest: None · Actual rest: None')).toBeDefined();
+  expect(screen.queryByText(/Duration: .*mins/)).toBeNull();
+});
+
+test('treats malformed v3 as wholly unavailable instead of salvaging occurrences', () => {
+  const malformed = v3Workout({
+    exercises: [v3Workout().exercises[0], { bad: true }],
+  });
+  render(<WorkoutHistory history={[malformed]} />);
+
+  expect(screen.getByText('Saved workout details are unavailable.')).toBeDefined();
+  expect(screen.queryByText('Plank')).toBeNull();
+  expect(screen.queryByText(/Work:/)).toBeNull();
 });

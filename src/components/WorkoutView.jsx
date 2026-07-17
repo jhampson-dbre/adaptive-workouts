@@ -5,7 +5,7 @@ import {
   activeWorkoutReducer, getSetStatus, initializeActiveWorkout, resolveFinishCandidate,
 } from '../utils/activeWorkout';
 import { calculateElapsedSeconds } from '../utils/workoutTiming';
-import { buildCompletedWorkoutDocument, hasConfirmedWork } from '../utils/workoutSchema';
+import { buildCompletedV3WorkoutDocument, hasConfirmedWork } from '../utils/workoutSchema';
 import WorkoutHistory from './WorkoutHistory';
 
 function deepFreeze(value) {
@@ -59,7 +59,7 @@ function WorkoutSummary({ candidate, isSaving, saveError, onBack, onSave, summar
     <section className="workout-summary" role="region" aria-label="Workout summary" tabIndex="-1" ref={summaryRef}>
       <h2>Review workout</h2>
       <p className="summary-total">{counts.confirmed} of {counts.planned} items confirmed</p>
-      <p>Duration: {candidate.actualDuration} min</p>
+      <p>Duration: {formatTime(candidate.actualDurationSeconds)}</p>
       <ul>{candidate.exercises.map((exercise, index) => {
         const records = Array.isArray(exercise.setRecords) ? exercise.setRecords : null;
         const status = records
@@ -282,10 +282,11 @@ export default function WorkoutView({ workout, onFinish }) {
       return;
     }
     if (result.status !== 'ready') return;
-    const exercises = result.candidate.exercises.map(exercise => exercise.trackingMode === 'simple'
-      ? { ...exercise, completed: exercise.setRecords.some(record => record.completed) }
-      : exercise);
-    const candidate = deepFreeze({ finishRequestedAt: timestamp, date: new Date(timestamp).toISOString(), actualDuration: Math.max(1, Math.round(result.candidate.actualDurationSeconds / 60)), exercises });
+    const candidate = deepFreeze({
+      ...result.candidate,
+      finishRequestedAt: timestamp,
+      date: new Date(timestamp).toISOString(),
+    });
     finishOwnerUidRef.current = activeOwnerUidRef.current;
     savedDocumentRef.current = null; saveCompletedRef.current = false; setSaveError(null); setFinishCandidate(candidate);
   };
@@ -299,7 +300,7 @@ export default function WorkoutView({ workout, onFinish }) {
     if (!owner) { setSaveError('Sign in before saving this workout.'); saveInFlightRef.current = false; return; }
     if (user?.uid !== owner) { setSaveError('Your signed-in account changed. Switch back to the account that started this summary or return to the workout.'); saveInFlightRef.current = false; return; }
     if (!savedDocumentRef.current) {
-      try { savedDocumentRef.current = deepFreeze(buildCompletedWorkoutDocument(finishCandidate)); }
+      try { savedDocumentRef.current = deepFreeze(buildCompletedV3WorkoutDocument(finishCandidate)); }
       catch (error) { console.error('Failed to prepare workout:', error); setSaveError('Could not prepare this workout to save. Review the workout data and try again.'); saveInFlightRef.current = false; return; }
     }
     setIsSaving(true);

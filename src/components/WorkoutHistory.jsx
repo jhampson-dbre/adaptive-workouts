@@ -84,7 +84,25 @@ function RecommendationReason({ record }) {
   return <p className="history-recommendation">{text}</p>;
 }
 
-function WeightedHistory({ exercise }) {
+const formatDuration = totalSeconds => `${Math.floor(totalSeconds / 60)}:${(totalSeconds % 60).toString().padStart(2, '0')}`;
+
+function SetTiming({ record }) {
+  const work = record.completed ? formatDuration(record.workDurationSeconds) : 'Not confirmed';
+  const plannedRest = record.plannedRestSeconds === null ? 'None' : formatDuration(record.plannedRestSeconds);
+  const actualRest = record.actualRestSeconds === null ? 'None' : formatDuration(record.actualRestSeconds);
+  let comparison = '';
+  if (record.actualRestSeconds !== null) {
+    const difference = record.actualRestSeconds - record.plannedRestSeconds;
+    comparison = difference > 0
+      ? ` · Overtime: ${formatDuration(difference)}`
+      : difference < 0
+        ? ` · Under target: ${formatDuration(-difference)}`
+        : ' · On target';
+  }
+  return <p className="history-set-timing">Work: {work} · Planned rest: {plannedRest} · Actual rest: {actualRest}{comparison}</p>;
+}
+
+function WeightedHistory({ exercise, includeTiming = false }) {
   return (
     <ol className="history-set-list">
       {exercise.setRecords.map(record => (
@@ -96,13 +114,14 @@ function WeightedHistory({ exercise }) {
               : `Target: ${record.targetWeight} lb × ${record.targetReps} reps · Not confirmed`}
           </p>
           <RecommendationReason record={record} />
+          {includeTiming && <SetTiming record={record} />}
         </li>
       ))}
     </ol>
   );
 }
 
-function BodyweightHistory({ exercise }) {
+function BodyweightHistory({ exercise, includeTiming = false }) {
   return (
     <ol className="history-set-list">
       {exercise.setRecords.map(record => {
@@ -115,6 +134,7 @@ function BodyweightHistory({ exercise }) {
                 ? `Target: ${record.targetReps} reps · Full: ${record.fullReps} · Assisted: ${record.assistedReps} · Eccentric: ${record.eccentricReps} · Total: ${total} · Confirmed`
                 : `Target: ${record.targetReps} reps · Not confirmed`}
             </p>
+            {includeTiming && <SetTiming record={record} />}
           </li>
         );
       })}
@@ -122,16 +142,43 @@ function BodyweightHistory({ exercise }) {
   );
 }
 
+function ExerciseHeading({ exercise }) {
+  return <>
+    <h4>{exercise.name}</h4>
+    <p className="history-exercise-summary">{exercise.prescribedSetCount} {exercise.prescribedSetCount === 1 ? 'set' : 'sets'} · {exercise.trackingMode}</p>
+  </>;
+}
+
 function V2Exercise({ exercise }) {
   return (
     <li className="history-exercise">
-      <h4>{exercise.name}</h4>
-      <p className="history-exercise-summary">{exercise.prescribedSetCount} {exercise.prescribedSetCount === 1 ? 'set' : 'sets'} · {exercise.trackingMode}</p>
+      <ExerciseHeading exercise={exercise} />
       {exercise.trackingMode === 'simple' && (
         <p className="history-simple-status">{exercise.completed ? 'Confirmed' : 'Not confirmed'}</p>
       )}
       {exercise.trackingMode === 'weighted' && <WeightedHistory exercise={exercise} />}
       {exercise.trackingMode === 'bodyweight' && <BodyweightHistory exercise={exercise} />}
+    </li>
+  );
+}
+
+function V3Exercise({ exercise }) {
+  return (
+    <li className="history-exercise">
+      <ExerciseHeading exercise={exercise} />
+      {exercise.trackingMode === 'simple' && (
+        <ol className="history-set-list">
+          {exercise.setRecords.map(record => (
+            <li className="history-set-row" key={record.index}>
+              <strong>Set {record.index + 1}</strong>
+              <p className="history-set-performance">{record.completed ? 'Confirmed' : 'Not confirmed'}</p>
+              <SetTiming record={record} />
+            </li>
+          ))}
+        </ol>
+      )}
+      {exercise.trackingMode === 'weighted' && <WeightedHistory exercise={exercise} includeTiming />}
+      {exercise.trackingMode === 'bodyweight' && <BodyweightHistory exercise={exercise} includeTiming />}
     </li>
   );
 }
@@ -181,6 +228,22 @@ function V2Workout({ entry }) {
   );
 }
 
+function V3Workout({ entry }) {
+  return (
+    <article className="history-card history-card-v3">
+      <header className="history-card-heading">
+        <h3>{formatWorkoutDate(entry.date)}</h3>
+        <p>Duration: {formatDuration(entry.actualDurationSeconds)}</p>
+      </header>
+      <ul className="history-exercise-list">
+        {entry.exercises.map(exercise => (
+          <V3Exercise exercise={exercise} key={exercise.occurrenceId} />
+        ))}
+      </ul>
+    </article>
+  );
+}
+
 function MalformedWorkout({ entry }) {
   return (
     <article className="history-card history-card-unavailable">
@@ -194,6 +257,7 @@ function HistoryEntry({ entry }) {
   const classification = classifyWorkoutDocument(entry);
   if (classification === 'legacy') return <LegacyWorkout entry={entry} />;
   if (classification === 'valid-v2' || isValidV2WorkoutEnvelope(entry)) return <V2Workout entry={entry} />;
+  if (classification === 'valid-v3') return <V3Workout entry={entry} />;
   return <MalformedWorkout entry={entry} />;
 }
 

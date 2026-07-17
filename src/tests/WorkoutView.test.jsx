@@ -257,10 +257,14 @@ test('undoing a final set re-expands its exercise', async () => {
   expect(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i })).toBeDefined();
 });
 
-test('Finish uses a fresh reducer snapshot after Back while saving remains v2', async () => {
+test('Finish uses a fresh reducer snapshot after Back and saves coherent v3 timing', async () => {
   vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
   storage.saveWorkout.mockResolvedValue(undefined);
-  const onFinish = vi.fn(); renderWorkout(timedWorkout, onFinish);
+  const savableWorkout = [{
+    ...timedWorkout[0],
+    setRecords: [{ ...timedWorkout[0].setRecords[0], plannedRestSeconds: 5 }, timedWorkout[0].setRecords[1]],
+  }, timedWorkout[1]];
+  const onFinish = vi.fn(); renderWorkout(savableWorkout, onFinish);
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
@@ -272,12 +276,17 @@ test('Finish uses a fresh reducer snapshot after Back while saving remains v2', 
   fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
   await act(async () => Promise.resolve());
-  expect(storage.saveWorkout.mock.calls[0][1]).toMatchObject({ schemaVersion: 2, actualDuration: 2 });
-  expect(storage.saveWorkout.mock.calls[0][1].exercises[0].completed).toBe(true);
+  const saved = storage.saveWorkout.mock.calls[0][1];
+  expect(saved).toMatchObject({ schemaVersion: 3, actualDurationSeconds: 120 });
+  expect(saved).not.toHaveProperty('actualDuration');
+  expect(saved.exercises[0]).not.toHaveProperty('completed');
+  expect(saved.exercises[0].setRecords[0]).toMatchObject({
+    completed: true, workDurationSeconds: 0, plannedRestSeconds: 5, actualRestSeconds: 120,
+  });
   expect(onFinish).toHaveBeenCalledOnce();
 });
 
-test('failed save retries the identical frozen v2 payload', async () => {
+test('failed save retries the identical frozen v3 payload', async () => {
   storage.saveWorkout.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(undefined);
   renderWorkout([{ ...timedWorkout[1] }]);
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
@@ -290,6 +299,8 @@ test('failed save retries the identical frozen v2 payload', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
   await waitFor(() => expect(storage.saveWorkout).toHaveBeenCalledTimes(2));
   expect(storage.saveWorkout.mock.calls[1][1]).toBe(payload);
+  expect(payload.schemaVersion).toBe(3);
+  expect(Object.isFrozen(payload)).toBe(true);
 });
 
 test('a failed frozen save remains bound to the account that created it', async () => {
