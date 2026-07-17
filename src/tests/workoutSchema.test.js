@@ -15,6 +15,7 @@ import {
   isValidV3ExerciseOccurrence,
   isValidV3WorkoutDocument,
   normalizeCatalogExercise,
+  normalizeWorkoutSettings,
   wasPerformed,
 } from '../utils/workoutSchema';
 
@@ -133,6 +134,21 @@ const validV3Workout = {
 };
 
 describe('workout schema', () => {
+  it('normalizes missing and invalid default rest values without changing valid settings', () => {
+    expect(normalizeWorkoutSettings({ staleThreshold: 4 })).toEqual({ staleThreshold: 4, defaultRestSeconds: 60 });
+    expect(normalizeWorkoutSettings({ defaultRestSeconds: 4 })).toEqual({ defaultRestSeconds: 60 });
+    expect(normalizeWorkoutSettings({ defaultRestSeconds: 601 })).toEqual({ defaultRestSeconds: 60 });
+    expect(normalizeWorkoutSettings({ defaultRestSeconds: 60.5 })).toEqual({ defaultRestSeconds: 60 });
+    expect(normalizeWorkoutSettings({ defaultRestSeconds: 90 })).toEqual({ defaultRestSeconds: 90 });
+  });
+
+  it('accepts optional valid catalog rest and rejects invalid explicit overrides', () => {
+    expect(isValidCatalogExercise({ ...weightedExercise, restSeconds: 5 })).toBe(true);
+    expect(isValidCatalogExercise({ ...weightedExercise, restSeconds: 600 })).toBe(true);
+    expect(isValidCatalogExercise({ ...weightedExercise, restSeconds: 4 })).toBe(false);
+    expect(isValidCatalogExercise({ ...weightedExercise, restSeconds: 60.5 })).toBe(false);
+  });
+
   it('defines the three canonical tracking modes and only normalizes an absent mode', () => {
     expect(TRACKING_MODES).toEqual(['simple', 'weighted', 'bodyweight']);
     const original = { id: 'curl', name: 'Curl', muscleGroup: 'Biceps', tier: 1, sets: 3 };

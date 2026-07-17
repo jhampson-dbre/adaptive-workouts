@@ -613,11 +613,55 @@ describe('Generator Engine', () => {
                 index: 1, targetWeight: 100, actualWeight: 100, targetReps: 8, actualReps: 8, completed: false,
                 recommendationReason: { recommendedWeight: 100, reasonCode: 'BACKOFF_AWAITING_PRIOR_SET' },
             });
-            expect(generated[2].setRecords[0]).toEqual({
+            expect(generated[2].setRecords[0]).toMatchObject({
                 index: 0, targetReps: 6, fullReps: 0, assistedReps: 0, eccentricReps: 0, completed: false,
             });
             expect(trackingCatalog[0]).not.toHaveProperty('trackingMode');
             expect(trackingCatalog[0].dynamicTier).toBe(99);
+        });
+
+        it('adds stable occurrence identities and v3-ready timing records while remaining valid v2', () => {
+            const generated = generateWorkout(60, [], false, trackingCatalog, [], {
+                staleThreshold: 5,
+                defaultRestSeconds: 75,
+            });
+
+            expect(generated.map(exercise => exercise.occurrenceId)).toEqual([
+                'simple:0', 'weighted:1', 'bodyweight:2',
+            ]);
+            expect(new Set(generated.map(exercise => exercise.occurrenceId)).size).toBe(generated.length);
+            expect(generated.every(isValidV2ExerciseOccurrence)).toBe(true);
+            generated.forEach(exercise => {
+                expect(exercise.setRecords).toHaveLength(exercise.sets);
+                exercise.setRecords.forEach((record, index) => {
+                    expect(record).toMatchObject({
+                        index,
+                        completed: false,
+                        plannedRestSeconds: index === exercise.sets - 1 ? null : 75,
+                        workDurationSeconds: null,
+                        actualRestSeconds: null,
+                    });
+                });
+            });
+            expect(generated[0].completed).toBe(false);
+        });
+
+        it('snapshots catalog rest overrides, inherits after clearing, and normalizes invalid defaults', () => {
+            const overridden = trackingCatalog.map(exercise => (
+                exercise.id === 'weighted' ? { ...exercise, restSeconds: 120 } : exercise
+            ));
+            const generated = generateWorkout(60, [], false, overridden, [], { defaultRestSeconds: 90 });
+            expect(generated.find(exercise => exercise.id === 'weighted').setRecords[0].plannedRestSeconds).toBe(120);
+            expect(generated.find(exercise => exercise.id === 'simple').setRecords[0].plannedRestSeconds).toBe(90);
+
+            const fallback = generateWorkout(60, [], false, trackingCatalog, [], { defaultRestSeconds: 0 });
+            expect(fallback[0].setRecords[0].plannedRestSeconds).toBe(60);
+        });
+
+        it('uses the invalid-catalog error path for an invalid explicit rest override', () => {
+            const invalid = { ...trackingCatalog[0], restSeconds: 4 };
+            expect(() => generateWorkout(60, [], false, [invalid], [], { defaultRestSeconds: 60 }))
+                .toThrow(/Plank.*simple.*Manage Catalog|Settings/i);
         });
 
         it('uses source snapshots for the decision and the current step in top-set provenance', () => {

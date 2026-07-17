@@ -2,6 +2,7 @@ import {
     isValidCatalogExercise,
     isValidV2ExerciseOccurrence,
     normalizeCatalogExercise,
+    normalizeWorkoutSettings,
     wasPerformed,
 } from './workoutSchema';
 import { getNextSessionRecommendation } from './progression';
@@ -33,19 +34,33 @@ function createOccurrenceSnapshot(exercise) {
     return snapshot;
 }
 
-function enrichSelectedExercise(exercise, history) {
+function createTimingRecord(index, setCount, restSeconds) {
+    return {
+        index,
+        completed: false,
+        plannedRestSeconds: index === setCount - 1 ? null : restSeconds,
+        workDurationSeconds: null,
+        actualRestSeconds: null,
+    };
+}
+
+function enrichSelectedExercise(exercise, history, defaultRestSeconds, ordinal) {
     const occurrence = createOccurrenceSnapshot(exercise);
+    occurrence.occurrenceId = `${exercise.id}:${ordinal}`;
+    const restSeconds = exercise.restSeconds ?? defaultRestSeconds;
     if (exercise.trackingMode === 'simple') {
         occurrence.completed = false;
+        occurrence.setRecords = Array.from({ length: exercise.sets }, (_, index) => (
+            createTimingRecord(index, exercise.sets, restSeconds)
+        ));
     } else if (exercise.trackingMode === 'bodyweight') {
         occurrence.targetReps = exercise.targetReps;
         occurrence.setRecords = Array.from({ length: exercise.sets }, (_, index) => ({
-            index,
+            ...createTimingRecord(index, exercise.sets, restSeconds),
             targetReps: exercise.targetReps,
             fullReps: 0,
             assistedReps: 0,
             eccentricReps: 0,
-            completed: false,
         }));
     } else {
         const recommendation = getNextSessionRecommendation(exercise, history);
@@ -55,12 +70,11 @@ function enrichSelectedExercise(exercise, history) {
             floorReps: exercise.floorReps,
             weightStep: exercise.weightStep,
             setRecords: Array.from({ length: exercise.sets }, (_, index) => ({
-                index,
+                ...createTimingRecord(index, exercise.sets, restSeconds),
                 targetWeight: recommendation.recommendedWeight,
                 targetReps: exercise.targetReps,
                 actualWeight: recommendation.recommendedWeight,
                 actualReps: exercise.targetReps,
-                completed: false,
                 recommendationReason: index === 0 ? { ...recommendation } : {
                     recommendedWeight: recommendation.recommendedWeight,
                     reasonCode: 'BACKOFF_AWAITING_PRIOR_SET',
@@ -289,7 +303,8 @@ export function checkIsLegDay(date, unrecoveredGroups, history, settings) {
 }
 
 export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay = false, catalog, history, settings) {
-    const staleThreshold = settings.staleThreshold || 5;
+    const normalizedSettings = normalizeWorkoutSettings(settings);
+    const staleThreshold = normalizedSettings.staleThreshold || 5;
     const chronologicalHistory = getChronologicalHistory(history);
     const normalizedCatalog = catalog.map(normalizeCatalogExercise);
     for (const exercise of normalizedCatalog) {
@@ -492,5 +507,10 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
     });
     for (const unit of selectedUnits) addMembers(unit.members);
     
-    return workout.map(exercise => enrichSelectedExercise(exercise, history));
+    return workout.map((exercise, ordinal) => enrichSelectedExercise(
+        exercise,
+        history,
+        normalizedSettings.defaultRestSeconds,
+        ordinal,
+    ));
 }

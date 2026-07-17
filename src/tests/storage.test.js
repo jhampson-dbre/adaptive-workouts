@@ -68,6 +68,15 @@ describe('Storage Layer (Async)', () => {
         expect(firestore.setDoc).not.toHaveBeenCalled();
     });
 
+    it('normalizes missing and invalid default rest settings in memory without writing', async () => {
+        firestore.getDoc.mockResolvedValueOnce({ exists: () => true, data: () => ({ staleThreshold: 7 }) });
+        await expect(getSettings('test-user')).resolves.toEqual({ staleThreshold: 7, defaultRestSeconds: 60 });
+
+        firestore.getDoc.mockResolvedValueOnce({ exists: () => true, data: () => ({ defaultRestSeconds: '90' }) });
+        await expect(getSettings('test-user')).resolves.toEqual({ defaultRestSeconds: 60 });
+        expect(firestore.setDoc).not.toHaveBeenCalled();
+    });
+
     it('passes v2 and legacy workout payloads through verbatim', async () => {
         const historyCollection = { path: 'history' };
         const legacy = { date: '2025-01-01', exercises: [{ id: 'curl' }] };

@@ -9,6 +9,7 @@ const getTier1Groups = (currentCatalog, ignoreId = null) => {
 };
 
 const coerceNumber = value => value === '' ? '' : Number(value);
+const isValidRestSeconds = value => Number.isInteger(value) && value >= 5 && value <= 600;
 
 const getTrackingConfig = (trackingMode, values) => {
   if (trackingMode === 'weighted') {
@@ -28,6 +29,9 @@ const getTrackingConfig = (trackingMode, values) => {
 const getCatalogValidationError = exercise => {
   if (!TRACKING_MODES.includes(exercise.trackingMode)) {
     return 'Choose a valid tracking mode before saving.';
+  }
+  if (Object.hasOwn(exercise, 'restSeconds') && !isValidRestSeconds(exercise.restSeconds)) {
+    return 'Rest override must be a whole number from 5 through 600 seconds.';
   }
   if (isValidCatalogExercise(exercise)) return '';
   if (exercise.trackingMode === 'weighted') {
@@ -113,8 +117,9 @@ export default function Settings({ onClose }) {
   const [editingId, setEditingId] = useState(null);
   const [isCatalogMutating, setIsCatalogMutating] = useState(false);
   const catalogMutationInFlight = useRef(false);
-  const [settings, setSettings] = useState({});
   const [legDayOfWeek, setLegDayOfWeek] = useState('None');
+  const [defaultRestSeconds, setDefaultRestSeconds] = useState('60');
+  const [settingsError, setSettingsError] = useState('');
   
   // New exercise state
   const [newName, setNewName] = useState('');
@@ -127,6 +132,7 @@ export default function Settings({ onClose }) {
   const [newTargetReps, setNewTargetReps] = useState('');
   const [newFloorReps, setNewFloorReps] = useState('');
   const [newWeightStep, setNewWeightStep] = useState('');
+  const [newRestSeconds, setNewRestSeconds] = useState('');
   const [addError, setAddError] = useState('');
   const [addErrorIsValidation, setAddErrorIsValidation] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
@@ -143,6 +149,7 @@ export default function Settings({ onClose }) {
   const [editTargetReps, setEditTargetReps] = useState('');
   const [editFloorReps, setEditFloorReps] = useState('');
   const [editWeightStep, setEditWeightStep] = useState('');
+  const [editRestSeconds, setEditRestSeconds] = useState('');
   const [editError, setEditError] = useState('');
   const [editErrorIsValidation, setEditErrorIsValidation] = useState(false);
   const [isEditSaving, setIsEditSaving] = useState(false);
@@ -159,8 +166,8 @@ export default function Settings({ onClose }) {
         setCatalog(fetchedCatalog);
         
         const currentSettings = await getSettings(user.uid);
-        setSettings(currentSettings);
         setLegDayOfWeek(currentSettings.legDayOfWeek || 'None');
+        setDefaultRestSeconds(String(currentSettings.defaultRestSeconds ?? 60));
       } catch (error) {
         console.error("Failed to load data:", error);
       } finally {
@@ -171,13 +178,21 @@ export default function Settings({ onClose }) {
   }, [user]);
 
   const handleSaveSettings = async (updates) => {
-    const newSettings = { ...settings, ...updates };
     try {
-      await saveSettings(user.uid, newSettings);
-      setSettings(newSettings);
+      await saveSettings(user.uid, updates);
     } catch (error) {
       console.error("Failed to save settings:", error);
     }
+  };
+
+  const handleDefaultRestBlur = () => {
+    const value = Number(defaultRestSeconds);
+    if (!isValidRestSeconds(value)) {
+      setSettingsError('Default rest must be a whole number from 5 through 600 seconds.');
+      return;
+    }
+    setSettingsError('');
+    handleSaveSettings({ defaultRestSeconds: value });
   };
 
   const handleSave = async (newCatalog, changedItem = null) => {
@@ -230,6 +245,7 @@ export default function Settings({ onClose }) {
     setEditTargetReps(ex.targetReps ?? '');
     setEditFloorReps(ex.floorReps ?? '');
     setEditWeightStep(ex.weightStep ?? '');
+    setEditRestSeconds(ex.restSeconds ?? '');
     setEditError('');
     setEditErrorIsValidation(false);
   };
@@ -264,6 +280,7 @@ export default function Settings({ onClose }) {
           sets: Number(editSets),
           linkedTo: (editGroup === 'Legs' && String(editTier) === '3') ? null : (editLink || null),
           trackingMode: editTrackingMode,
+          ...(editRestSeconds === '' ? {} : { restSeconds: Number(editRestSeconds) }),
           ...getTrackingConfig(editTrackingMode, {
             startingWeight: editStartingWeight,
             targetReps: editTargetReps,
@@ -271,6 +288,7 @@ export default function Settings({ onClose }) {
             weightStep: editWeightStep,
           }),
         };
+        if (editRestSeconds === '') delete changedItem.restSeconds;
         return changedItem;
       }
       return ex;
@@ -332,6 +350,7 @@ export default function Settings({ onClose }) {
       sets: Number(newSets),
       linkedTo: newLink || null,
       trackingMode: newTrackingMode,
+      ...(newRestSeconds === '' ? {} : { restSeconds: Number(newRestSeconds) }),
       ...getTrackingConfig(newTrackingMode, {
         startingWeight: newStartingWeight,
         targetReps: newTargetReps,
@@ -361,6 +380,7 @@ export default function Settings({ onClose }) {
       setNewTargetReps('');
       setNewFloorReps('');
       setNewWeightStep('');
+      setNewRestSeconds('');
       setAddError('');
       setAddErrorIsValidation(false);
     } catch (error) {
@@ -392,6 +412,25 @@ export default function Settings({ onClose }) {
       </div>
 
       <div className="setting-group" style={{ padding: '15px' }}>
+        <label>
+          Default rest seconds
+          <input
+            aria-label="Default rest seconds"
+            type="number"
+            min="5"
+            max="600"
+            step="1"
+            value={defaultRestSeconds}
+            onChange={event => setDefaultRestSeconds(event.target.value)}
+            onBlur={handleDefaultRestBlur}
+            aria-invalid={settingsError ? true : undefined}
+            aria-describedby={settingsError ? 'default-rest-error' : undefined}
+          />
+        </label>
+        {settingsError && <div id="default-rest-error" className="catalog-form-error" role="alert">{settingsError}</div>}
+      </div>
+
+      <div className="setting-group" style={{ padding: '15px' }}>
         <label style={{ marginRight: '10px' }}>Leg Day Schedule</label>
         <select value={legDayOfWeek} onChange={(e) => {
           setLegDayOfWeek(e.target.value);
@@ -410,7 +449,7 @@ export default function Settings({ onClose }) {
       
       <div className="add-exercise">
         <h3>Add New Exercise</h3>
-        <form onSubmit={handleAdd} className="add-form">
+        <form onSubmit={handleAdd} className="add-form" noValidate>
           <input 
             aria-label="Exercise name"
             type="text" 
@@ -459,6 +498,20 @@ export default function Settings({ onClose }) {
             title="Sets"
             placeholder="Sets"
           />
+          <label className="tracking-field">
+            <span>Rest override seconds (optional)</span>
+            <input
+              aria-label="Rest override seconds"
+              type="number"
+              min="5"
+              max="600"
+              step="1"
+              value={newRestSeconds}
+              onChange={event => setNewRestSeconds(event.target.value)}
+              aria-invalid={addErrorIsValidation || undefined}
+              aria-describedby={addErrorIsValidation ? 'add-tracking-error' : undefined}
+            />
+          </label>
           <label className="tracking-field tracking-mode-field">
             <span>Tracking mode</span>
             <select
@@ -549,6 +602,20 @@ export default function Settings({ onClose }) {
                     onChange={(e) => setEditSets(e.target.value)} 
                     title="Sets"
                   />
+                  <label className="tracking-field">
+                    <span>Rest override seconds (optional)</span>
+                    <input
+                      aria-label="Edit rest override seconds"
+                      type="number"
+                      min="5"
+                      max="600"
+                      step="1"
+                      value={editRestSeconds}
+                      onChange={event => setEditRestSeconds(event.target.value)}
+                      aria-invalid={editErrorIsValidation || undefined}
+                      aria-describedby={editErrorIsValidation ? `edit-tracking-error-${editingId}` : undefined}
+                    />
+                  </label>
                   <label className="tracking-field tracking-mode-field">
                     <span>Tracking mode</span>
                     <select

@@ -19,6 +19,16 @@ const isNonnegativeInteger = value => Number.isInteger(value) && value >= 0;
 const isPositiveInteger = value => Number.isInteger(value) && value > 0;
 const isValidPlannedRestSeconds = value => Number.isInteger(value) && value >= 5 && value <= 600;
 
+export function normalizeWorkoutSettings(settings) {
+  const source = isObject(settings) ? settings : {};
+  return {
+    ...source,
+    defaultRestSeconds: isValidPlannedRestSeconds(source.defaultRestSeconds)
+      ? source.defaultRestSeconds
+      : 60,
+  };
+}
+
 export function normalizeCatalogExercise(exercise) {
   if (!isObject(exercise) || hasOwn(exercise, 'trackingMode')) return exercise;
   return { ...exercise, trackingMode: 'simple' };
@@ -53,6 +63,7 @@ export function isValidCatalogExercise(exercise) {
     || !Number.isInteger(normalized.sets)
     || normalized.sets < 1
     || normalized.sets > 10
+    || (hasOwn(normalized, 'restSeconds') && !isValidPlannedRestSeconds(normalized.restSeconds))
     || !TRACKING_MODES.includes(normalized.trackingMode)) {
     return false;
   }
