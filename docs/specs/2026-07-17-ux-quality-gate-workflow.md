@@ -105,6 +105,7 @@ UX review is expert heuristic review. It is not human research, accessibility ce
 
 For every applicable evidence area, follow this order: applicability, per-run capability probe, required evidence, outcome, changed-surface routing, evidence obligation, and recommendation. Record these dimensions separately:
 
+- Applicability: `applicable` or `genuinely-not-applicable`.
 - `capability_state`: `supported`, `partial`, or `unsupported`. An unsupported area also records `capability_reason: unsupported-by-harness`, the harness/version/session, eligible alternatives and selection rationale, a bounded safe probe, the limitation, fallback, residual risk, and reactivation trigger.
 - Evidence kind: `rendered-primary`, `rendered-proxy`, `component-test`, or `source-audit`.
 - Outcome: `observed-pass`, `defect`, `inconclusive`, `not-tested`, or `static-risk`.
@@ -115,7 +116,14 @@ A failed, flaky, fragile, or overly complex attempt alone does not establish uns
 
 Any direct changed-surface defect or audit finding blocks regardless of evidence kind. An unrelated finding follows duplicate search and user-approved follow-up routing. Frozen EPIC-8 is the evaluation target, not the TREK-206 implementation surface; product findings are routed durably without changing EPIC-8 or EPIC-11. Re-probe capability on every future required run; do not cache waivers. Improved tooling does not retroactively reopen completed tasks.
 
-Allowed recommendations are `rendered-usability-pass`, `evidence-complete-with-residual-capability-risk`, `needs-changes`, and `blocked`. The coordinator owns the capability matrix and Trekker routing. The UX reviewer validates evidence and recommendation, the code reviewer validates source and proxy evidence, and the spec reviewer validates conformance. No reviewer may promote static or unsupported evidence to a rendered pass or expand product scope.
+Allowed recommendations are:
+
+- `rendered-usability-pass`: every applicable obligation has a rendered-primary pass and no blocking finding.
+- `evidence-complete-with-residual-capability-risk`: every capability-specific obligation is satisfied, at least one applicable portion remains partial or unsupported, and no direct changed-surface defect exists.
+- `needs-changes`: a concrete direct changed-surface defect or source/proxy audit finding exists.
+- `blocked`: prescribed evidence is missing, remains inconclusive without a satisfied prescribed fallback, or a mandatory scenario cannot be completed safely and determinately.
+
+The coordinator owns the capability matrix and Trekker routing. The UX reviewer validates evidence and recommendation, the code reviewer validates source and proxy evidence, and the spec reviewer validates conformance. No reviewer may promote static or unsupported evidence to a rendered pass or expand product scope.
 
 Use these fallbacks when the harness cannot provide primary rendered evidence:
 
