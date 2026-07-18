@@ -1,6 +1,6 @@
 # Project-Native UX Quality Gate
 
-Status: Approved
+Status: Approved, amended 2026-07-17
 
 Date: 2026-07-17
 
@@ -85,7 +85,7 @@ For required work, a fresh `ux-design-reviewer` reviews the artifact before arch
 
 Implementors preserve the approved UX artifact and do not independently redesign the workflow. After implementation and the required simplification pass, the coordinator owns rendered verification using synthetic or de-identified local data and local emulators where applicable.
 
-Evidence must cover the approved scenarios and identify the build, viewport, state, actions, observed result, and any limitation. Missing required browser, authentication, or fixture evidence blocks the task with a resumable `Checkpoint:`. Static inspection cannot produce a usability pass.
+Evidence must cover the approved scenarios and identify the build, viewport, state, actions, observed result, and any limitation. Missing prescribed evidence blocks the task with a resumable `Checkpoint:`. Harness limitations use the capability-aware evidence contract below; static inspection cannot produce a rendered usability pass.
 
 After coordinator-owned rendered verification, fresh UX usability, code, and task-conformance reviews run in parallel. A UX finding that changes approved product behavior, architecture, data, authentication, migration, or scope follows the existing clarification and escalation rules. Any changed final diff receives renewed verification and affected reviews.
 
@@ -100,6 +100,31 @@ After coordinator-owned rendered verification, fresh UX usability, code, and tas
 ### Review boundary
 
 UX review is expert heuristic review. It is not human research, accessibility certification, security review, or authorization to redesign approved behavior.
+
+### Capability-aware evidence contract
+
+For every applicable evidence area, follow this order: applicability, per-run capability probe, required evidence, outcome, changed-surface routing, evidence obligation, and recommendation. Record these dimensions separately:
+
+- `capability_state`: `supported`, `partial`, or `unsupported`. An unsupported area also records `capability_reason: unsupported-by-harness`, the harness/version/session, eligible alternatives and selection rationale, a bounded safe probe, the limitation, fallback, residual risk, and reactivation trigger.
+- Evidence kind: `rendered-primary`, `rendered-proxy`, `component-test`, or `source-audit`.
+- Outcome: `observed-pass`, `defect`, `inconclusive`, `not-tested`, or `static-risk`.
+- Evidence obligation: `satisfied` or `unsatisfied`.
+- Disposition: `blocking`, `nonblocking-residual`, or `not-applicable`.
+
+A failed, flaky, fragile, or overly complex attempt alone does not establish unsupported capability. Use tool documentation plus a bounded safe probe. Partial support requires rendered-primary evidence for the supported portion and the prescribed fallback for the unsupported portion. Unsupported capability requires the fallback and complete limitation metadata. Missing prescribed evidence blocks. Static or proxy evidence may prove a defect but never a rendered usability pass.
+
+Any direct changed-surface defect or audit finding blocks regardless of evidence kind. An unrelated finding follows duplicate search and user-approved follow-up routing. Frozen EPIC-8 is the evaluation target, not the TREK-206 implementation surface; product findings are routed durably without changing EPIC-8 or EPIC-11. Re-probe capability on every future required run; do not cache waivers. Improved tooling does not retroactively reopen completed tasks.
+
+Allowed recommendations are `rendered-usability-pass`, `evidence-complete-with-residual-capability-risk`, `needs-changes`, and `blocked`. The coordinator owns the capability matrix and Trekker routing. The UX reviewer validates evidence and recommendation, the code reviewer validates source and proxy evidence, and the spec reviewer validates conformance. No reviewer may promote static or unsupported evidence to a rendered pass or expand product scope.
+
+Use these fallbacks when the harness cannot provide primary rendered evidence:
+
+- Sequential keyboard: semantic DOM, native roles, `tabIndex`, disabled/hidden state, and focus logic source audit plus focused component tests; record reliable rendered focus-indicator observations separately.
+- Browser zoom: use half the representative CSS width, record requested and actual width, and use the smallest reliable width if clamped. Inspect overflow, clipping, overlap, reachability, and fixed-element occlusion. Label it a reflow proxy, not actual zoom.
+- Notched safe area: when fixed or sticky edge UI or PWA presentation applies, inspect `viewport-fit`, `env(safe-area-*)`, offsets, padding, and overlays, plus rectangular-viewport reachability. Missing accommodation is `source-audit` / `static-risk`.
+- Reduced motion: inventory rendered transitions and animations and inspect CSS/JavaScript preference handling. Missing accommodation is `source-audit` / `static-risk`.
+
+Saved-history reload and active-workout resume remain mandatory rendered scenarios. Use the same emulator processes, app build/server, browser profile/session, synthetic identity, and stable UID throughout. For history, save a workout, observe an identifiable history entry, reload without restarting or clearing authentication, and observe the same entry. For interruption/resume, start a new workout and set timer, reload without restarting, and observe the same identifiable active context or an already-approved user-visible explanation with actionable recovery or exit. Emulator restart, authentication loss, sign-in fallback, silent reset, or ambiguity does not satisfy these scenarios.
 
 ## Verification Matrix
 
@@ -172,7 +197,9 @@ git diff --check
 - Run fresh UX design and rendered-usability reviews at applicable widths and states.
 - Produce `docs/reports/2026-07-17-ux-quality-gate-epic-8-retrospective.md` and non-sensitive evidence.
 - Record known issues caught, false positives, false negatives, retrospective bias, and evidence cost.
-- If required rendered evidence cannot run safely, leave the task blocked with a resumable `Checkpoint:` and prevent Tasks 4–6 from starting.
+- Apply the capability-aware evidence contract to sequential keyboard, browser zoom, notched safe area, and reduced motion. Unsupported capability is nonblocking only when its prescribed fallback and metadata satisfy the evidence obligation.
+- Run saved-history reload and active-workout resume in one uninterrupted emulator, build/server, browser, authentication, and synthetic-identity lifecycle.
+- If prescribed evidence is missing, or either uninterrupted rendered scenario is ambiguous or loses authentication, leave the task blocked with a resumable `Checkpoint:` and prevent Tasks 4–6 from starting.
 - Stop only tracked processes and remove only the validated temporary worktree or junction.
 
 Pilot coverage includes the proportional items in the verification matrix, with particular attention to long/dense, error, offline, interruption/resume, concurrent, keyboard/focus, zoom/reflow, safe-area, reduced-motion, touch-target, and feedback-retirement states.
@@ -183,6 +210,7 @@ Pilot coverage includes the proportional items in the verification matrix, with 
 - Update discovery, feature planning, feature-planner, architecture-reviewer, and senior-reviewer contracts.
 - Update planning/design sections of `AGENTS.md` and the main-coordinator contract.
 - Preserve architecture authority and user approval boundaries.
+- Create the canonical `docs/templates/ux-evidence-matrix.md` taxonomy and integrate only planning/core workflow sections in this task. Begin validator changes with a failing RED assertion.
 - Extend the validator RED/GREEN for classification, UX artifacts, review ordering, and escalation.
 - Run mandatory simplification and fresh code and task-conformance reviews.
 
@@ -201,6 +229,7 @@ git diff --check
 - Update synchronized implementor, simplifier, code-reviewer, and spec-reviewer Markdown/TOML pairs.
 - Require implementors to preserve approved UX artifacts rather than redesign.
 - Require coordinator-owned rendered evidence and parallel UX, code, and task-conformance reviews.
+- Integrate the canonical capability-aware taxonomy into execution and reviewer contracts only, and begin validator changes with a failing RED assertion.
 - Preserve existing clarification, escalation, simplification, and re-review rules.
 - Extend the validator RED/GREEN with execution-contract assertions, then simplify and review.
 
