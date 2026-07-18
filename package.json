@@ -14,7 +14,9 @@
     "ci:check": "npm run ci:test && npm run ci:lint && npm run ci:build && npm run ci:rules",
     "preview": "vite preview",
     "test": "vitest",
-    "emulators": "firebase emulators:start --project demo-project"
+    "emulators": "node scripts/emulator/run-emulators.mjs",
+    "emulators:scratch": "node scripts/emulator/run-emulators.mjs --scratch",
+    "test:emulator-baseline": "node scripts/emulator/run-integration-tests.mjs"
   },
   "dependencies": {
     "firebase": "^12.15.0",
@@ -27,6 +29,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
+    "firebase-admin": "^14.2.0",
     "firebase-tools": "^15.22.4",
     "jsdom": "^29.1.1",
     "oxlint": "^1.71.0",
