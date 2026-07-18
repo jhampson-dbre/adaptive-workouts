@@ -18,7 +18,8 @@ export default function Generator({
   setTimeBudget, 
   unrecoveredGroups, 
   setUnrecoveredGroups, 
-  onGenerate 
+  onGenerate,
+  headingRef,
 }) {
   const user = useContext(AuthContext);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -106,7 +107,7 @@ export default function Generator({
 
   return (
     <div className="generator">
-      <h2>Generate Workout</h2>
+      <h2 ref={headingRef} tabIndex="-1">Generate Workout</h2>
       
       {error && <div className="error-message">{error}</div>}
       {canRetryHistory && (

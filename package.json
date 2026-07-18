@@ -16,7 +16,9 @@
     "test": "vitest",
     "emulators": "node scripts/emulator/run-emulators.mjs",
     "emulators:scratch": "node scripts/emulator/run-emulators.mjs --scratch",
-    "test:emulator-baseline": "node scripts/emulator/run-integration-tests.mjs"
+    "test:emulator-baseline": "node scripts/emulator/run-integration-tests.mjs",
+    "dev:baseline": "node scripts/emulator/run-baseline-dev.mjs",
+    "verify:baseline-production": "node scripts/emulator/verify-baseline-production.mjs"
   },
   "dependencies": {
     "firebase": "^12.15.0",
