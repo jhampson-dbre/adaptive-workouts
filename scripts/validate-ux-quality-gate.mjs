@@ -18,6 +18,15 @@ export const requiredPaths = [
   'docs/agents/senior-developer-reviewer.md',
   '.codex/agents/senior-developer-reviewer.toml',
   'docs/agents/main-coordinator.md',
+  'docs/agent-workflow.md',
+  'docs/agents/implementor.md',
+  '.codex/agents/implementor.toml',
+  'docs/agents/code-simplifier.md',
+  '.codex/agents/code-simplifier.toml',
+  'docs/agents/code-reviewer.md',
+  '.codex/agents/code-reviewer.toml',
+  'docs/agents/spec-reviewer.md',
+  '.codex/agents/spec-reviewer.toml',
   'AGENTS.md',
   'docs/agents/ux-design-reviewer.md',
   '.codex/agents/ux-design-reviewer.toml',
@@ -70,6 +79,8 @@ export function validate(root = repositoryRoot) {
     'fresh ux-design-reviewer before architecture-design-reviewer',
     'after implementation and the required simplification pass',
     'coordinator-owned rendered verification',
+    'docs/templates/ux-evidence-matrix.md',
+    'requires a resumable `checkpoint:`',
     'ux-usability-reviewer, code reviewer, and task-conformance reviewer run in parallel',
     'must not invoke agents, skills, browsers, llms, or external network tooling',
   ]) assertIncludes(skill, '.codex/skills/ux-quality-gate/SKILL.md', phrase)
@@ -198,6 +209,91 @@ export function validate(root = repositoryRoot) {
       const contents = readContract(root, path)
       for (const phrase of concepts) assertIncludes(contents, path, phrase)
     }
+  }
+
+  const executionContracts = {
+    'AGENTS.md': [
+      'per-run bounded capability probes',
+      'missing prescribed rendered evidence blocks',
+      'requires a resumable `checkpoint:`',
+      'direct changed-surface usability finding blocks',
+      'unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation',
+    ],
+    'docs/agent-workflow.md': [
+      'per-run bounded capability probes',
+      'canonical matrix',
+      'docs/templates/ux-evidence-matrix.md',
+      'missing prescribed rendered evidence blocks',
+      'requires a resumable `checkpoint:`',
+      'direct changed-surface usability finding blocks',
+      'unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation',
+    ],
+    'docs/agents/main-coordinator.md': [
+      'handoff includes ux classification, approved artifact, scenarios, and capability obligations',
+      'per-run bounded capability probes',
+      'canonical matrix',
+      'docs/templates/ux-evidence-matrix.md',
+      'missing prescribed rendered evidence blocks',
+      'requires a resumable `checkpoint:`',
+    ],
+    'docs/agents/implementor.md': [
+      'the implementor preserves the approved ux artifact',
+      'cannot redesign or expand approved ux scope',
+      'handoff includes ux classification, approved artifact, scenarios, and capability obligations',
+    ],
+    '.codex/agents/implementor.toml': [
+      'the implementor preserves the approved ux artifact',
+      'cannot redesign or expand approved ux scope',
+      'handoff includes ux classification, approved artifact, scenarios, and capability obligations',
+    ],
+    'docs/agents/code-simplifier.md': [
+      'preserve the approved ux artifact',
+      'cannot redesign or expand approved ux scope',
+    ],
+    '.codex/agents/code-simplifier.toml': [
+      'preserve the approved ux artifact',
+      'cannot redesign or expand approved ux scope',
+    ],
+    'docs/agents/code-reviewer.md': [
+      'direct changed-surface usability finding blocks',
+      'unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation',
+      'cannot grant product, architecture, or trekker authority',
+      'cannot redesign or expand approved ux scope',
+    ],
+    '.codex/agents/code-reviewer.toml': [
+      'direct changed-surface usability finding blocks',
+      'unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation',
+      'cannot grant product, architecture, or trekker authority',
+      'cannot redesign or expand approved ux scope',
+    ],
+    'docs/agents/spec-reviewer.md': [
+      'direct changed-surface usability finding blocks',
+      'unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation',
+      'cannot grant product, architecture, or trekker authority',
+      'cannot redesign or expand approved ux scope',
+    ],
+    '.codex/agents/spec-reviewer.toml': [
+      'direct changed-surface usability finding blocks',
+      'unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation',
+      'cannot grant product, architecture, or trekker authority',
+      'cannot redesign or expand approved ux scope',
+    ],
+    'docs/agents/ux-usability-reviewer.md': [
+      'direct changed-surface usability finding blocks',
+      'unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation',
+      'cannot grant product, architecture, or trekker authority',
+      'cannot redesign or expand approved ux scope',
+    ],
+    '.codex/agents/ux-usability-reviewer.toml': [
+      'direct changed-surface usability finding blocks',
+      'unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation',
+      'cannot grant product, architecture, or trekker authority',
+      'cannot redesign or expand approved ux scope',
+    ],
+  }
+  for (const [path, concepts] of Object.entries(executionContracts)) {
+    const contents = readContract(root, path)
+    for (const phrase of concepts) assertIncludes(contents, path, phrase)
   }
 
   const registration = readContract(root, '.codex/skills/ux-quality-gate/agents/openai.yaml')

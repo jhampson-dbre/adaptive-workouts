@@ -40,6 +40,63 @@ test('rejects deterministic model-policy drift', () => {
   })
 })
 
+test('rejects execution-contract drift', () => {
+  assert.ok(
+    requiredPaths.includes('docs/agents/implementor.md'),
+    'execution contracts must be copied into validator fixtures',
+  )
+
+  withFixture((fixtureRoot) => {
+    const implementorPath = resolve(fixtureRoot, 'docs/agents/implementor.md')
+    writeFileSync(
+      implementorPath,
+      readFileSync(implementorPath, 'utf8').replace(
+        'the implementor preserves the approved UX artifact',
+        'the implementor may redesign the approved UX artifact',
+      ),
+    )
+
+    assert.throws(
+      () => validate(fixtureRoot),
+      /docs\/agents\/implementor\.md must include contract phrase: the implementor preserves the approved ux artifact/,
+    )
+  })
+})
+
+test('rejects UX usability reviewer synchronization drift', () => {
+  withFixture((fixtureRoot) => {
+    const reviewerPath = resolve(fixtureRoot, '.codex/agents/ux-usability-reviewer.toml')
+    writeFileSync(
+      reviewerPath,
+      readFileSync(reviewerPath, 'utf8').replace(
+        'it cannot redesign or expand approved UX scope',
+        'it may redesign the approved UX scope',
+      ),
+    )
+
+    assert.throws(
+      () => validate(fixtureRoot),
+      /\.codex\/agents\/ux-usability-reviewer\.toml must include contract phrase: cannot redesign or expand approved ux scope/,
+    )
+  })
+})
+
+test('rejects execution review-order drift', () => {
+  withFixture((fixtureRoot) => {
+    const skillPath = resolve(fixtureRoot, '.codex/skills/ux-quality-gate/SKILL.md')
+    const sections = readFileSync(skillPath, 'utf8').split('\n\n')
+    const implementationIndex = sections.findIndex((section) => section.startsWith('After implementation'))
+    const reviewIndex = sections.findIndex((section) => section.startsWith('After rendered verification'))
+    ;[sections[implementationIndex], sections[reviewIndex]] = [sections[reviewIndex], sections[implementationIndex]]
+    writeFileSync(skillPath, sections.join('\n\n'))
+
+    assert.throws(
+      () => validate(fixtureRoot),
+      /\.codex\/skills\/ux-quality-gate\/SKILL\.md must keep contract concepts in order:/,
+    )
+  })
+})
+
 test('rejects ordering drift', () => {
   withFixture((fixtureRoot) => {
     const skillPath = resolve(fixtureRoot, '.codex/skills/ux-quality-gate/SKILL.md')

@@ -51,6 +51,11 @@ allowed after substantive review-driven fixes only when those fixes materially
 reshape or reintroduce complexity. There is at most one post-review rerun per task;
 simplifier edits and re-verification requests never trigger another pass.
 
+For UI work classified `required`, preserve the approved UX artifact. You cannot
+redesign or expand approved UX scope. Treat approved scenarios, states, recovery,
+and interaction behavior as observable behavior under the exact-preservation
+contract; report a scope concern to the coordinator rather than simplifying it away.
+
 ## Hard Constraints
 
 - Never update Trekker, expand task scope, push, merge, deploy, or change PR state.

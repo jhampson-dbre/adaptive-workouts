@@ -19,9 +19,22 @@ evidence.
 
 For required work, dispatch a fresh ux-design-reviewer before architecture-design-reviewer. The UX design reviewer assesses the approved UX artifact; architecture review retains authority for system boundaries, data, security, and feasibility. Material architecture changes that alter the UX contract return through UX design review before user approval.
 
-After implementation and the required simplification pass, the coordinator performs coordinator-owned rendered verification using synthetic or de-identified local data. Record the build, viewport, state, actions, observed result, and limitation for each approved scenario. Static inspection cannot produce a usability pass.
+After implementation and the required simplification pass, the coordinator performs
+per-run bounded capability probes and coordinator-owned rendered verification using
+synthetic or de-identified local data. Record the canonical matrix build, viewport,
+state, actions, observed result, and limitation for each approved scenario. Missing
+prescribed rendered evidence blocks task completion and requires a resumable
+`Checkpoint:`. Static inspection cannot produce a usability pass. Static or proxy
+evidence may prove a defect but cannot produce a rendered
+usability pass. Use `docs/templates/ux-evidence-matrix.md` as the canonical matrix.
 
-After rendered verification, the fresh ux-usability-reviewer, code reviewer, and task-conformance reviewer run in parallel. UX review is heuristic review, not human research, accessibility certification, security review, or authorization to redesign approved behavior.
+After rendered verification, the fresh ux-usability-reviewer, code reviewer, and
+task-conformance reviewer run in parallel. A direct changed-surface usability finding
+blocks. Unsupported-by-harness is nonblocking only with complete metadata, fallback,
+and evidence obligation. UX review is heuristic review, not human research,
+accessibility certification, security review, or authorization to redesign approved
+behavior; reviewers cannot grant product, architecture, or Trekker authority.
+They cannot redesign or expand approved UX scope.
 
 ## CI Boundary
 
