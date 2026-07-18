@@ -196,6 +196,28 @@ export async function terminateProcessTree(child, {
   throw new Error(`Failed to terminate process tree PID ${child.pid} on ${platform} after graceful and forced attempts.${details}`);
 }
 
+// A detached Firebase CLI process can exit before its Java emulator descendant
+// after non-forced taskkill. Force the complete owned tree after export instead.
+export async function terminateEmulatorProcessTree(child, {
+  graceMs = DEFAULT_STOP_GRACE_MS,
+  platform = process.platform,
+  taskkill = runTaskkill,
+  waitForExit: wait = waitForExit,
+} = {}) {
+  if (platform !== 'win32') {
+    return terminateProcessTree(child, { graceMs, platform, taskkill, waitForExit: wait });
+  }
+  if (!child?.pid || child.exitCode !== null || child.signalCode !== null) return;
+
+  const firstResult = taskkill(child.pid, true);
+  if (await wait(child, graceMs)) return;
+  const secondResult = taskkill(child.pid, true);
+  if (await wait(child, graceMs)) return;
+  throw new Error(
+    `Failed to force terminate emulator process tree PID ${child.pid} on win32. ${describeTerminationResult('first forced taskkill', firstResult)}; ${describeTerminationResult('second forced taskkill', secondResult)}.`,
+  );
+}
+
 export function spawnOwnedProcess(command, args, options = {}, {
   platform = process.platform,
   spawnProcess = spawn,
@@ -204,6 +226,20 @@ export function spawnOwnedProcess(command, args, options = {}, {
     ...options,
     shell: false,
     detached: platform !== 'win32',
+    windowsHide: true,
+  });
+}
+
+// The emulator stack must not share the wrapper's Windows console: a Ctrl+C is
+// the wrapper's shutdown signal and needs the running emulators to remain alive
+// long enough for `emulators:export` to complete.
+export function spawnEmulatorProcess(command, args, options = {}, {
+  spawnProcess = spawn,
+} = {}) {
+  return spawnProcess(command, args, {
+    ...options,
+    shell: false,
+    detached: true,
     windowsHide: true,
   });
 }
@@ -373,15 +409,12 @@ export async function startEmulatorStack({
     scratchDirectory: absoluteScratch,
     scratchExists,
   });
-  const child = spawn(process.execPath, args, {
+  const child = spawnEmulatorProcess(process.execPath, args, {
     cwd: process.cwd(),
     env,
-    shell: false,
     stdio,
-    detached: process.platform !== 'win32',
-    windowsHide: true,
   });
-  const supervisor = createProcessSupervisor({ onFailure });
+  const supervisor = createProcessSupervisor({ onFailure, terminateTree: terminateEmulatorProcessTree });
   supervisor.watch('Firebase emulators', child);
 
   const auth = services.find(service => service.name === 'Auth');

@@ -9,7 +9,9 @@ import {
   buildEmulatorArgs,
   createProcessSupervisor,
   preflightPorts,
+  spawnEmulatorProcess,
   spawnOwnedProcess,
+  terminateEmulatorProcessTree,
   terminateProcessTree,
   validateScratchExport,
   waitForOwnedChild,
@@ -142,6 +144,19 @@ describe('emulator lifecycle', () => {
     })).rejects.toThrow(/taskkill spawn denied.*status 5/i);
   });
 
+  it('forces detached Windows emulator tree cleanup before accepting root exit', async () => {
+    const child = fakeChild(510020);
+    const taskkill = vi.fn(() => ({ status: 0, signal: null }));
+
+    await expect(terminateEmulatorProcessTree(child, {
+      platform: 'win32',
+      taskkill,
+      waitForExit: async () => true,
+    })).resolves.toBeUndefined();
+
+    expect(taskkill).toHaveBeenCalledExactlyOnceWith(510020, true);
+  });
+
   it('accepts a raced child exit even when graceful taskkill reports nonzero', async () => {
     const child = fakeChild(510003);
     const taskkill = vi.fn(() => ({ status: 128, signal: null }));
@@ -194,6 +209,17 @@ describe('emulator lifecycle', () => {
     });
     expect(spawnProcess).toHaveBeenLastCalledWith('node', ['test.js'], expect.objectContaining({
       detached: false,
+      shell: false,
+    }));
+  });
+
+  it('isolates the long-running emulator stack from Windows Ctrl+C broadcasts', () => {
+    const child = fakeChild(510006);
+    const spawnProcess = vi.fn(() => child);
+
+    expect(spawnEmulatorProcess('node', ['firebase.js', 'emulators:start'], { stdio: 'inherit' }, { spawnProcess })).toBe(child);
+    expect(spawnProcess).toHaveBeenCalledWith('node', ['firebase.js', 'emulators:start'], expect.objectContaining({
+      detached: true,
       shell: false,
     }));
   });

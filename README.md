@@ -16,6 +16,10 @@ Start the dev server:
 npm run dev
 ```
 
+For deterministic Firebase emulator profiles, popup-free baseline mode, dynamic
+history scenarios, and recovery guidance, see
+[docs/emulator-baseline.md](docs/emulator-baseline.md).
+
 ## Quality Gates
 
 Pull requests and pushes to `main` run two GitHub Actions jobs:
