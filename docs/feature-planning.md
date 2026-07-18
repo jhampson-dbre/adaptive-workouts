@@ -134,6 +134,17 @@ blocking open question rather than deferring the decision to implementation.
 
 ## Phase 4. Architecture / Design Review
 
+Before architecture review, classify UI work as `required`, `optional`, or
+`skip-recorded` and record the decision with a durable rationale for optional and
+skip-recorded work. Required work needs a proportional scenario-indexed UX artifact
+using `docs/templates/ux-evidence-matrix.md` and a fresh ux-design-reviewer before
+architecture-design-reviewer. Architecture retains authority for system boundaries,
+data, security, and feasibility; the UX reviewer validates the user-flow contract and
+does not authorize product, Trekker, or architecture changes. If material architecture
+changes alter the approved UX contract, return through UX design review before user
+approval. Later evidence must re-probe capability on each future required run; do not
+cache waivers.
+
 Before telling the user the design is ready for approval, run the `architecture-design-reviewer` for all new feature epics. If the `feature-planner-advisor` is drafting the spec and can dispatch nested subagents, it should request this review itself; otherwise it must return a handoff packet for the main coordinator to dispatch. For very small, low-risk feature tweaks, the main agent may perform the same checklist inline, but must say why a subagent review was skipped.
 
 Give the reviewer:
@@ -360,11 +371,34 @@ trekker task update TREK-ID -s in_progress
 
 Then use the normal TDD/subagent workflow in `docs/agent-workflow.md`.
 
+## Planning UX Quality Gate
+
+During discovery, classify UI work as `required`, `optional`, or `skip-recorded` and
+preserve that decision in the Discovery Brief and durable plan. Optional and
+skip-recorded decisions require a rationale. Required work must attach a proportional,
+scenario-indexed UX artifact based on `docs/templates/ux-evidence-matrix.md` before
+formal design review. The artifact records the screen's job, action hierarchy and
+placement, compact wireframe, meaningful states, recovery, and feedback lifecycle;
+its evidence records are completed proportionally during execution.
+
+For required work, dispatch a fresh ux-design-reviewer before architecture-design-reviewer.
+Architecture retains authority for system boundaries, data, security, and feasibility;
+UX review validates the user-flow contract and does not grant product or Trekker
+authority. A material architecture change that alters the approved UX contract returns
+through UX design review before user approval. Every future required evidence run must
+re-probe capability; do not cache waivers. The planning
+artifact records capability fields separately so later evidence can distinguish
+applicability, per-run probe, `capability_state`, unsupported metadata, evidence kind,
+outcome, evidence obligation, disposition, changed-surface routing, and allowed
+recommendation.
+
 ## Planning Completion Checklist
 
 Across the approval, record-creation, and Task 1 completion stages, confirm:
 
 - `$feature-discovery` was completed and its Discovery Brief was user-approved before formal planning, or the explicit opt-out/small-mechanical exception and rationale were recorded
+- UI work was classified as `required`, `optional`, or `skip-recorded`; optional and skip-recorded decisions have durable rationale
+- required UI work has the proportional scenario-indexed artifact and a fresh UX design review before architecture review
 - duplicate search was done
 - user approved the design spec
 - architecture/design review was run, or skipped with a reason for tiny low-risk work

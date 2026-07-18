@@ -56,6 +56,22 @@ test('rejects ordering drift', () => {
   })
 })
 
+test('rejects canonical matrix ordering drift', () => {
+  withFixture((fixtureRoot) => {
+    const matrixPath = resolve(fixtureRoot, 'docs/templates/ux-evidence-matrix.md')
+    const outcomeRow = '| Outcome | `observed-pass` / `defect` / `inconclusive` / `not-tested` / `static-risk` |'
+    const routingRow = '| Changed-surface routing | Direct changed-surface defect blocks; unrelated finding uses duplicate search and approved follow-up routing |'
+    const matrix = readFileSync(matrixPath, 'utf8')
+    assert.ok(matrix.includes(`${outcomeRow}\n${routingRow}`), 'fixture must contain adjacent canonical rows')
+    writeFileSync(matrixPath, matrix.replace(`${outcomeRow}\n${routingRow}`, `${routingRow}\n${outcomeRow}`))
+
+    assert.throws(
+      () => validate(fixtureRoot),
+      /docs\/templates\/ux-evidence-matrix\.md must keep contract concepts in order: \| changed-surface routing \|/,
+    )
+  })
+})
+
 test('rejects missing workflow wiring', () => {
   withFixture((fixtureRoot) => {
     const workflowPath = resolve(fixtureRoot, '.github/workflows/ci.yml')

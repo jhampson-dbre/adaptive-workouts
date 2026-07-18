@@ -26,6 +26,16 @@ Use GPT-5.6 with high reasoning for cross-component feature design, storage/auth
 
 ## Review Focus
 
+### UX Quality Gate handoff
+
+Check that discovery classified UI work as `required`, `optional`, or
+`skip-recorded`, with a durable rationale for optional or skip-recorded work. Required
+work must arrive after a fresh ux-design-reviewer before architecture-design-reviewer
+and include the proportional scenario-indexed artifact. Architecture retains authority
+for system boundaries, data, security, and feasibility. If a material architecture
+change alters the approved UX contract, return it through UX design review before user
+approval; do not silently rewrite the UX contract.
+
 - Does the design solve the stated user problem?
 - Are goals, non-goals, and acceptance criteria explicit?
 - Are data model, storage, auth, migration, deployment, and PWA implications covered when relevant?

@@ -8,6 +8,17 @@ const repositoryRoot = resolve(import.meta.dirname, '..')
 export const requiredPaths = [
   '.codex/skills/ux-quality-gate/SKILL.md',
   '.codex/skills/ux-quality-gate/agents/openai.yaml',
+  '.codex/skills/feature-discovery/SKILL.md',
+  'docs/templates/ux-evidence-matrix.md',
+  'docs/feature-planning.md',
+  'docs/agents/feature-planner.md',
+  '.codex/agents/feature-planner-advisor.toml',
+  'docs/agents/architecture-design-reviewer.md',
+  '.codex/agents/architecture-design-reviewer.toml',
+  'docs/agents/senior-developer-reviewer.md',
+  '.codex/agents/senior-developer-reviewer.toml',
+  'docs/agents/main-coordinator.md',
+  'AGENTS.md',
   'docs/agents/ux-design-reviewer.md',
   '.codex/agents/ux-design-reviewer.toml',
   'docs/agents/ux-usability-reviewer.md',
@@ -16,7 +27,7 @@ export const requiredPaths = [
   '.github/workflows/ci.yml',
 ]
 
-const normalize = (value) => value.replace(/\s+/g, ' ').trim().toLowerCase()
+const normalize = (value) => value.replace(/`/g, '').replace(/\s+/g, ' ').trim().toLowerCase()
 
 function readContract(root, path) {
   const absolutePath = resolve(root, path)
@@ -68,6 +79,126 @@ export function validate(root = repositoryRoot) {
     'after implementation and the required simplification pass',
     'after rendered verification, the fresh ux-usability-reviewer, code reviewer, and task-conformance reviewer run in parallel',
   ])
+
+  const matrix = readContract(root, 'docs/templates/ux-evidence-matrix.md')
+  for (const phrase of [
+    'scenario-indexed ux evidence matrix',
+    'required, optional, or skip-recorded',
+    'applicability',
+    'per-run capability probe',
+    'capability_state',
+    'capability_reason: unsupported-by-harness',
+    'evidence kind',
+    'outcome',
+    'evidence obligation',
+    'disposition',
+    'changed-surface routing',
+    'allowed recommendation',
+    'build / commit',
+    'fixture / data revision',
+    'requested and actual viewport',
+    'starting state',
+    'action',
+    'observed result',
+    'representative synthetic or de-identified screenshots',
+    'text-only rationale',
+    'never require sensitive, personal, or production evidence',
+  ]) assertIncludes(matrix, 'docs/templates/ux-evidence-matrix.md', phrase)
+  const scenarioMatrix = matrix.slice(matrix.indexOf('## per-scenario record'))
+  assertOrdered(scenarioMatrix, 'docs/templates/ux-evidence-matrix.md', [
+    '| applicability |',
+    '| per-run capability probe |',
+    '| evidence kind |',
+    '| outcome |',
+    '| changed-surface routing |',
+    '| evidence obligation |',
+    '| disposition |',
+    '| allowed recommendation |',
+  ])
+
+  const planningContracts = {
+    '.codex/skills/feature-discovery/SKILL.md': [
+      'required, optional, or skip-recorded',
+      'docs/templates/ux-evidence-matrix.md',
+    ],
+    'docs/feature-planning.md': [
+      'required, optional, or skip-recorded',
+      'fresh ux-design-reviewer before architecture-design-reviewer',
+      'through ux design review before user approval',
+      'architecture retains authority',
+      're-probe capability',
+      'do not cache waivers',
+    ],
+    'docs/agents/feature-planner.md': [
+      'required, optional, or skip-recorded',
+      'fresh ux-design-reviewer before architecture-design-reviewer',
+      'through ux design review before user approval',
+    ],
+    '.codex/agents/feature-planner-advisor.toml': [
+      'required, optional, or skip-recorded',
+      'fresh ux-design-reviewer before architecture-design-reviewer',
+      'through ux design review before user approval',
+    ],
+    'docs/agents/architecture-design-reviewer.md': [
+      'required, optional, or skip-recorded',
+      'architecture retains authority',
+      'through ux design review before user approval',
+    ],
+    '.codex/agents/architecture-design-reviewer.toml': [
+      'required, optional, or skip-recorded',
+      'architecture retains authority',
+      'through ux design review before user approval',
+    ],
+    'docs/agents/senior-developer-reviewer.md': [
+      'required, optional, or skip-recorded',
+      'docs/templates/ux-evidence-matrix.md',
+    ],
+    '.codex/agents/senior-developer-reviewer.toml': [
+      'required, optional, or skip-recorded',
+      'docs/templates/ux-evidence-matrix.md',
+    ],
+    'docs/agents/main-coordinator.md': [
+      'required, optional, or skip-recorded',
+      'fresh ux-design-reviewer before architecture-design-reviewer',
+      're-probe capability',
+      'do not cache waivers',
+    ],
+    'AGENTS.md': [
+      'required, optional, or skip-recorded',
+      'fresh ux-design-reviewer before architecture-design-reviewer',
+      'material architecture changes that alter the approved ux contract return through ux design review before user approval',
+      'architecture retains authority',
+    ],
+  }
+  for (const [path, concepts] of Object.entries(planningContracts)) {
+    const contents = readContract(root, path)
+    for (const phrase of concepts) assertIncludes(contents, path, phrase)
+  }
+  assertOrdered(readContract(root, 'docs/feature-planning.md'), 'docs/feature-planning.md', [
+    'fresh ux-design-reviewer before architecture-design-reviewer',
+    'before telling the user the design is ready for approval, run the architecture-design-reviewer',
+  ])
+
+  const synchronizedPlanningRolePairs = [
+    {
+      paths: ['docs/agents/feature-planner.md', '.codex/agents/feature-planner-advisor.toml'],
+      concepts: ['required, optional, or skip-recorded', 'fresh ux-design-reviewer before architecture-design-reviewer', 'through ux design review before user approval'],
+    },
+    {
+      paths: ['docs/agents/architecture-design-reviewer.md', '.codex/agents/architecture-design-reviewer.toml'],
+      concepts: ['required, optional, or skip-recorded', 'architecture retains authority', 'through ux design review before user approval'],
+    },
+    {
+      paths: ['docs/agents/senior-developer-reviewer.md', '.codex/agents/senior-developer-reviewer.toml'],
+      concepts: ['required, optional, or skip-recorded', 'docs/templates/ux-evidence-matrix.md'],
+    },
+  ]
+  for (const { paths, concepts } of synchronizedPlanningRolePairs) {
+    for (const path of paths) {
+      const contents = readContract(root, path)
+      for (const phrase of concepts) assertIncludes(contents, path, phrase)
+    }
+  }
 
   const registration = readContract(root, '.codex/skills/ux-quality-gate/agents/openai.yaml')
   assertIncludes(registration, '.codex/skills/ux-quality-gate/agents/openai.yaml', 'display_name: "ux quality gate"')
