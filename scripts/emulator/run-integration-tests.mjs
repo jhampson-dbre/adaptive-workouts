@@ -6,6 +6,8 @@ import { pathToFileURL } from 'node:url';
 import { BASELINE_USER_ID } from './fixtures/baseline.mjs';
 import { spawnOwnedProcess, startEmulatorStack, waitForOwnedChild } from './lifecycle.mjs';
 import { withAdminEmulators } from './seed-baseline.mjs';
+import { replaceScenarioHistory } from './scenarios/load.mjs';
+import { buildScenario, scenarioDefinitions } from './scenarios/index.mjs';
 
 const configPath = path.resolve('firebase.emulator-test.json');
 const projectId = 'demo-project';
@@ -41,6 +43,33 @@ const verifyScratchLifecycle = async scratchDirectory => {
   try {
     stack = await startEmulatorStack({ configPath, profile: 'scratch', scratchDirectory });
     if (stack.importedScratch) throw new Error('Missing scratch directory was unexpectedly imported');
+    for (const name of Object.keys(scenarioDefinitions)) {
+      const expected = buildScenario(name, '2026-07-18');
+      await replaceScenarioHistory({ name, referenceDate: '2026-07-18', hosts: stack.hosts, profile: 'scratch' });
+      await replaceScenarioHistory({ name, referenceDate: '2026-07-18', hosts: stack.hosts, profile: 'scratch' });
+      await withAdminEmulators({ projectId, hosts: stack.hosts }, async ({ firestore }) => {
+        const history = await firestore.collection(`users/${BASELINE_USER_ID}/history`).get();
+        const actualIds = history.docs.map(document => document.id).sort();
+        const expectedIds = expected.documents.map(document => document.id).sort();
+        if (JSON.stringify(actualIds) !== JSON.stringify(expectedIds)) throw new Error(`Scenario ${name} was not loaded idempotently`);
+      });
+    }
+    await replaceScenarioHistory({ name: 'weighted-progression', referenceDate: '2026-07-18', hosts: stack.hosts, profile: 'scratch' });
+    await withAdminEmulators({ projectId, hosts: stack.hosts }, async ({ firestore }) => {
+      const [user, history, catalog] = await Promise.all([
+        firestore.doc(`users/${BASELINE_USER_ID}`).get(),
+        firestore.collection(`users/${BASELINE_USER_ID}/history`).get(),
+        firestore.collection(`users/${BASELINE_USER_ID}/catalog`).get(),
+      ]);
+      if (history.size !== 3 || catalog.size !== 15 || user.data()?.warmupTime !== 10) throw new Error('Scenario loader did not atomically replace history while preserving settings and catalog');
+    });
+    await replaceScenarioHistory({
+      name: 'weighted-progression', referenceDate: '2026-07-19', hosts: stack.hosts, profile: 'scratch',
+    });
+    await withAdminEmulators({ projectId, hosts: stack.hosts }, async ({ firestore }) => {
+      const shifted = await firestore.doc(`users/${BASELINE_USER_ID}/history/scenario-weighted-increase`).get();
+      if (shifted.data()?.date !== new Date(2026, 6, 9, 12).toISOString()) throw new Error('Scenario reference-date shift was not idempotent');
+    });
     await withAdminEmulators({ projectId, hosts: stack.hosts }, async ({ firestore }) => {
       await firestore.doc(`users/${BASELINE_USER_ID}/history/scratch-persistence-probe`).set({ persisted: true });
     });
