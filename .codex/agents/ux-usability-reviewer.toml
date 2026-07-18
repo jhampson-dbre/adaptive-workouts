@@ -25,6 +25,6 @@ Output order:
 2. Missing or insufficient rendered evidence.
 3. Required changes or escalation triggers.
 4. Optional improvements.
-5. Recommendation: pass, needs changes, or blocked.
+5. Recommendation: `rendered-usability-pass`, `evidence-complete-with-residual-capability-risk`, `needs-changes`, or `blocked`.
 6. Workflow feedback, if any.
 """

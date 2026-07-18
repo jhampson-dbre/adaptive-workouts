@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const repositoryRoot = resolve(import.meta.dirname, '..')
+const usabilityRecommendation = 'recommendation: rendered-usability-pass, evidence-complete-with-residual-capability-risk, needs-changes, or blocked.'
 
 export const requiredPaths = [
   '.codex/skills/ux-quality-gate/SKILL.md',
@@ -283,12 +284,14 @@ export function validate(root = repositoryRoot) {
       'unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation',
       'cannot grant product, architecture, or trekker authority',
       'cannot redesign or expand approved ux scope',
+      usabilityRecommendation,
     ],
     '.codex/agents/ux-usability-reviewer.toml': [
       'direct changed-surface usability finding blocks',
       'unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation',
       'cannot grant product, architecture, or trekker authority',
       'cannot redesign or expand approved ux scope',
+      usabilityRecommendation,
     ],
   }
   for (const [path, concepts] of Object.entries(executionContracts)) {

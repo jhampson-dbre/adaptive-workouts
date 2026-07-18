@@ -81,6 +81,24 @@ test('rejects UX usability reviewer synchronization drift', () => {
   })
 })
 
+test('rejects canonical UX usability recommendation taxonomy drift', () => {
+  withFixture((fixtureRoot) => {
+    const reviewerPath = resolve(fixtureRoot, 'docs/agents/ux-usability-reviewer.md')
+    writeFileSync(
+      reviewerPath,
+      readFileSync(reviewerPath, 'utf8').replace(
+        'Recommendation: `rendered-usability-pass`, `evidence-complete-with-residual-capability-risk`, `needs-changes`, or `blocked`.',
+        'Recommendation: generic pass or blocked.',
+      ),
+    )
+
+    assert.throws(
+      () => validate(fixtureRoot),
+      /docs\/agents\/ux-usability-reviewer\.md must include contract phrase: recommendation: rendered-usability-pass/,
+    )
+  })
+})
+
 test('rejects execution review-order drift', () => {
   withFixture((fixtureRoot) => {
     const skillPath = resolve(fixtureRoot, '.codex/skills/ux-quality-gate/SKILL.md')

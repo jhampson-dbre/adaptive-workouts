@@ -37,6 +37,6 @@ may prove a defect but cannot produce a rendered usability pass.
 2. Missing or insufficient rendered evidence.
 3. Required changes or escalation triggers.
 4. Optional improvements.
-5. Recommendation: pass, needs changes, or blocked.
+5. Recommendation: `rendered-usability-pass`, `evidence-complete-with-residual-capability-risk`, `needs-changes`, or `blocked`.
 
 The fresh ux-usability-reviewer, code reviewer, and task-conformance reviewer run in parallel after coordinator-owned rendered verification. Include `Workflow feedback:` when the evidence or handoff made reliable review materially harder.
