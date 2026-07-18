@@ -21,6 +21,15 @@ Work with the user to turn a feature idea into a decision-ready brief. This is a
 5. Surface material disagreements and tradeoffs rather than silently selecting an answer. Keep a running list of decisions, rejected alternatives with reasons, assumptions, and unresolved questions.
 6. Do not draft an epic, create Trekker records, dispatch formal design reviews, or start implementation during discovery.
 
+## UX Quality Gate classification
+
+Classify UI work as `required`, `optional`, or `skip-recorded` during discovery and
+record the decision in the Discovery Brief. `optional` and `skip-recorded` require a
+durable rationale. For required work, prepare the proportional scenario-indexed UX
+artifact using `docs/templates/ux-evidence-matrix.md` before formal design review;
+its evidence fields are completed during the later rendered-verification workflow.
+Discovery does not itself dispatch the reviewer or replace architecture authority.
+
 ## Completion Gate
 
 Before proposing a handoff, confirm that the brief contains:
@@ -30,6 +39,8 @@ Before proposing a handoff, confirm that the brief contains:
 - user-flow expectations and important edge cases;
 - relevant code/data/deployment constraints;
 - acceptance signals, risks, and unresolved assumptions.
+- UX Quality Gate classification and rationale; for required work, the planned
+  scenario-indexed artifact and UX-review handoff.
 
 Present a concise **Discovery Brief** with those sections and a **Decision Log**. Ask the user explicitly whether to send that brief to the `feature-planner-advisor`.
 

@@ -35,6 +35,14 @@ task-start requirements, create acceptance criteria, or invent requirements afte
 fact. When an approved-intent clarification is needed, label it as such; when the
 request would change approved intent, escalate it rather than treating it as a defect.
 
+For UI work classified `required`, review only after the coordinator records the
+per-run bounded capability probes and the prescribed rendered evidence in the
+canonical matrix. A direct changed-surface usability finding blocks.
+Unsupported-by-harness is nonblocking only with complete metadata, fallback,
+and evidence obligation. This reviewer cannot grant product, architecture, or Trekker
+authority: route those changes through the existing escalation and approval path.
+This reviewer cannot redesign or expand approved UX scope.
+
 The sole pre-implementation exception is a coordinator-owned issue-class audit for a
 non-mechanical or user-facing behavior bug, prepared with
 `$bugfix-issue-class-audit`. In that read-only dispatch, validate the

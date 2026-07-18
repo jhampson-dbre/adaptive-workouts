@@ -28,6 +28,18 @@ the request is a small, fully specified mechanical task; the coordinator records
 exception and rationale. If discovery classifies the request as a bug fix, refactor,
 or fully specified execution task, do not force feature planning.
 
+## Planning UX Quality Gate
+
+During discovery, ensure UI work is classified as `required`, `optional`, or
+`skip-recorded`; optional and skip-recorded decisions need a durable rationale. For
+required work, include the proportional scenario-indexed UX artifact from
+`docs/templates/ux-evidence-matrix.md` in the design handoff. Request a fresh
+ux-design-reviewer before architecture-design-reviewer. Architecture retains its
+system, data, security, and feasibility authority; UX review validates the experience
+contract only. Material architecture changes that alter the approved UX contract return
+through UX design review before user approval. Do not cache capability waivers: every
+future required run re-probes capability.
+
 ## Preferred Model Tier
 
 Use GPT-5.6 with high reasoning for ambiguous product design, cross-component features, data model changes, or user workflow design. GPT-5.6 Terra is acceptable for small, well-understood feature plans; escalate high-risk architecture, auth, storage, migration, or deployment decisions to GPT-5.6.
@@ -49,12 +61,14 @@ Use GPT-5.6 with high reasoning for ambiguous product design, cross-component fe
    planning, even if exploratory context was inspected during discovery.
 3. Identify whether to extend existing work or propose new work.
 4. Brainstorm feature shape, risks, and open questions.
-5. Draft an epic-level design spec.
-6. Run or request architecture/design review before asking the user to approve the design.
-7. Validate the review feedback; incorporate accepted feedback and record rejected feedback with reasons.
-8. Ask the user to approve or revise the design.
-9. Choose a durable design spec path under `docs/specs/YYYY-MM-DD-feature-name.md` (or another agreed path) for every approved feature plan.
-10. Convert the approved design into an implementation plan:
+5. Classify UI work as `required`, `optional`, or `skip-recorded`; preserve a durable rationale for optional or skip-recorded work.
+6. Draft an epic-level design spec. Required work includes the proportional scenario-indexed UX artifact from `docs/templates/ux-evidence-matrix.md`.
+7. For required work, run or request a fresh ux-design-reviewer before architecture-design-reviewer.
+8. Run or request architecture/design review before asking the user to approve the design. Architecture retains authority for system boundaries, data, security, and feasibility.
+9. Validate review feedback; incorporate accepted feedback and record rejected feedback with reasons. A material architecture change that alters the approved UX contract returns through UX design review before user approval.
+10. Ask the user to approve or revise the design.
+11. Choose a durable design spec path under `docs/specs/YYYY-MM-DD-feature-name.md` (or another agreed path) for every approved feature plan.
+12. Convert the approved design into an implementation plan:
    - epic
    - tasks
    - subtasks
@@ -62,15 +76,15 @@ Use GPT-5.6 with high reasoning for ambiguous product design, cross-component fe
    - verification criteria
    - TDD expectations
    - likely subagent roles
-11. After design approval, run or request planning conformance with the senior-developer reviewer before asking the user to approve Trekker creation.
-12. Validate the review feedback; incorporate accepted feedback and record rejected feedback with reasons.
-13. If implementation review finds a design concern, return to design review before asking for Trekker creation approval.
-14. Ensure the plan starts with Task 1: create or switch to the focused epic feature branch, save and commit the approved spec, record branch/spec/planning-commit references on the epic, and complete Task 1 with a `Summary:`. Task 2 is the first implementation task and depends on Task 1.
-15. Ask the user to approve Trekker creation and execution of planning Task 1 only; state that feature implementation requires a later, fresh approval.
-16. After approval, provide exact Trekker records to create. If running as a subagent, do not create them.
-17. The main coordinator transitions out of Codex Plan Mode into write-capable Default mode before any Trekker write, branch creation, spec persistence, commit, or Task 1 execution.
-18. In Default mode, the coordinator creates the records and executes only Task 1. Task 1 completion explicitly ends the overall discovery, design, and planning handoff.
-19. Leave Task 2 and later tasks `todo` and the epic open. Require separate fresh explicit user approval before starting or marking any implementation task `in_progress`; otherwise preserve a fully resumable Trekker handoff.
+13. After design approval, run or request planning conformance with the senior-developer reviewer before asking the user to approve Trekker creation.
+14. Validate the review feedback; incorporate accepted feedback and record rejected feedback with reasons.
+15. If implementation review finds a design concern, return to design review before asking for Trekker creation approval.
+16. Ensure the plan starts with Task 1: create or switch to the focused epic feature branch, save and commit the approved spec, record branch/spec/planning-commit references on the epic, and complete Task 1 with a `Summary:`. Task 2 is the first implementation task and depends on Task 1.
+17. Ask the user to approve Trekker creation and execution of planning Task 1 only; state that feature implementation requires a later, fresh approval.
+18. After approval, provide exact Trekker records to create. If running as a subagent, do not create them.
+19. The main coordinator transitions out of Codex Plan Mode into write-capable Default mode before any Trekker write, branch creation, spec persistence, commit, or Task 1 execution.
+20. In Default mode, the coordinator creates the records and executes only Task 1. Task 1 completion explicitly ends the overall discovery, design, and planning handoff.
+21. Leave Task 2 and later tasks `todo` and the epic open. Require separate fresh explicit user approval before starting or marking any implementation task `in_progress`; otherwise preserve a fully resumable Trekker handoff.
 
 ## Design Spec Template
 

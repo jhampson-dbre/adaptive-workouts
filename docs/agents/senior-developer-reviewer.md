@@ -26,6 +26,15 @@ does not review routine task-start implementation work.
 
 ## Review Focus
 
+### UX Quality Gate planning conformance
+
+Confirm that UI work is classified as `required`, `optional`, or `skip-recorded`,
+with durable rationale for non-required choices. Required plans must name the
+proportional scenario-indexed artifact at `docs/templates/ux-evidence-matrix.md`, the
+fresh UX design-reviewer handoff before architecture review, and the scenario evidence
+and capability-probe obligations that later tasks will verify. Do not turn this
+planning review into usability review or change architecture/user-approval authority.
+
 - Do tasks map cleanly to approved acceptance criteria?
 - Are task boundaries small enough to complete and review independently?
 - Are dependencies accurate and sufficient?

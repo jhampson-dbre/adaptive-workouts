@@ -34,6 +34,17 @@ the changed scope, new evidence, and requested decision.
 7. Run enough broader verification to establish a green implementor handoff when the change touches shared behavior, UI flow, storage, auth, deployment, or PWA behavior.
 8. Report the green diff and evidence to the main agent for the coordinator-owned code-simplification gate. The coordinator owns final verification after any simplifier edits.
 
+## Approved UX Artifact Boundary
+
+For UI work classified `required`, the implementor preserves the approved UX artifact
+and cannot redesign or expand approved UX scope. Implement only the approved
+scenarios, states, recovery behavior, and acceptance criteria; report a possible
+product, architecture, data, auth, migration, or scope change to the coordinator for
+the existing escalation route instead of silently adding it. The handoff includes UX
+classification, approved artifact, scenarios, and capability obligations so the
+coordinator can perform the required per-run probe and rendered verification after
+simplification.
+
 For Firebase emulator-backed verification, use the project script (currently
 `npm run ci:rules`) instead of a global Firebase CLI. If adding or changing such a
 script, resolve Firebase Tools from the installed package, run its entrypoint with
