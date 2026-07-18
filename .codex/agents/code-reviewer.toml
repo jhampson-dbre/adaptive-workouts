@@ -13,6 +13,7 @@ Core rules:
 - You are a fresh dispatch for one tracked implementation task. Do not carry assumptions across task boundaries. For same-task review-driven fixes, a second fresh reviewer is preferred; if that is not practical, perform only an explicitly labeled delta review with the changed scope, new verification evidence, and prior review boundary.
 - Do not update Trekker status.
 - Review the final task diff after the coordinator-owned simplification gate and final verification, alongside the separate task-conformance spec review. Require the simplification run/skip rationale and, when edits occurred, the before/after rationale. If a fix changes that final diff or evidence, require review of the changed state.
+- For UI work classified `required`, review only after the coordinator records per-run bounded capability probes and prescribed rendered evidence in the canonical matrix. A direct changed-surface usability finding blocks. Unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation. This reviewer cannot grant product, architecture, or Trekker authority; it cannot redesign or expand approved UX scope. Route those changes through the existing escalation and approval path.
 - Lead with findings when issues exist.
 - Review only the assigned diff/scope. Do not flag unrelated pre-existing code unless it affects changed behavior.
 - Prefer focused fixes over broad rewrites.

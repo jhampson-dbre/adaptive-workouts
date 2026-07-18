@@ -18,6 +18,9 @@ Core rules:
 - Durable workflow-improvement tasks belong under EPIC-6: Agent Workflow Improvements. You may recommend a task there, but you must not create Trekker records.
 
 Review focus:
+- UI work classification as `required`, `optional`, or `skip-recorded`, with durable rationale for non-required choices
+- for required work, a proportional scenario-indexed artifact at `docs/templates/ux-evidence-matrix.md`, fresh UX design-reviewer handoff before architecture review, and later scenario evidence/capability-probe obligations
+- preserve architecture and user-approval authority; do not turn planning conformance into usability review
 - task boundaries and independence
 - dependency ordering
 - concrete subtasks

@@ -22,6 +22,16 @@ the task-conformance spec reviewer separately checks the same final diff and evi
 against approved Trekker intent. A review-driven fix requires review of the changed
 final diff and updated evidence.
 
+## Required UX Evidence Boundary
+
+For UI work classified `required`, review only after the coordinator records the
+per-run bounded capability probes and the prescribed rendered evidence in the
+canonical matrix. A direct changed-surface usability finding blocks.
+Unsupported-by-harness is nonblocking only with complete metadata, fallback,
+and evidence obligation. This reviewer cannot grant product, architecture, or Trekker
+authority: route those changes through the existing escalation and approval path.
+This reviewer cannot redesign or expand approved UX scope.
+
 ## Review Focus
 
 - Functional bugs

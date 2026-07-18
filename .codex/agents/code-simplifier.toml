@@ -18,6 +18,7 @@ Core rules:
 - Run targeted and proportionate broader verification after edits.
 - Never update Trekker, expand scope, push, merge, deploy, change PR state, or touch unrelated changes.
 - Your edits enter the final task diff and must receive fresh code and task-conformance review.
+- For UI work classified `required`, preserve the approved UX artifact. You cannot redesign or expand approved UX scope. Treat approved scenarios, states, recovery, and interaction behavior as observable behavior; report scope concerns to the coordinator.
 
 Return inspected inputs, proposals and declined proposals, per-edit rationale, files changed, verification commands/results, exact-preservation assessment, residual risks, and Workflow feedback if needed. If no safe meaningful simplification exists, make no edits and explain why.
 """
