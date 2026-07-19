@@ -122,6 +122,13 @@ field, record:
 - write and migration behavior, including whether old and new versions can safely
   coexist
 
+When reload restoration or active recovery is in scope, also enumerate recovery
+timestamps (with epoch/clock meaning), elapsed and phase-boundary ledgers, ownership
+or generation tokens, save-operation identity/idempotency fields, reader/writer unit
+responsibilities, fallback behavior, and coexistence/version rules. State explicit
+null, missing, and zero semantics for every recovery field; a duration-only table is
+not complete when deterministic restoration depends on this metadata.
+
 ```text
 | Field / persisted path | Reader/writer versions | Storage unit | Input/storage/display rounding or precision | Null/missing/zero/sentinel semantics | Cross-version reads / legacy-unit detection | Writes / migration / coexistence |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -441,7 +448,7 @@ Across the approval, record-creation, and Task 1 completion stages, confirm:
 - subtasks are concrete
 - each task has verification criteria
 - implementation-specificity choices, permitted discretion, deferred checks, and completion boundaries are explicit where relevant
-- timing designs include a complete persisted-duration contract covering field/path, unit, rounding/precision, nullability/absence semantics, and cross-version read/write/migration compatibility
+- timing designs include a complete persisted-duration and recovery contract covering field/path, epoch timestamps, elapsed boundaries, ownership/version and save-operation identity, reader/writer units, rounding/precision, nullability/absence semantics, fallback, coexistence, and cross-version read/write/migration compatibility
 - deferred checks name their trigger, evidence, owner, and whether they need a follow-up task or subtask
 - behavior tasks have TDD expectations
 - execution can resume from Trekker alone

@@ -49,6 +49,10 @@ approval; do not silently rewrite the UX contract.
 - Are mixed legacy and current duration units deterministically distinguishable and
   convertible, including safe coexistence, rather than left for implementation to
   infer?
+- When reload restoration is in scope, does the contract enumerate epoch/clock
+  timestamps, elapsed and phase-boundary ledgers, ownership/generation,
+  save-operation identity, reader/writer units, fallback, and null/missing/zero
+  semantics needed for deterministic recovery?
 - Are edge cases and failure modes identified?
 - Are UI surfaces and user workflows concrete enough to plan implementation?
 - Is the design over-scoped for the likely epic?

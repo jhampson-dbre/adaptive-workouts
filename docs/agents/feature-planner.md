@@ -120,6 +120,11 @@ behavior, and write/migration coexistence behavior. Mixed legacy and current uni
 must have deterministic interpretation and conversion rules; otherwise the design
 remains blocked rather than passing the decision to implementation.
 
+When reload restoration is in scope, enumerate epoch/clock timestamps, elapsed and
+phase-boundary ledgers, ownership/generation and save-operation identity, reader/writer
+unit responsibilities, fallback, coexistence/version rules, and explicit
+null/missing/zero semantics needed for deterministic recovery.
+
 ```text
 | Field / persisted path | Reader/writer versions | Storage unit | Input/storage/display rounding or precision | Null/missing/zero/sentinel semantics | Cross-version reads / legacy-unit detection | Writes / migration / coexistence |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -174,7 +179,7 @@ Dependencies:
 - Do not treat planning notes as the durable source of truth after Trekker is populated.
 - Do not skip duplicate search.
 - Do not create vague tasks without verification criteria.
-- Do not present a timing design for approval without a complete persisted-duration contract that resolves unit, rounding/precision, nullability/absence, and cross-version compatibility for every affected persisted duration field.
+- Do not present a timing design for approval without a complete persisted-duration and recovery contract that resolves timestamps, boundaries, ownership/version, save-operation identity, reader/writer units, fallback, nullability/absence, and cross-version compatibility whenever reload restoration is in scope.
 - Do not start implementation until planning Task 1 is completed and the user then gives separate fresh explicit approval to continue.
 
 ## Expected Output
