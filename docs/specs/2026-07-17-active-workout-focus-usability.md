@@ -1,12 +1,14 @@
 # Mobile Active-Workout Focus and Interim History Disclosure
 
-**Status:** Approved for implementation planning
+**Status:** Approved; UX Quality Gate reviewed for future implementation authorization
 
 **Date:** 2026-07-17
 
 **Trekker epic:** EPIC-11
 
 **Planning task:** TREK-200
+
+**UX quality retrofit:** TREK-243
 
 ## Problem
 
@@ -188,6 +190,204 @@ existing in-memory and saved values.
 `src/utils/workoutSchema.js`, `src/utils/storage.js`, Firebase configuration, and
 auth are outside implementation scope.
 
+## Planning UX Quality Gate
+
+### Classification and artifact authority
+
+| Field | Record |
+| --- | --- |
+| Classification | `required` |
+| Applicability rationale | The epic materially changes mobile action hierarchy, disclosure, viewport placement, transient-feedback ownership, and recovery on the active-workout surface. |
+| Proportional artifact | This section is the authoritative scenario-indexed artifact. Four scenarios cover the two planned implementation tasks without expanding product scope. |
+| Planning artifact revision | `UX-ARTIFACT: active-workout-focus-usability@v1`; authoritative location: this section of `docs/specs/2026-07-17-active-workout-focus-usability.md`. |
+| Planning wireframe status | `planning-only`; the compact wireframes below communicate intended hierarchy and are not rendered implementation evidence. |
+| Required UX design review | Fresh `ux-design-reviewer` required against this artifact, the approved design, and the implementation plan before implementation authorization. |
+| Architecture authority | Architecture retains authority for system boundaries, data, security, and feasibility. A review outcome that requires changing those boundaries returns to architecture/design review and user approval. |
+
+### Shared mobile interaction contract
+
+The active-workout screen has one job: keep the user's next safe workout action
+obvious while retaining access to completed context and history without making either
+compete with the current action.
+
+Action hierarchy at the 375px reference viewport is:
+
+1. **Primary:** the current ready or active set action (`Start set`, confirmation,
+   or the existing finalization action for that state).
+2. **Secondary:** completed-set disclosure and guarded Undo inside expanded details.
+3. **Exit:** `Finish Workout`, with blocking feedback adjacent to that control.
+4. **Utility:** exercise collapse and the whole-history disclosure.
+
+No destructive action is added. Controls and timer text wrap within the exercise
+panel without horizontal scrolling or hiding the focused control. The primary action
+and its contextual status stay together; prior completed details are disclosed in
+place and never inserted between the ready set and its action. Scrolling, manual
+exercise expansion choices, and focus remain stable when feedback appears or retires.
+
+Feedback ownership and retirement are explicit:
+
+- the workout-scoped hidden live region owns newly completed rest announcements;
+- the acted-in exercise owns invalid confirmation and blocked-Start feedback;
+- the Finish area owns blocked-Finish feedback;
+- the workout summary owns save and account errors;
+- corrected input, the relevant successful retry/action, cancellation, Undo, or the
+  defined state transition retires only the message whose cause is no longer valid.
+
+Backgrounding or collapsing a panel must preserve the existing in-memory active set,
+rest, overtime, and focus rules. Full reload recovery remains outside this epic and is
+owned by TREK-210; this epic must not imply that reload recovery has been added.
+
+### Scenario UX-11-01 — Advance through work, rest, and overtime
+
+**Changed surface:** `WorkoutView` active exercise panel. **Applicability:**
+`applicable`; this is the epic's primary action-hierarchy change.
+
+**Approved flow and states:** before workout start, existing gating remains. After a
+non-final set is confirmed, its compact completed row stays above the next ready set.
+The next ready set derives the preceding record's live rest and presents countdown or
+overtime beside an always-available **Start set**. Starting that set closes only its
+own predecessor rest. Concurrent rests in other exercises remain active. Collapsing
+the exercise preserves textual active-rest/overtime status in its header; expanding
+returns to the same actionable state. Final sets never create or display rest.
+
+```text
++ Exercise header: 1/3 complete · Rest 0:42        [Collapse]
+| Set 1 · Completed                               [Details]
+| Set 2 · Ready                 Rest 0:42          [Start set]
+| Set 3 · Upcoming
++------------------------------------------------------------
+```
+
+| Evidence field | Planning record |
+| --- | --- |
+| Per-run capability probe | `not-probed` before execution |
+| `capability_state` | `not-probed` before execution |
+| Unsupported metadata | `not-applicable-before-probe` |
+| Evidence kind / outcome | `rendered-primary` planned / `not-tested` |
+| Changed-surface routing | Direct defect in action placement, rest ownership, concurrency, focus, collapse status, reach, or overflow blocks the task. |
+| Evidence obligation / disposition / allowed recommendation | `unsatisfied` / `blocking` until execution evidence / `blocked` before execution |
+| Build / fixture / viewport | `not-run`; use the per-run build, synthetic baseline fixture, requested 375px viewport, and record the actual viewport. |
+| Starting state / action / observed result | `not-run`; cover remaining rest, overtime, collapsed exercise, concurrent rest, and final-set states with the approved actions. |
+| Evidence link and limitation | `planning-only`; this wireframe is not rendered evidence. |
+
+### Scenario UX-11-02 — Inspect a completed set and use guarded Undo
+
+**Changed surface:** completed set rows in `WorkoutView`. **Applicability:**
+`applicable`; the epic introduces progressive disclosure and changes Undo hierarchy.
+
+**Approved flow and states:** a completed row begins compact. Its accessible disclosure
+opens mode-specific performance, work duration, resolved planned/actual rest,
+recommendation explanation where applicable, and the existing guarded Undo. Undo is
+secondary, retains all eligibility rules, and returns the row through the existing
+reducer path. Closing details restores the compact row without changing focus,
+timers, save output, or unrelated exercise expansion.
+
+```text
+| Set 1 · Completed                               [Show details]
+|   (expanded)
+|   8 reps · 95 lb · Work 0:37 · Rest 1:12
+|   Recommendation explanation
+|                                                [Undo]
+```
+
+| Evidence field | Planning record |
+| --- | --- |
+| Per-run capability probe | `not-probed` before execution |
+| `capability_state` | `not-probed` before execution |
+| Unsupported metadata | `not-applicable-before-probe` |
+| Evidence kind / outcome | `rendered-primary` planned / `not-tested` |
+| Changed-surface routing | Direct defect in disclosure semantics, content completeness, Undo eligibility/hierarchy, focus stability, or narrow-width layout blocks the task. |
+| Evidence obligation / disposition / allowed recommendation | `unsatisfied` / `blocking` until execution evidence / `blocked` before execution |
+| Build / fixture / viewport | `not-run`; record per-run build, mode-specific synthetic fixtures, requested 375px viewport, and actual viewport. |
+| Starting state / action / observed result | `not-run`; cover collapsed/expanded details, eligible and ineligible Undo, and post-Undo recovery. |
+| Evidence link and limitation | `planning-only`; this wireframe is not rendered evidence. |
+
+### Scenario UX-11-03 — Recover from contextual workout feedback
+
+**Changed surface:** exercise-local feedback, the hidden rest announcer, and
+Finish-local feedback in `WorkoutView`. **Applicability:** `applicable`; the epic
+separates formerly competing status ownership and defines message recovery.
+
+**Approved flow and states:** invalid confirmation or blocked **Start set** feedback
+appears in the exercise where the action occurred and associates with the relevant
+control. A collapsed owning exercise opens without moving focus or disturbing other
+manual expansion choices. Correcting the field or the relevant successful action,
+cancellation, or Undo retires the stale message. Blocked Finish feedback stays beside
+Finish and retires when active work is confirmed/canceled or Finish succeeds. The
+single hidden polite atomic live region announces newly completed rests only, never
+per-second ticks or actionable errors.
+
+```text
++ Exercise header                                      [Collapse]
+| [contextual error for this exercise]
+| Current set fields                                  [Confirm]
++------------------------------------------------------------
+|                                                     [Finish Workout]
+| [Finish-only blocking feedback]
+(hidden at workout scope: newly completed rest announcements)
+```
+
+| Evidence field | Planning record |
+| --- | --- |
+| Per-run capability probe | `not-probed` before execution |
+| `capability_state` | `not-probed` before execution |
+| Unsupported metadata | `not-applicable-before-probe` |
+| Evidence kind / outcome | `rendered-primary` planned, with accessibility-tree or component-test support / `not-tested` |
+| Changed-surface routing | Direct defect in ownership, association, expansion, focus, concurrency, announcement isolation, or retirement blocks the task. |
+| Evidence obligation / disposition / allowed recommendation | `unsatisfied` / `blocking` until execution evidence / `blocked` before execution |
+| Build / fixture / viewport | `not-run`; record the per-run build, synthetic invalid/blocked states, requested 375px viewport, and actual viewport. |
+| Starting state / action / observed result | `not-run`; cover collapsed owner, corrected input, retry, cancellation, Undo, blocked Finish, rest completion, and repeated-message states. |
+| Evidence link and limitation | `planning-only`; this wireframe is not rendered evidence. |
+
+### Scenario UX-11-04 — Reveal interim workout history without distraction
+
+**Changed surface:** outer `WorkoutHistory` disclosure within the active-workout view.
+**Applicability:** `applicable`; the epic changes hierarchy and semantic visibility
+while preserving eager fetching and all history content behavior.
+
+**Approved flow and states:** a stable **Workout history** button starts collapsed with
+`aria-expanded="false"` and a controlled region ID. Loading, error, empty, and list
+content remain absent visually and semantically while closed even though fetching
+starts eagerly. Opening reveals the current state and unchanged legacy/v2/v3/malformed
+read-only content; closing returns to a quiet stable button. Load failure never blocks
+the active workout. No individual-card disclosure, navigation, count, search, or
+pagination is introduced.
+
+```text
+|                                                     [Finish Workout]
++ Workout history                                      [Show]
+  (closed: no loading, error, empty, count, or list content)
+
++ Workout history                                      [Hide]
+| Existing loading / error / empty / history list content
+```
+
+| Evidence field | Planning record |
+| --- | --- |
+| Per-run capability probe | `not-probed` before execution |
+| `capability_state` | `not-probed` before execution |
+| Unsupported metadata | `not-applicable-before-probe` |
+| Evidence kind / outcome | `rendered-primary` planned, with accessibility-tree or component-test support / `not-tested` |
+| Changed-surface routing | Direct defect in initial quietness, disclosure semantics, state reveal, active-workout nonblocking behavior, focus, or overflow blocks the task. |
+| Evidence obligation / disposition / allowed recommendation | `unsatisfied` / `blocking` until execution evidence / `blocked` before execution |
+| Build / fixture / viewport | `not-run`; record the per-run build, synthetic loading/error/empty/versioned-history fixtures, requested 375px viewport, and actual viewport. |
+| Starting state / action / observed result | `not-run`; cover closed eager load, open loading/error/empty/content, close/reopen, and continued workout interaction. |
+| Evidence link and limitation | `planning-only`; this wireframe is not rendered evidence. |
+
+### Execution evidence obligation
+
+The coordinator must re-probe the available rendered harness on every required task
+run, instantiate the canonical evidence matrix with each evidence concept in its own
+field, populate those fields from the per-run build with synthetic or de-identified
+data, and preserve representative screenshots when safe. The compact combined rows
+above are planning-only and must not be reused as completed execution evidence. Missing
+prescribed rendered evidence blocks task completion and requires a resumable
+`Checkpoint:`. Static or proxy evidence may prove a defect but cannot produce a
+rendered usability pass. After simplification and coordinator-owned rendered
+verification, dispatch a fresh `ux-usability-reviewer` in parallel with the fresh
+code reviewer and task-conformance reviewer. Reviewers may report defects but may not
+redesign or expand this approved artifact.
+
 ## Edge Cases
 
 - If a resting exercise is collapsed when rest crosses zero, its header reports
@@ -299,6 +499,19 @@ the approved architecture decision that Finish-triggered feedback belongs beside
 the workout-level Finish control. The reviewer accepted the explicit boundary and
 recommended the final plan for approval.
 
+After the UX Quality Gate was merged to `main`, a fresh read-only
+`ux-design-reviewer` retroactively reviewed
+`UX-ARTIFACT: active-workout-focus-usability@v1`, the approved design, and the
+implementation plan. It found no blocking or material UX issue and no product,
+architecture, data, auth, migration, persistence, or scope change. It confirmed that
+UX-11-01 through UX-11-04 proportionally cover the planned flows, that all planning
+capability and execution fields remain `not-probed` / `not-run` / `not-tested`, and
+that TREK-201 and TREK-202 carry the required fresh probe, coordinator-owned rendered
+evidence, and fresh `ux-usability-reviewer` obligations. Recommendation: ready for the
+implementation-authorization gate; the review does not itself authorize
+implementation. Its optional clarification to use separate canonical evidence fields
+during execution is incorporated above.
+
 No durable EPIC-6 workflow follow-up was identified. The model failure was an
 account capability limitation, and the documented nearest-tier fallback completed
 both planning reviews without changing the workflow contract.
@@ -343,11 +556,18 @@ Immediate verification:
 - `npm test -- --run src/tests/WorkoutView.test.jsx`
 - `npm run lint`
 - `npm run build`
-- keyboard, focus, contextual-message, disclosure, and overflow checks at 375px.
+- coordinator-owned rendered evidence for UX-11-01, UX-11-02, and UX-11-03 after a
+  fresh bounded harness probe, including keyboard, focus, feedback retirement,
+  collapse/recovery, concurrency, reach, and overflow checks at the requested 375px
+  viewport.
 
 Use a fresh implementor, task-scoped code simplifier, fresh code reviewer, and fresh
-task-conformance reviewer. Commit only the scoped task diff and complete it with a
-`Summary:` containing RED/GREEN and verification evidence.
+task-conformance reviewer. After simplification and coordinator-owned rendered
+verification, run a fresh `ux-usability-reviewer` in parallel with code and
+task-conformance review. Missing required rendered evidence blocks completion and
+requires a resumable `Checkpoint:`. Commit only the scoped task diff and complete it
+with a `Summary:` containing RED/GREEN, capability-probe, rendered-evidence, and
+review evidence.
 
 ### Task 3: Add the interim whole-history disclosure
 
@@ -373,11 +593,18 @@ Immediate verification:
 - `npm test -- --run src/tests/WorkoutView.test.jsx`
 - `npm run lint`
 - `npm run build`
-- keyboard, focus, disclosure, and overflow checks at 375px.
+- coordinator-owned rendered evidence for UX-11-04 after a fresh bounded harness
+  probe, including closed quietness, open loading/error/empty/content states,
+  keyboard, focus, continued-workout nonblocking behavior, and overflow checks at
+  the requested 375px viewport.
 
 Use a fresh implementor, task-scoped code simplifier, fresh code reviewer, and fresh
-task-conformance reviewer. Commit only the scoped task diff and complete it with a
-`Summary:` containing RED/GREEN and verification evidence.
+task-conformance reviewer. After simplification and coordinator-owned rendered
+verification, run a fresh `ux-usability-reviewer` in parallel with code and
+task-conformance review. Missing required rendered evidence blocks completion and
+requires a resumable `Checkpoint:`. Commit only the scoped task diff and complete it
+with a `Summary:` containing RED/GREEN, capability-probe, rendered-evidence, and
+review evidence.
 
 Task 2 and Task 3 share only scoped stylesheet work and have no behavioral
 dependency. Both depend directly on Task 1. The coordinator executes them serially
@@ -390,8 +617,9 @@ and preserves scoped CSS ownership.
 **Depends on:** TREK-201 and TREK-202
 
 Invoke `$epic-development-branch-completion`, verify task commit and Summary
-boundaries, run full tests/lint/build and cumulative 375px manual checks, and run
-independent epic code and fresh epic conformance reviews over the cumulative branch.
+boundaries, run full tests/lint/build and cumulative 375px rendered checks against
+UX-11-01 through UX-11-04, and run independent epic code and fresh epic conformance
+reviews over the cumulative branch.
 Route accepted source fixes through the owning implementation-task continuation,
 then renew affected task reviews and both final-integration gates.
 
