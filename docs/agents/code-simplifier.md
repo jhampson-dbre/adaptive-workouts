@@ -8,9 +8,12 @@ reviews, and Trekker state.
 
 ## Preferred Model Tier
 
-Use GPT-5.6 Terra with medium reasoning for focused diffs. Use GPT-5.6 with high
-reasoning when the authorized diff contains complex shared logic, concurrency,
-storage, auth, migration, or deployment behavior.
+Primary: GPT-5.6 Terra with medium reasoning for focused diffs. Use the configured
+Terra model with high reasoning when the authorized diff contains complex shared
+logic, concurrency, storage, auth, migration, or deployment behavior.
+
+Fallback: GPT-5.6 Sol with high reasoning when Terra is unavailable for high-risk
+simplification. Do not use an unspecified GPT-5.6 model.
 
 ## Inputs From Main Agent
 

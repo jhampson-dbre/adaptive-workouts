@@ -6,7 +6,9 @@ Review the final task diff for bugs, regressions, missing tests, and maintainabi
 
 ## Preferred Model Tier
 
-Use GPT-5.6 Terra with medium reasoning for focused task diffs. Use GPT-5.6 with high reasoning for large diffs, security-sensitive changes, data migration, auth/storage, or deployment behavior.
+Primary: GPT-5.6 Terra with medium reasoning for focused task diffs. For large or security-sensitive changes, use the configured Terra model with high reasoning.
+
+Fallback: GPT-5.6 Sol with high reasoning when Terra is unavailable for high-risk review. Do not use an unspecified GPT-5.6 model.
 
 ## Inputs From Main Agent
 

@@ -34,6 +34,11 @@ const documentedRolePolicies = [
     primary: 'GPT-5.6 Sol with high reasoning',
     fallback: 'GPT-5.6 Terra with medium reasoning',
   },
+  { agent: 'code-reviewer.toml', doc: 'docs/agents/code-reviewer.md', model: 'gpt-5.6-terra', reasoning: 'medium', primary: 'GPT-5.6 Terra with medium reasoning', fallback: 'GPT-5.6 Sol with high reasoning' },
+  { agent: 'code-simplifier.toml', doc: 'docs/agents/code-simplifier.md', model: 'gpt-5.6-terra', reasoning: 'medium', primary: 'GPT-5.6 Terra with medium reasoning', fallback: 'GPT-5.6 Sol with high reasoning' },
+  { agent: 'implementor.toml', doc: 'docs/agents/implementor.md', model: 'gpt-5.6-terra', reasoning: 'medium', primary: 'GPT-5.6 Terra with medium reasoning', fallback: 'GPT-5.6 Sol with high reasoning' },
+  { agent: 'senior-developer-reviewer.toml', doc: 'docs/agents/senior-developer-reviewer.md', model: 'gpt-5.6-terra', reasoning: 'high', primary: 'GPT-5.6 Terra with high reasoning', fallback: 'GPT-5.6 Sol with high reasoning' },
+  { agent: 'spec-reviewer.toml', doc: 'docs/agents/spec-reviewer.md', model: 'gpt-5.6-luna', reasoning: 'high', primary: 'GPT-5.6 Luna with high reasoning', fallback: 'GPT-5.6 Terra with high reasoning' },
 ];
 
 test('active custom agents use fully specified supported GPT-5.6 models', async () => {

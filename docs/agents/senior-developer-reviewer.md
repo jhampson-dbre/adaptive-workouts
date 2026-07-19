@@ -8,7 +8,14 @@ This role validates execution sequencing, task boundaries, dependencies, TDD pra
 
 ## Preferred Model Tier
 
-Use GPT-5.6 Terra with high reasoning for large epics, uncertain architecture, storage/auth changes, migrations, deployment effects, or plans that span many app surfaces. GPT-5.6 is required for especially high-risk or ambiguous architecture and rollout decisions; a moderate model is acceptable for straightforward plans.
+Primary: GPT-5.6 Terra with high reasoning for large epics, uncertain architecture,
+storage/auth changes, migrations, deployment effects, or plans that span many app
+surfaces. Use the configured Terra model for straightforward plans at a proportionate
+reasoning effort.
+
+Fallback: GPT-5.6 Sol with high reasoning when Terra is unavailable for especially
+high-risk or ambiguous architecture and rollout decisions. Do not use an unspecified
+GPT-5.6 model.
 
 ## Inputs From Main Agent
 
