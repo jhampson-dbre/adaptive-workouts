@@ -1,6 +1,7 @@
 import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 import { collection, doc, getDocFromServer, getDocsFromServer } from 'firebase/firestore';
 import baselineFixture, {
+  BASELINE_AUTH_MARKER,
   BASELINE_EMAIL,
   BASELINE_FIXTURE_REVISION,
   BASELINE_PROVIDER_ID,
@@ -8,10 +9,24 @@ import baselineFixture, {
   BASELINE_USER_ID,
 } from '../../scripts/emulator/fixtures/baseline.mjs';
 
-export const BASELINE_AUTH_MARKER = 'emulator-baseline-auth-v1';
-export { BASELINE_EMAIL, BASELINE_FIXTURE_REVISION, BASELINE_PROVIDER_UID, BASELINE_USER_ID };
+export { BASELINE_AUTH_MARKER, BASELINE_EMAIL, BASELINE_FIXTURE_REVISION, BASELINE_PROVIDER_UID, BASELINE_USER_ID };
 
 export const isBaselineMode = env => env?.DEV === true && env?.MODE === 'baseline';
+
+export const validateBaselineAuthProvenance = fixture => {
+  if (fixture?.auth?.contractRevision !== BASELINE_AUTH_MARKER) {
+    const error = new Error('Baseline auth provenance mismatch');
+    error.code = 'baseline/auth-provenance-mismatch';
+    throw error;
+  }
+  const claims = fixture.auth.users?.[0]?.customClaims;
+  if (claims === null || typeof claims !== 'object' || Array.isArray(claims)
+    || Object.keys(claims).length !== 1 || claims.approved !== true) {
+    const error = new Error('Baseline auth claim contract mismatch');
+    error.code = 'baseline/auth-claim-contract-mismatch';
+    throw error;
+  }
+};
 
 const mockGoogleCredential = () => JSON.stringify({
   email: BASELINE_EMAIL,
@@ -63,6 +78,7 @@ export const validateBaselineIdentity = user => {
 };
 
 export async function verifyBaselineData(db, user) {
+  validateBaselineAuthProvenance(baselineFixture);
   validateBaselineIdentity(user);
   const userRef = doc(db, 'users', BASELINE_USER_ID);
   const [userSnapshot, catalogSnapshot] = await Promise.all([

@@ -9,6 +9,7 @@ import {
   isBaselineMode,
   validateBaselineCatalog,
   validateBaselineIdentity,
+  validateBaselineAuthProvenance,
 } from '../utils/baselineAuth';
 import baselineFixture from '../../scripts/emulator/fixtures/baseline.mjs';
 
@@ -21,7 +22,7 @@ describe('baseline auth contract', () => {
       BASELINE_PROVIDER_UID,
       BASELINE_USER_ID,
     }).toEqual({
-      BASELINE_AUTH_MARKER: 'emulator-baseline-auth-v1',
+      BASELINE_AUTH_MARKER: 'emulator-baseline-auth-v2',
       BASELINE_EMAIL: 'peach.otter.880@example.com',
       BASELINE_FIXTURE_REVISION: 'emulator-baseline-v1',
       BASELINE_PROVIDER_UID: 'google-peach-otter-880',
@@ -30,6 +31,24 @@ describe('baseline auth contract', () => {
     expect(isBaselineMode({ DEV: true, MODE: 'baseline' })).toBe(true);
     expect(isBaselineMode({ DEV: false, MODE: 'baseline' })).toBe(false);
     expect(isBaselineMode({ DEV: true, MODE: 'development' })).toBe(false);
+  });
+
+  it('accepts only the fixture v2 provenance marker without treating it as authorization', () => {
+    expect(() => validateBaselineAuthProvenance(baselineFixture)).not.toThrow();
+    const staleMarker = structuredClone(baselineFixture);
+    staleMarker.auth.contractRevision = 'emulator-baseline-auth-v1';
+    expect(() => validateBaselineAuthProvenance(staleMarker)).toThrow(/provenance mismatch/i);
+  });
+
+  it.each([
+    ['missing', undefined],
+    ['false', { approved: false }],
+    ['additional', { approved: true, role: 'coach' }],
+  ])('rejects %s fixture custom claims from the client baseline contract', (_label, customClaims) => {
+    const fixture = structuredClone(baselineFixture);
+    fixture.auth.users[0].customClaims = customClaims;
+
+    expect(() => validateBaselineAuthProvenance(fixture)).toThrow(/claim contract mismatch/i);
   });
 
   it('rejects a replaced 15-item catalog even when cardinality is unchanged', () => {

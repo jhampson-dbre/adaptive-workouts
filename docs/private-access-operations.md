@@ -39,3 +39,21 @@ gcloud auth application-default revoke
 
 Actual IAM configuration and production mutations are deferred to TREK-158. This
 document will accumulate the later rules-deployment and rollout procedures.
+
+## Firestore rules deployment
+
+TREK-158 performs this deployment only after the strict-claim rules change has passed
+the reviewed emulator matrix and the target production project ID has been explicitly
+confirmed. The operator needs Firebase CLI authentication authorized for that project,
+the reviewed commit checked out, and the production project ID in hand. Deploy rules
+before the application deployment so an app release can never precede its enforcement
+boundary:
+
+```powershell
+npx firebase-tools@15.22.4 deploy --only firestore:rules --project PROJECT_ID
+```
+
+Replace `PROJECT_ID` with the confirmed production Firebase project ID; do not use a
+default project selection. Record the command result and deployed project ID without
+recording credentials, tokens, or user identifiers. This command is documented here
+for the Task 5 rollout and is not run by TREK-156.
