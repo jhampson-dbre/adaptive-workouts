@@ -38,6 +38,8 @@ planning review into usability review or change architecture/user-approval autho
 - Do tasks map cleanly to approved acceptance criteria?
 - Are task boundaries small enough to complete and review independently?
 - Are dependencies accurate and sufficient?
+- Is each dependency classified as artifact-blocking or implementation-only, with a concrete reason for any block on durable spec persistence?
+- Does the first planning-artifact task persist the approved spec as soon as it can safely branch and commit, while external merges and fresh-authorization gates stay on the first implementation task that needs them?
 - Are subtasks concrete implementation steps rather than vague reminders?
 - Does each task name the important artifacts and choose mechanisms that affect consistency, such as workflow filenames, emulator lifecycles, or integration patterns?
 - Is any implementation discretion intentional, bounded, and safe to leave to the implementor?

@@ -309,7 +309,7 @@ Planning flow:
 8. Present the revised design spec to the user for approval.
 9. Choose the durable spec path under `docs/specs/`; every approved feature plan
    will save its spec there during planning Task 1.
-10. Convert the approved design into an implementation plan: epic, tasks, subtasks, dependencies, and verification. Task 1 must create or switch to the focused `codex/` epic feature branch, save and commit the approved spec, and record the branch name, spec path, and planning commit hash on the epic.
+10. Convert the approved design into an implementation plan: epic, tasks, subtasks, dependencies, and verification. Classify each dependency as artifact-blocking (prevents safe durable-spec persistence) or implementation-only (blocks later product work only). Task 1 must create or switch to the focused `codex/` epic feature branch, save and commit the approved spec, and record the branch name, spec path, and planning commit hash on the epic; external merge and fresh-authorization gates attach to the first implementation task that needs them. Record a concrete rationale for any artifact-blocking delay.
 11. Run planning conformance with the senior-developer implementation-plan reviewer, validate the feedback, and either incorporate it or record why it was not accepted.
 12. While still in Codex Plan Mode, ask the user to approve the implementation plan and authorize Trekker creation plus planning Task 1 only.
 13. After approval, transition out of Codex Plan Mode into write-capable Default mode before any Trekker write, branch creation, spec persistence, commit, or Task 1 execution.

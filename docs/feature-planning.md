@@ -188,6 +188,16 @@ Task 1: Establish the epic feature branch and durable approved spec
 Task 2 is the first implementation task and depends on Task 1. The implementation
 plan must state that Task 2 and all later implementation remain `todo` until the
 user gives a separate, fresh, explicit approval to continue after Task 1 completes.
+Classify every proposed dependency before adding it:
+
+- **artifact-blocking**: the dependency prevents the durable planning artifact itself from being safely branched, written, reviewed, or committed. Record the concrete content or branch-basis reason.
+- **implementation-only**: the dependency affects product implementation, integration, deployment, or a later authorization gate, but does not prevent persisting the already-approved design.
+
+Default the first planning task to create or switch to the focused branch and persist
+the approved spec as soon as it is safe. Do not block that durable artifact on an
+unrelated merge or external integration. Attach implementation-only merges and fresh
+authorization gates to the first task that actually needs them. If spec persistence
+must wait, record why it is artifact-blocking in the task and plan.
 
 For each verification criterion, label it as one of:
 
@@ -231,6 +241,7 @@ Tasks:
     Suggested subagents: none unless explicitly useful
   - Title:
     Description:
+    Planning artifact: yes/no (identify the task that persists the approved spec)
     Depends on:
     Subtasks:
       - Title:
@@ -240,7 +251,10 @@ Tasks:
     Suggested subagents:
 
 Dependencies:
-  - DEPENDENT depends on BLOCKER because ...
+  - DEPENDENT depends on BLOCKER
+    Classification: artifact-blocking | implementation-only
+    Rationale:
+    Artifact-blocking content/branch-basis reason: required only when classification is artifact-blocking
 ```
 
 ## Phase 6. Planning Conformance Review
@@ -256,6 +270,11 @@ Give the reviewer:
 - suggested subagent roles
 - related Trekker context
 - known constraints, risks, and non-goals
+
+The reviewer must check that every dependency is classified as artifact-blocking or
+implementation-only, that the planning-artifact task is independently completable
+when safe, and that external merge or fresh-authorization gates are attached to the
+first dependent implementation task.
 
 The main agent must validate each reviewer finding before changing the implementation plan. Valid feedback should be incorporated into the proposed Trekker records. Rejected feedback should be recorded in a short `Review notes:` section with the reason.
 
@@ -412,6 +431,8 @@ Across the approval, record-creation, and Task 1 completion stages, confirm:
 - the implementation plan begins with Task 1 for the branch, durable approved spec, scoped planning commit, and epic references
 - tasks are independently completable
 - dependencies encode ordering
+- every dependency is classified as artifact-blocking or implementation-only, with a concrete rationale for any delay to durable spec persistence
+- the first planning-artifact task persists the approved spec when safely possible; external merges and fresh-authorization gates are attached to the first implementation task that needs them
 - subtasks are concrete
 - each task has verification criteria
 - implementation-specificity choices, permitted discretion, deferred checks, and completion boundaries are explicit where relevant

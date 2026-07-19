@@ -78,6 +78,9 @@ Fallback: GPT-5.6 Terra with medium reasoning for small, well-understood feature
    - verification criteria
    - TDD expectations
    - likely subagent roles
+   - classify each dependency as artifact-blocking (prevents safe durable-spec persistence) or implementation-only (blocks later product work only)
+   - make the first planning-artifact task persist the approved spec when it can safely branch and commit; record a concrete rationale if it cannot
+   - attach external merges and fresh-authorization gates to the first implementation task that actually needs them
 13. After design approval, run or request planning conformance with the senior-developer reviewer before asking the user to approve Trekker creation.
 14. Validate the review feedback; incorporate accepted feedback and record rejected feedback with reasons.
 15. If implementation review finds a design concern, return to design review before asking for Trekker creation approval.
@@ -142,6 +145,7 @@ Tasks:
     Suggested subagents: none unless explicitly useful
   - Title:
     Description:
+    Planning artifact: yes/no (identify the task that persists the approved spec)
     Depends on:
     Subtasks:
     Verification:
@@ -149,7 +153,10 @@ Tasks:
     Suggested subagents:
 
 Dependencies:
-  - DEPENDENT depends on BLOCKER because ...
+  - DEPENDENT depends on BLOCKER
+    Classification: artifact-blocking | implementation-only
+    Rationale:
+    Artifact-blocking content/branch-basis reason: required only when classification is artifact-blocking
 ```
 
 ## Hard Constraints
