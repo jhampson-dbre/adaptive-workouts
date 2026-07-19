@@ -42,7 +42,9 @@ future required run re-probes capability.
 
 ## Preferred Model Tier
 
-Use GPT-5.6 with high reasoning for ambiguous product design, cross-component features, data model changes, or user workflow design. GPT-5.6 Terra is acceptable for small, well-understood feature plans; escalate high-risk architecture, auth, storage, migration, or deployment decisions to GPT-5.6.
+Primary: GPT-5.6 Sol with high reasoning. The native feature-planner-advisor configuration uses this model for ambiguous product design, cross-component features, data model changes, and user workflow design.
+
+Fallback: GPT-5.6 Terra with medium reasoning for small, well-understood feature plans when Sol is unavailable. Escalate high-risk architecture, auth, storage, migration, or deployment decisions to the primary mapping rather than using an unspecified GPT-5.6 model.
 
 ## Inputs From Main Agent
 
@@ -76,6 +78,9 @@ Use GPT-5.6 with high reasoning for ambiguous product design, cross-component fe
    - verification criteria
    - TDD expectations
    - likely subagent roles
+   - classify each dependency as artifact-blocking (prevents safe durable-spec persistence) or implementation-only (blocks later product work only)
+   - make the first planning-artifact task persist the approved spec when it can safely branch and commit; record a concrete rationale if it cannot
+   - attach external merges and fresh-authorization gates to the first implementation task that actually needs them
 13. After design approval, run or request planning conformance with the senior-developer reviewer before asking the user to approve Trekker creation.
 14. Validate the review feedback; incorporate accepted feedback and record rejected feedback with reasons.
 15. If implementation review finds a design concern, return to design review before asking for Trekker creation approval.
@@ -115,6 +120,11 @@ behavior, and write/migration coexistence behavior. Mixed legacy and current uni
 must have deterministic interpretation and conversion rules; otherwise the design
 remains blocked rather than passing the decision to implementation.
 
+When reload restoration is in scope, enumerate epoch/clock timestamps, elapsed and
+phase-boundary ledgers, ownership/generation and save-operation identity, reader/writer
+unit responsibilities, fallback, coexistence/version rules, and explicit
+null/missing/zero semantics needed for deterministic recovery.
+
 ```text
 | Field / persisted path | Reader/writer versions | Storage unit | Input/storage/display rounding or precision | Null/missing/zero/sentinel semantics | Cross-version reads / legacy-unit detection | Writes / migration / coexistence |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -140,6 +150,7 @@ Tasks:
     Suggested subagents: none unless explicitly useful
   - Title:
     Description:
+    Planning artifact: yes/no (identify the task that persists the approved spec)
     Depends on:
     Subtasks:
     Verification:
@@ -147,7 +158,10 @@ Tasks:
     Suggested subagents:
 
 Dependencies:
-  - DEPENDENT depends on BLOCKER because ...
+  - DEPENDENT depends on BLOCKER
+    Classification: artifact-blocking | implementation-only
+    Rationale:
+    Artifact-blocking content/branch-basis reason: required only when classification is artifact-blocking
 ```
 
 ## Hard Constraints
@@ -165,7 +179,7 @@ Dependencies:
 - Do not treat planning notes as the durable source of truth after Trekker is populated.
 - Do not skip duplicate search.
 - Do not create vague tasks without verification criteria.
-- Do not present a timing design for approval without a complete persisted-duration contract that resolves unit, rounding/precision, nullability/absence, and cross-version compatibility for every affected persisted duration field.
+- Do not present a timing design for approval without a complete persisted-duration and recovery contract that resolves timestamps, boundaries, ownership/version, save-operation identity, reader/writer units, fallback, nullability/absence, and cross-version compatibility whenever reload restoration is in scope.
 - Do not start implementation until planning Task 1 is completed and the user then gives separate fresh explicit approval to continue.
 
 ## Expected Output

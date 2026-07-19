@@ -122,6 +122,13 @@ field, record:
 - write and migration behavior, including whether old and new versions can safely
   coexist
 
+When reload restoration or active recovery is in scope, also enumerate recovery
+timestamps (with epoch/clock meaning), elapsed and phase-boundary ledgers, ownership
+or generation tokens, save-operation identity/idempotency fields, reader/writer unit
+responsibilities, fallback behavior, and coexistence/version rules. State explicit
+null, missing, and zero semantics for every recovery field; a duration-only table is
+not complete when deterministic restoration depends on this metadata.
+
 ```text
 | Field / persisted path | Reader/writer versions | Storage unit | Input/storage/display rounding or precision | Null/missing/zero/sentinel semantics | Cross-version reads / legacy-unit detection | Writes / migration / coexistence |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -188,6 +195,16 @@ Task 1: Establish the epic feature branch and durable approved spec
 Task 2 is the first implementation task and depends on Task 1. The implementation
 plan must state that Task 2 and all later implementation remain `todo` until the
 user gives a separate, fresh, explicit approval to continue after Task 1 completes.
+Classify every proposed dependency before adding it:
+
+- **artifact-blocking**: the dependency prevents the durable planning artifact itself from being safely branched, written, reviewed, or committed. Record the concrete content or branch-basis reason.
+- **implementation-only**: the dependency affects product implementation, integration, deployment, or a later authorization gate, but does not prevent persisting the already-approved design.
+
+Default the first planning task to create or switch to the focused branch and persist
+the approved spec as soon as it is safe. Do not block that durable artifact on an
+unrelated merge or external integration. Attach implementation-only merges and fresh
+authorization gates to the first task that actually needs them. If spec persistence
+must wait, record why it is artifact-blocking in the task and plan.
 
 For each verification criterion, label it as one of:
 
@@ -231,6 +248,7 @@ Tasks:
     Suggested subagents: none unless explicitly useful
   - Title:
     Description:
+    Planning artifact: yes/no (identify the task that persists the approved spec)
     Depends on:
     Subtasks:
       - Title:
@@ -240,7 +258,10 @@ Tasks:
     Suggested subagents:
 
 Dependencies:
-  - DEPENDENT depends on BLOCKER because ...
+  - DEPENDENT depends on BLOCKER
+    Classification: artifact-blocking | implementation-only
+    Rationale:
+    Artifact-blocking content/branch-basis reason: required only when classification is artifact-blocking
 ```
 
 ## Phase 6. Planning Conformance Review
@@ -256,6 +277,11 @@ Give the reviewer:
 - suggested subagent roles
 - related Trekker context
 - known constraints, risks, and non-goals
+
+The reviewer must check that every dependency is classified as artifact-blocking or
+implementation-only, that the planning-artifact task is independently completable
+when safe, and that external merge or fresh-authorization gates are attached to the
+first dependent implementation task.
 
 The main agent must validate each reviewer finding before changing the implementation plan. Valid feedback should be incorporated into the proposed Trekker records. Rejected feedback should be recorded in a short `Review notes:` section with the reason.
 
@@ -379,7 +405,12 @@ skip-recorded decisions require a rationale. Required work must attach a proport
 scenario-indexed UX artifact based on `docs/templates/ux-evidence-matrix.md` before
 formal design review. The artifact records the screen's job, action hierarchy and
 placement, compact wireframe, meaningful states, recovery, and feedback lifecycle;
-its evidence records are completed proportionally during execution.
+its evidence records are completed proportionally during execution. Give the
+pre-approval artifact a stable versioned identifier (for example,
+`UX-ARTIFACT: feature-flow@v1`) and record its authoritative inline or file location.
+Wireframes are planning-only, not rendered evidence. Before Task 1, capability fields
+remain `not-probed` / `not-run` without unsupported metadata; each required execution
+run completes them only after its own bounded probe.
 
 For required work, dispatch a fresh ux-design-reviewer before architecture-design-reviewer.
 Architecture retains authority for system boundaries, data, security, and feasibility;
@@ -412,10 +443,12 @@ Across the approval, record-creation, and Task 1 completion stages, confirm:
 - the implementation plan begins with Task 1 for the branch, durable approved spec, scoped planning commit, and epic references
 - tasks are independently completable
 - dependencies encode ordering
+- every dependency is classified as artifact-blocking or implementation-only, with a concrete rationale for any delay to durable spec persistence
+- the first planning-artifact task persists the approved spec when safely possible; external merges and fresh-authorization gates are attached to the first implementation task that needs them
 - subtasks are concrete
 - each task has verification criteria
 - implementation-specificity choices, permitted discretion, deferred checks, and completion boundaries are explicit where relevant
-- timing designs include a complete persisted-duration contract covering field/path, unit, rounding/precision, nullability/absence semantics, and cross-version read/write/migration compatibility
+- timing designs include a complete persisted-duration and recovery contract covering field/path, epoch timestamps, elapsed boundaries, ownership/version and save-operation identity, reader/writer units, rounding/precision, nullability/absence semantics, fallback, coexistence, and cross-version read/write/migration compatibility
 - deferred checks name their trigger, evidence, owner, and whether they need a follow-up task or subtask
 - behavior tasks have TDD expectations
 - execution can resume from Trekker alone

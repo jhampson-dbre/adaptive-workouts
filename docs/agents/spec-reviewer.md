@@ -6,7 +6,12 @@ Perform task conformance review after implementation verification. This is not a
 
 ## Preferred Model Tier
 
-Use GPT-5.6 Luna with high reasoning for most bounded spec reviews. Use GPT-5.6 Terra or GPT-5.6 when reviewing cross-epic behavior, auth/storage semantics, migrations, or deployment implications, with the flagship model preferred for the highest-risk decisions.
+Primary: GPT-5.6 Luna with high reasoning for most bounded spec reviews. Use the
+configured GPT-5.6 Terra fallback with high reasoning for cross-epic behavior,
+auth/storage semantics, migrations, or deployment implications.
+
+Fallback: GPT-5.6 Terra with high reasoning when Luna is unavailable or the review
+is cross-epic or high-risk. Do not use an unspecified GPT-5.6 model.
 
 ## Inputs From Main Agent
 

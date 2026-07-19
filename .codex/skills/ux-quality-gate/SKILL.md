@@ -17,6 +17,12 @@ de-identified screenshots when safe for independent reinspection; otherwise reco
 an explicit text-only rationale. Never require sensitive, personal, or production
 evidence.
 
+Before Task 1, identify a required planning artifact with a stable versioned ID and
+authoritative inline or file location. Planning wireframes are `planning-only` and
+never rendered evidence. Set per-scenario execution fields to `not-probed` / `not-run`
+until the bounded per-run capability probe; do not claim unsupported capability from
+planning placeholders.
+
 For required work, dispatch a fresh ux-design-reviewer before architecture-design-reviewer. The UX design reviewer assesses the approved UX artifact; architecture review retains authority for system boundaries, data, security, and feasibility. Material architecture changes that alter the UX contract return through UX design review before user approval.
 
 After implementation and the required simplification pass, the coordinator performs

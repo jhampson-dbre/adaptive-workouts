@@ -23,6 +23,8 @@ Review focus:
 - preserve architecture and user-approval authority; do not turn planning conformance into usability review
 - task boundaries and independence
 - dependency ordering
+- whether each dependency is artifact-blocking or implementation-only, including a concrete rationale for any delay to durable-spec persistence
+- whether the first planning-artifact task persists the approved spec as soon as it can safely branch and commit, with external merge and fresh-authorization gates attached only to the first implementation task that needs them
 - concrete subtasks
 - named artifacts and chosen mechanisms that affect consistency, such as workflow filenames, emulator lifecycles, and integration patterns
 - intentional, bounded implementation discretion

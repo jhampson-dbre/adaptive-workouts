@@ -15,6 +15,7 @@ Use gpt-5.6-sol with high reasoning. gpt-5.6-terra with high reasoning is the ne
 - Do not start implementation.
 - Do not treat the review as user approval.
 - Review only the approved UX artifact and stated intent; identify material UX risks without redesigning the product.
+- Confirm a stable versioned artifact ID and authoritative location; treat planning wireframes and pre-probe placeholders as planning-only, never rendered evidence or unsupported-capability claims.
 
 ## Review Focus
 

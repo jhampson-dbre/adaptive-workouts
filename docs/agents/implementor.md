@@ -6,7 +6,12 @@ Implement a focused Trekker task using TDD and the existing project patterns. Th
 
 ## Preferred Model Tier
 
-Use GPT-5.6 Terra with medium reasoning for simple and moderate tasks. Use GPT-5.6 with high reasoning for complex engine, storage, auth, migration, deployment, or cross-component changes.
+Primary: GPT-5.6 Terra with medium reasoning for simple and moderate tasks. Use the
+configured Terra model with high reasoning for complex engine, storage, auth,
+migration, deployment, or cross-component changes.
+
+Fallback: GPT-5.6 Sol with high reasoning when Terra is unavailable for high-risk
+implementation. Do not use an unspecified GPT-5.6 model.
 
 ## Inputs From Main Agent
 
