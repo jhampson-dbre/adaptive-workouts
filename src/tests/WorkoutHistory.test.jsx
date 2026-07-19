@@ -1,8 +1,12 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, expect, test } from 'vitest';
 import WorkoutHistory from '../components/WorkoutHistory';
 
 afterEach(cleanup);
+
+function openHistory() {
+  fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
+}
 
 const identity = { id: 'bench', name: 'Bench Press', muscleGroup: 'Chest', tier: 1 };
 
@@ -70,15 +74,32 @@ function v3Workout(overrides = {}) {
   };
 }
 
-test('renders loading, error, empty, and a semantic read-only history section', () => {
+test('keeps history content semantically quiet until its stable disclosure opens', () => {
+  const { rerender } = render(<WorkoutHistory loading history={[]} />);
+  const disclosure = screen.getByRole('button', { name: 'Workout history' });
+  expect(disclosure.getAttribute('aria-expanded')).toBe('false');
+  expect(disclosure.getAttribute('aria-controls')).toBeTruthy();
+  expect(screen.queryByText('Loading history...')).toBeNull();
+  rerender(<WorkoutHistory error="Failed to load workout history." history={[]} />);
+  expect(screen.queryByRole('alert')).toBeNull();
+  openHistory();
+  expect(disclosure.getAttribute('aria-expanded')).toBe('true');
+  expect(screen.getByRole('alert').textContent).toMatch(/failed to load/i);
+  openHistory();
+  expect(disclosure.getAttribute('aria-expanded')).toBe('false');
+  expect(screen.queryByRole('alert')).toBeNull();
+});
+
+test('renders loading, error, empty, and a semantic read-only history section after opening', () => {
   const { rerender } = render(<WorkoutHistory loading history={[]} />);
   expect(screen.getByRole('region', { name: 'Workout History' })).toBeDefined();
+  openHistory();
   expect(screen.getByText('Loading history...')).toBeDefined();
   rerender(<WorkoutHistory error="Failed to load workout history." history={[]} />);
   expect(screen.getByRole('alert').textContent).toMatch(/failed to load/i);
   rerender(<WorkoutHistory history={[]} />);
   expect(screen.getByText('No workouts logged yet.')).toBeDefined();
-  expect(screen.queryAllByRole('button')).toHaveLength(0);
+  expect(screen.queryAllByRole('button')).toHaveLength(1);
   expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
 });
 
@@ -87,6 +108,7 @@ test('renders legacy entries as guarded summaries without version or completion 
     id: 'legacy', date: '2026-07-11T12:00:00Z', actualDuration: 30,
     exercises: [{ name: 'Squat', sets: 3 }, null],
   }]} />);
+  openHistory();
   expect(screen.getByText('Squat: 3 sets')).toBeDefined();
   expect(screen.queryByText(/schema|version|confirmed|completed/i)).toBeNull();
 });
@@ -101,6 +123,7 @@ test('renders valid v2 modes and hides unconfirmed tracked performance', () => {
     { id: 'plank', name: 'Plank', muscleGroup: 'Core', tier: 1, trackingMode: 'simple', sets: 1, prescribedSetCount: 1, completed: false },
   ] });
   render(<WorkoutHistory history={[entry]} />);
+  openHistory();
   expect(screen.getByText(/Target: 100 lb.*Actual: 100 lb.*8 reps.*Confirmed/)).toBeDefined();
   expect(screen.getAllByText(/Target: 100 lb.*Not confirmed/)).toHaveLength(1);
   expect(screen.queryByText(/777|99 reps/)).toBeNull();
@@ -112,6 +135,7 @@ test('renders valid v2 modes and hides unconfirmed tracked performance', () => {
 
 test('shows confirmed bodyweight categories and totals', () => {
   render(<WorkoutHistory history={[workout({ exercises: [bodyweight()] })]} />);
+  openHistory();
   expect(screen.getByText(/Target: 8 reps.*Full: 4.*Assisted: 2.*Eccentric: 1.*Total: 7.*Confirmed/)).toBeDefined();
 });
 
@@ -127,6 +151,7 @@ test('uses only saved rationale fields for every stable recommendation reason', 
   ];
   for (const [reason, expected] of cases) {
     const { unmount } = render(<WorkoutHistory history={[workout({ exercises: [weighted({ sets: 1, prescribedSetCount: 1, setRecords: [weightedRecord(0, { recommendationReason: reason })] })] })]} />);
+    openHistory();
     expect(screen.getByText(expected)).toBeDefined();
     unmount();
   }
@@ -146,6 +171,7 @@ test('renders saved backoff explanations including capped recommendations', () =
   for (const [reason, expected] of reasons) {
     const records = [weightedRecord(0), weightedRecord(1, { targetWeight: reason.recommendedWeight, recommendationReason: reason })];
     const { unmount } = render(<WorkoutHistory history={[workout({ exercises: [weighted({ setRecords: records })] })]} />);
+    openHistory();
     expect(screen.getByText(expected)).toBeDefined();
     unmount();
   }
@@ -156,6 +182,7 @@ test('salvages valid siblings from a valid v2 envelope but falls back for invali
   const mixed = workout({ exercises: [bodyweight(), { bad: true }, invalidReason, weighted()] });
   const invalidEnvelope = workout({ id: 'bad-envelope', exercises: 'nope' });
   render(<WorkoutHistory history={[mixed, invalidEnvelope, null, { schemaVersion: 99 }]} />);
+  openHistory();
   expect(screen.getByText('Pull Up')).toBeDefined();
   expect(screen.getByText('Bench Press')).toBeDefined();
   expect(screen.getAllByText('Exercise details unavailable.')).toHaveLength(2);
@@ -173,6 +200,7 @@ test('formats date-only values without rollback, guards invalid dates, and prese
     workout({ id: 'impossible', date: '2026-02-30', exercises: [bodyweight({ name: 'Impossible-date exercise' })] }),
     workout({ id: 'second', date: 'not-a-date', exercises: [bodyweight({ name: 'Second workout exercise' })] }),
   ]} />);
+  openHistory();
   expect(screen.getByText(localTimestampDate)).toBeDefined();
   expect(screen.getByText(/January 1, 2026/)).toBeDefined();
   expect(screen.getAllByText('Unknown date')).toHaveLength(2);
@@ -183,6 +211,7 @@ test('formats date-only values without rollback, guards invalid dates, and prese
 
 test('treats a non-array history result as empty instead of crashing', () => {
   const { rerender } = render(<WorkoutHistory history={null} />);
+  openHistory();
   expect(screen.getByText('No workouts logged yet.')).toBeDefined();
   rerender(<WorkoutHistory history={{ bad: true }} />);
   expect(screen.getByText('No workouts logged yet.')).toBeDefined();
@@ -190,6 +219,7 @@ test('treats a non-array history result as empty instead of crashing', () => {
 
 test('renders valid v3 total and per-set work, planned rest, actual rest, and overtime', () => {
   render(<WorkoutHistory history={[v3Workout()]} />);
+  openHistory();
 
   expect(screen.getByText('Duration: 2:05')).toBeDefined();
   expect(screen.getByText('Work: 0:12 · Planned rest: 1:00 · Actual rest: 1:10 · Overtime: 0:10')).toBeDefined();
@@ -202,6 +232,7 @@ test('treats malformed v3 as wholly unavailable instead of salvaging occurrences
     exercises: [v3Workout().exercises[0], { bad: true }],
   });
   render(<WorkoutHistory history={[malformed]} />);
+  openHistory();
 
   expect(screen.getByText('Saved workout details are unavailable.')).toBeDefined();
   expect(screen.queryByText('Plank')).toBeNull();

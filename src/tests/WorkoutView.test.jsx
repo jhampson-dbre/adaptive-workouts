@@ -45,6 +45,79 @@ const weighted = [{
   })),
 }];
 
+test('keeps a same-exercise rest beside the next Start control while completed sets stay compact', () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
+  renderWorkout([timedWorkout[0]]);
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+
+  const nextStart = screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i });
+  expect(nextStart.parentElement.textContent).toMatch(/Rest: 0:02 remaining/i);
+  expect(screen.getByRole('button', { name: /Show details for Plank set 1/i })).toBeDefined();
+  expect(screen.queryByRole('button', { name: /Undo set 1/i })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: /Show details for Plank set 1/i }));
+  expect(screen.getByRole('button', { name: /Undo set 1/i })).toBeDefined();
+});
+
+test('a reconfirmed set returns to compact presentation after details and Undo', () => {
+  renderWorkout([timedWorkout[0]]);
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Show details for Plank set 1/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Undo set 1/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+
+  expect(screen.getByRole('button', { name: /Show details for Plank set 1/i })).toBeDefined();
+  expect(screen.queryByRole('button', { name: /Undo set 1/i })).toBeNull();
+});
+
+test('next Start omits predecessor rest after the live rest closes and in initialized completed-prefix state', () => {
+  const exercise = timedWorkout[0];
+  const first = renderWorkout([exercise]);
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 2 cancel/i }));
+  expect(screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i }).parentElement.textContent).toBe('Start set');
+  first.unmount();
+
+  renderWorkout([{
+    ...exercise,
+    setRecords: [
+      { ...exercise.setRecords[0], completed: true, workDurationSeconds: 4, actualRestSeconds: 3 },
+      { ...exercise.setRecords[1] },
+    ],
+  }]);
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  expect(screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i }).parentElement.textContent).toBe('Start set');
+  fireEvent.click(screen.getByRole('button', { name: /Show details for Plank set 1/i }));
+  expect(screen.getByText('Rest: 0:03 actual / 0:02 planned')).toBeDefined();
+});
+
+test('editing completed details preserves another set invalid-confirmation feedback', () => {
+  renderWorkout(weighted);
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /set 1 confirm/i }));
+  fireEvent.click(screen.getByRole('button', { name: /set 2 start/i }));
+  fireEvent.change(screen.getByRole('spinbutton', { name: /set 2 actual reps/i }), { target: { value: '' } });
+  fireEvent.click(screen.getByRole('button', { name: /set 2 confirm/i }));
+  const confirm = screen.getByRole('button', { name: /set 2 confirm/i });
+  expect(confirm.getAttribute('aria-describedby')).toBe('exercise-0-feedback');
+
+  fireEvent.click(screen.getByRole('button', { name: /Show details for Bench Press set 1/i }));
+  fireEvent.change(screen.getByRole('spinbutton', { name: /set 1 actual weight/i }), { target: { value: '95' } });
+
+  expect(screen.getByRole('alert').textContent).toMatch(/Bench Press set 2/i);
+  expect(confirm.getAttribute('aria-describedby')).toBe('exercise-0-feedback');
+  fireEvent.change(screen.getByRole('spinbutton', { name: /set 2 actual reps/i }), { target: { value: '8' } });
+  expect(screen.queryByRole('alert')).toBeNull();
+});
+
 test('starts explicitly with set controls disabled and one shared total timer', async () => {
   vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
   renderWorkout(timedWorkout);
@@ -153,17 +226,48 @@ test('retiring one duplicate-name rest announcement preserves the other occurren
   expect(screen.getByRole('status').textContent).toBe('Plank set 1 rest is complete. Overtime has started.');
 });
 
-test('blocks global concurrent work and Finish with a semantic status', () => {
+test('keeps blocked Start feedback with its exercise and blocked Finish feedback beside Finish', () => {
   vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
   renderWorkout(timedWorkout);
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat.*expand/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 2 set 1 start/i }));
-  expect(screen.getByRole('status').textContent).toMatch(/Only one work timer/i);
+  expect(screen.getByRole('alert').textContent).toMatch(/Only one work timer/i);
   fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
   expect(screen.queryByRole('region', { name: 'Workout summary' })).toBeNull();
-  expect(screen.getByRole('status').textContent).toMatch(/Finish or cancel Plank set 1/i);
+  expect(screen.getByText(/Finish or cancel Plank set 1 before finishing/i)).toBeDefined();
+});
+
+test('cancelling the active owner retires a blocked Start error in another exercise', () => {
+  renderWorkout(timedWorkout);
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Squat.*expand/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 2 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i }));
+  expect(screen.getByRole('alert').textContent).toMatch(/Only one work timer can run/i);
+
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 2 set 1 cancel/i }));
+
+  expect(screen.queryByRole('alert')).toBeNull();
+});
+
+test('retires contextual and Finish feedback after correction or cancellation without using the rest announcer', () => {
+  renderWorkout(weighted);
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.change(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }), { target: { value: '' } });
+  fireEvent.click(screen.getByRole('button', { name: /set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /set 1 confirm/i }));
+  expect(screen.getByRole('alert').textContent).toMatch(/valid performance values/i);
+  expect(screen.getByRole('status').textContent).toBe('');
+  fireEvent.change(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }), { target: { value: '8' } });
+  expect(screen.queryByRole('alert')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  expect(screen.getByText(/Finish or cancel Bench Press set 1 before finishing/i)).toBeDefined();
+  fireEvent.click(screen.getByRole('button', { name: /set 1 cancel/i }));
+  expect(screen.queryByText(/Finish or cancel Bench Press set 1 before finishing/i)).toBeNull();
 });
 
 test('cancel leaves the set ready without recording work or rest', () => {
@@ -181,7 +285,7 @@ test('weighted confirmation validates inputs and unlocks the next set with backo
   fireEvent.change(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }), { target: { value: '' } });
   fireEvent.click(screen.getByRole('button', { name: /set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /set 1 confirm/i }));
-  expect(screen.getByRole('status').textContent).toMatch(/valid performance values/i);
+  expect(screen.getByText(/valid performance values/i)).toBeDefined();
   fireEvent.change(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }), { target: { value: '4' } });
   fireEvent.click(screen.getByRole('button', { name: /set 1 confirm/i }));
   expect(screen.getByRole('button', { name: /set 2 start/i })).toBeDefined();
@@ -259,6 +363,7 @@ test('visible rest alerts fire once per rest identity and reconfirming creates o
     expect(vibrate).toHaveBeenCalledTimes(1);
     expect(AudioContextMock).toHaveBeenCalledTimes(1);
 
+    fireEvent.click(screen.getByRole('button', { name: /Show details for Plank set 1/i }));
     fireEvent.click(screen.getByRole('button', { name: /Undo set 1/i }));
     fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
     fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
@@ -342,6 +447,7 @@ test('undoing a final set re-expands its exercise', async () => {
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   await waitFor(() => expect(screen.getByRole('button', { name: /Squat.*expand/i })).toBeDefined());
   fireEvent.click(screen.getByRole('button', { name: /Squat.*expand/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Show details for Squat set 1/i }));
   fireEvent.click(screen.getByRole('button', { name: /Undo set 1/i }));
   expect(screen.getByRole('button', { name: /Squat.*collapse/i }).getAttribute('aria-expanded')).toBe('true');
   expect(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i })).toBeDefined();
@@ -412,6 +518,9 @@ test('a failed frozen save remains bound to the account that created it', async 
 test('history loading and failure remain nonblocking', async () => {
   storage.getHistory.mockRejectedValueOnce(new Error('offline'));
   renderWorkout([]);
+  expect(storage.getHistory).toHaveBeenCalledWith('test-user-id');
+  expect(screen.queryByText('Failed to load workout history.')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
   expect(await screen.findByText('Failed to load workout history.')).toBeDefined();
   expect(screen.getByRole('button', { name: 'Start Workout' })).toBeDefined();
 });
@@ -523,6 +632,7 @@ test('history fetch failure stays separate while a timed workout saves successfu
   storage.saveWorkout.mockResolvedValueOnce(undefined);
   const onFinish = vi.fn();
   renderWorkout([{ ...timedWorkout[1] }], onFinish);
+  fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
   expect(await screen.findByText('Failed to load workout history.')).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
