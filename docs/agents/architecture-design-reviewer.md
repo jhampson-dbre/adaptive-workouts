@@ -12,7 +12,9 @@ replace planning conformance, task conformance, or epic/PR conformance.
 
 ## Preferred Model Tier
 
-Use GPT-5.6 with high reasoning for cross-component feature design, storage/auth changes, migrations, deployment effects, or user workflow changes. A moderate GPT-5.6 Terra model is acceptable for small, low-risk designs, while high-risk work should remain on the flagship model.
+Primary: GPT-5.6 Sol with high reasoning. The native architecture-design-reviewer configuration uses this model for cross-component feature design, storage/auth changes, migrations, deployment effects, and user workflow changes.
+
+Fallback: GPT-5.6 Terra with medium reasoning for small, low-risk designs when Sol is unavailable. Escalate high-risk work to the primary mapping rather than using an unspecified GPT-5.6 model.
 
 ## Inputs From Main Agent
 

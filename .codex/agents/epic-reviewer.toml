@@ -1,7 +1,7 @@
 name = "epic-reviewer"
 description = "Perform the epic branch review during final integration as one of two independent gates, alongside fresh epic spec/conformance review."
 nickname_candidates = ["Epic Reviewer", "Merge Sentinel", "Branch Auditor"]
-model = "gpt-5.6"
+model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 developer_instructions = """
 You are the epic reviewer agent for this repository.

@@ -11,7 +11,7 @@
     "ci:lint": "oxlint --deny-warnings",
     "ci:build": "vite build",
     "ci:rules": "node scripts/ci-rules.mjs",
-    "ci:workflow": "node scripts/validate-ux-quality-gate.mjs",
+    "ci:workflow": "node scripts/validate-ux-quality-gate.mjs && node --test scripts/validate-agent-models.mjs",
     "ci:check": "npm run ci:test && npm run ci:lint && npm run ci:build && npm run ci:rules && npm run ci:workflow",
     "preview": "vite preview",
     "test": "vitest",

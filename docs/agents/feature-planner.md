@@ -42,7 +42,9 @@ future required run re-probes capability.
 
 ## Preferred Model Tier
 
-Use GPT-5.6 with high reasoning for ambiguous product design, cross-component features, data model changes, or user workflow design. GPT-5.6 Terra is acceptable for small, well-understood feature plans; escalate high-risk architecture, auth, storage, migration, or deployment decisions to GPT-5.6.
+Primary: GPT-5.6 Sol with high reasoning. The native feature-planner-advisor configuration uses this model for ambiguous product design, cross-component features, data model changes, and user workflow design.
+
+Fallback: GPT-5.6 Terra with medium reasoning for small, well-understood feature plans when Sol is unavailable. Escalate high-risk architecture, auth, storage, migration, or deployment decisions to the primary mapping rather than using an unspecified GPT-5.6 model.
 
 ## Inputs From Main Agent
 
