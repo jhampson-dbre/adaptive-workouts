@@ -8,9 +8,12 @@ reviews, and Trekker state.
 
 ## Preferred Model Tier
 
-Use GPT-5.6 Terra with medium reasoning for focused diffs. Use GPT-5.6 with high
-reasoning when the authorized diff contains complex shared logic, concurrency,
-storage, auth, migration, or deployment behavior.
+Primary: GPT-5.6 Terra with medium reasoning for focused diffs. Use the configured
+Terra model with high reasoning when the authorized diff contains complex shared
+logic, concurrency, storage, auth, migration, or deployment behavior.
+
+Fallback: GPT-5.6 Sol with high reasoning when Terra is unavailable for high-risk
+simplification. Do not use an unspecified GPT-5.6 model.
 
 ## Inputs From Main Agent
 
@@ -50,6 +53,11 @@ output and before final verification and reviews. One additional fresh dispatch 
 allowed after substantive review-driven fixes only when those fixes materially
 reshape or reintroduce complexity. There is at most one post-review rerun per task;
 simplifier edits and re-verification requests never trigger another pass.
+
+For UI work classified `required`, preserve the approved UX artifact. You cannot
+redesign or expand approved UX scope. Treat approved scenarios, states, recovery,
+and interaction behavior as observable behavior under the exact-preservation
+contract; report a scope concern to the coordinator rather than simplifying it away.
 
 ## Hard Constraints
 

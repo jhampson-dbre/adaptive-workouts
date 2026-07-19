@@ -1,0 +1,7 @@
+interface:
+  display_name: "UX Quality Gate"
+  short_description: "Apply risk-proportional UX workflow checks"
+  default_prompt: "Use $ux-quality-gate to classify this UI work and apply the approved UX workflow."
+
+policy:
+  allow_implicit_invocation: true
