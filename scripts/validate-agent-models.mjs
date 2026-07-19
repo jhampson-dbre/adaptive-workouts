@@ -1,4 +1,4 @@
-// This native Node test is invoked by ci:workflow, not Vitest discovery.
+// This native Node test is invoked by ci:agent-models, not Vitest discovery.
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
