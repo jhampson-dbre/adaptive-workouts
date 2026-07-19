@@ -3,6 +3,7 @@ import {
   isValidV2ExerciseOccurrence,
   isValidV2WorkoutEnvelope,
 } from '../utils/workoutSchema';
+import { useState } from 'react';
 
 const localDateFormatter = new Intl.DateTimeFormat(undefined, {
   year: 'numeric', month: 'long', day: 'numeric',
@@ -263,14 +264,28 @@ function HistoryEntry({ entry }) {
 
 export default function WorkoutHistory({ history = [], loading = false, error = null }) {
   const entries = Array.isArray(history) ? history : [];
+  const [isOpen, setIsOpen] = useState(false);
   return (
     <section className="workout-history-section" aria-labelledby="workout-history-heading">
-      <h2 id="workout-history-heading">Workout History</h2>
-      {loading ? <p>Loading history...</p> : error ? (
-        <p className="error-message" role="alert">{error}</p>
-      ) : entries.length === 0 ? <p>No workouts logged yet.</p> : (
-        <div className="history-list">
-          {entries.map((entry, index) => <HistoryEntry entry={entry} key={entry?.id || index} />)}
+      <h2 id="workout-history-heading" className="visually-hidden">Workout History</h2>
+      <button
+        type="button"
+        className="history-disclosure"
+        aria-expanded={isOpen}
+        aria-controls="workout-history-content"
+        onClick={() => setIsOpen(open => !open)}
+      >
+        Workout history
+      </button>
+      {isOpen && (
+        <div id="workout-history-content">
+          {loading ? <p>Loading history...</p> : error ? (
+            <p className="error-message" role="alert">{error}</p>
+          ) : entries.length === 0 ? <p>No workouts logged yet.</p> : (
+            <div className="history-list">
+              {entries.map((entry, index) => <HistoryEntry entry={entry} key={entry?.id || index} />)}
+            </div>
+          )}
         </div>
       )}
     </section>

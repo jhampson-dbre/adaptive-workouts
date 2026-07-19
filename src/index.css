@@ -559,6 +559,11 @@ code {
   margin-top: 2rem;
 }
 
+.history-disclosure {
+  min-height: 44px;
+  margin-bottom: 1rem;
+}
+
 .history-list,
 .history-exercise-list,
 .history-set-list,

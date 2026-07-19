@@ -460,6 +460,9 @@ test('a failed frozen save remains bound to the account that created it', async 
 test('history loading and failure remain nonblocking', async () => {
   storage.getHistory.mockRejectedValueOnce(new Error('offline'));
   renderWorkout([]);
+  expect(storage.getHistory).toHaveBeenCalledWith('test-user-id');
+  expect(screen.queryByText('Failed to load workout history.')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
   expect(await screen.findByText('Failed to load workout history.')).toBeDefined();
   expect(screen.getByRole('button', { name: 'Start Workout' })).toBeDefined();
 });
@@ -571,6 +574,7 @@ test('history fetch failure stays separate while a timed workout saves successfu
   storage.saveWorkout.mockResolvedValueOnce(undefined);
   const onFinish = vi.fn();
   renderWorkout([{ ...timedWorkout[1] }], onFinish);
+  fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
   expect(await screen.findByText('Failed to load workout history.')).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
