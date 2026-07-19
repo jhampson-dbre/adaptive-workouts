@@ -398,7 +398,12 @@ skip-recorded decisions require a rationale. Required work must attach a proport
 scenario-indexed UX artifact based on `docs/templates/ux-evidence-matrix.md` before
 formal design review. The artifact records the screen's job, action hierarchy and
 placement, compact wireframe, meaningful states, recovery, and feedback lifecycle;
-its evidence records are completed proportionally during execution.
+its evidence records are completed proportionally during execution. Give the
+pre-approval artifact a stable versioned identifier (for example,
+`UX-ARTIFACT: feature-flow@v1`) and record its authoritative inline or file location.
+Wireframes are planning-only, not rendered evidence. Before Task 1, capability fields
+remain `not-probed` / `not-run` without unsupported metadata; each required execution
+run completes them only after its own bounded probe.
 
 For required work, dispatch a fresh ux-design-reviewer before architecture-design-reviewer.
 Architecture retains authority for system boundaries, data, security, and feasibility;

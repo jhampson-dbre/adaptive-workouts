@@ -19,19 +19,27 @@ evidence.
 | Classification | `required` / `optional` / `skip-recorded` |
 | Applicability rationale | Why the gate applies, is optional, or is genuinely not applicable |
 | Proportional artifact | Link or path to the scenario-indexed artifact; record its risk/depth rationale |
+| Planning artifact revision | Stable versioned identifier (for example, `UX-ARTIFACT: resolve-flow@v2`) and the authoritative inline or file location. Revise by creating the next version; do not rely on chat ordering. |
+| Planning wireframe status | `planning-only`; compact wireframes communicate the approved intended flow and are not rendered implementation evidence. |
 | Required UX design review | Reviewer handoff/status, or durable reason it is not required |
 | Architecture authority | Architecture retains authority for system boundaries, data, security, and feasibility |
 
 ## Per-scenario record
+
+Before implementation, create a scenario row with its stable ID, name, changed
+surface, approved flow, and planning wireframe. Leave capability and execution-evidence
+fields as `not-probed` / `not-run`; do not infer a capability state or unsupported
+metadata from planning. On every required execution run, replace those placeholders
+only after the bounded per-run capability probe.
 
 | Field | Record |
 | --- | --- |
 | Scenario ID and name | Stable identifier and user outcome |
 | Changed surface | UI surface or `none`; direct changed-surface findings block |
 | Applicability | `applicable` / `genuinely-not-applicable` and rationale |
-| Per-run capability probe | Harness, version/session, bounded safe probe, and result; re-probe every future required run and do not cache waivers |
-| `capability_state` | `supported` / `partial` / `unsupported` |
-| Unsupported metadata | For unsupported only: `capability_reason: unsupported-by-harness`; harness/version/session; eligible alternatives and selection rationale; bounded safe probe; limitation; fallback; residual risk; reactivation trigger |
+| Per-run capability probe | `not-probed` before execution; otherwise harness, version/session, bounded safe probe, and result. Re-probe every future required run and do not cache waivers. |
+| `capability_state` | `not-probed` before execution; otherwise `supported` / `partial` / `unsupported` |
+| Unsupported metadata | `not-applicable-before-probe` until a probe. For unsupported only: `capability_reason: unsupported-by-harness`; harness/version/session; eligible alternatives and selection rationale; bounded safe probe; limitation; fallback; residual risk; reactivation trigger |
 | Evidence kind | `rendered-primary` / `rendered-proxy` / `component-test` / `source-audit` |
 | Outcome | `observed-pass` / `defect` / `inconclusive` / `not-tested` / `static-risk` |
 | Changed-surface routing | Direct changed-surface defect blocks; unrelated finding uses duplicate search and approved follow-up routing |
@@ -44,7 +52,7 @@ evidence.
 | Starting state | Initial route, authenticated state, fixture state, and preconditions |
 | Action | User or test action |
 | Observed result | What actually occurred, including recovery or feedback retirement |
-| Evidence link and limitation | Screenshot/link when safe, or explicit text-only rationale; limitation and residual risk |
+| Evidence link and limitation | `planning-only` before execution; otherwise screenshot/link when safe, or explicit text-only rationale; limitation and residual risk. A planning wireframe never substitutes for rendered evidence. |
 
 ## Interpretation rules
 

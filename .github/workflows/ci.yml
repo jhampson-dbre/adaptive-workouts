@@ -32,7 +32,7 @@ jobs:
         run: npm run ci:lint
 
       - name: Validate agent model contract
-        run: npm run ci:workflow
+        run: npm run ci:agent-models
 
       - name: Build app
         run: npm run ci:build
