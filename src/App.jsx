@@ -162,7 +162,7 @@ function App() {
         </button>
       </header>
       
-      <main tabIndex="-1">
+      <main className={isBaselineBuild ? 'baseline-focus-target' : undefined} tabIndex={isBaselineBuild ? '-1' : undefined}>
         {showSettings && (
           <Settings onClose={() => setShowSettings(false)} />
         )}
@@ -175,6 +175,7 @@ function App() {
             setUnrecoveredGroups={setUnrecoveredGroups}
             onGenerate={(w) => setWorkout(w)}
             headingRef={generateHeadingRef}
+            baselineFocus={isBaselineBuild}
           />
         )}
         

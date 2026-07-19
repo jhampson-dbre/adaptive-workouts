@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
 
 import { buildScenario, scenarioDefinitions } from '../../scripts/emulator/scenarios/index.mjs';
@@ -9,6 +9,40 @@ import { isValidV3WorkoutDocument } from '../utils/workoutSchema';
 import { getNextSessionRecommendation } from '../utils/progression';
 import { generateWorkout } from '../utils/engine';
 import baselineFixture from '../../scripts/emulator/fixtures/baseline.mjs';
+
+const isScenarioOutcomeChild = process.env.EMULATOR_SCENARIO_OUTCOME_CHILD === '1';
+
+const atChicagoReferenceNoon = referenceDate => {
+  const [year, month, day] = referenceDate.split('-').map(Number);
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(year, month - 1, day, 12));
+};
+
+const runScenarioOutcomeChild = testName => {
+  const child = spawnSync(process.execPath, [
+    'node_modules/vitest/vitest.mjs', 'run', 'src/tests/emulatorScenarios.test.js', '-t', testName, '--fileParallelism=false',
+  ], {
+    cwd: process.cwd(),
+    env: { ...process.env, EMULATOR_SCENARIO_OUTCOME_CHILD: '1', TZ: 'America/Chicago' },
+    encoding: 'utf8',
+    timeout: 30_000,
+  });
+  expect(child.status, child.stderr).toBe(0);
+};
+
+const productionScenarioSignals = referenceDate => {
+  const catalog = baselineFixture.firestore.catalog;
+  const settings = baselineFixture.firestore.user;
+  const quota = buildScenario('tier4-quota-closed-open', referenceDate);
+  const quotaCatalog = catalog.filter(exercise => ['bench-press', 'cable-row', 'standing-calf-raise'].includes(exercise.id)).map(exercise => ({ ...exercise, sets: 1 }));
+  const quotaSettings = { ...settings, staleThreshold: 99 };
+  return {
+    pivot: generateWorkout(60, [], false, catalog, buildScenario('pivot-rotation-staleness', referenceDate).documents, settings)[0].muscleGroup,
+    legs: generateWorkout(60, [], false, catalog, buildScenario('recent-primary-leg-suppresses-tier4', referenceDate).documents, settings).filter(exercise => exercise.tier === 4 && exercise.muscleGroup === 'Legs').map(exercise => exercise.id),
+    closedQuota: generateWorkout(1.75, [], false, quotaCatalog, quota.documents.slice(0, 3), quotaSettings).map(exercise => exercise.id),
+    openQuota: generateWorkout(1.75, [], false, quotaCatalog, quota.documents, quotaSettings).map(exercise => exercise.id),
+  };
+};
 
 const fakeAdmin = ({ profile = 'scratch', history = new Map(), retries = 1 } = {}) => async (_options, callback) => {
   const userRef = {
@@ -39,6 +73,7 @@ const fakeAdmin = ({ profile = 'scratch', history = new Map(), retries = 1 } = {
 };
 
 describe('emulator history scenarios', () => {
+  afterEach(() => vi.useRealTimers());
   it('proves Chicago local noon across summer, winter, and shifted reference dates in a child process', () => {
     const script = `import { buildScenario } from './scripts/emulator/scenarios/index.mjs'; console.log(JSON.stringify({ summer: buildScenario('weighted-progression', '2026-07-18').documents.map(x => x.date), shifted: buildScenario('weighted-progression', '2026-07-19').documents.map(x => x.date), winter: buildScenario('weighted-progression', '2026-01-18').documents.map(x => x.date) }));`;
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], { cwd: process.cwd(), env: { ...process.env, TZ: 'America/Chicago' }, encoding: 'utf8' });
@@ -69,22 +104,36 @@ describe('emulator history scenarios', () => {
     }
   });
 
-  it('preserves the intended pivot, leg suppression, and quota scenario signals', () => {
-    const catalog = baselineFixture.firestore.catalog;
+  it('preserves the intended pivot, leg suppression, and quota scenario signals at the scenario reference-date local noon', () => {
+    if (!isScenarioOutcomeChild) return runScenarioOutcomeChild('preserves the intended pivot');
+    expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe('America/Chicago');
+    atChicagoReferenceNoon('2026-07-18');
     const settings = baselineFixture.firestore.user;
-    const pivot = generateWorkout(60, [], false, catalog, buildScenario('pivot-rotation-staleness', '2026-07-18').documents, settings);
-    expect(pivot[0].muscleGroup).toBe('Shoulders');
+    const signals = productionScenarioSignals('2026-07-18');
+    expect(signals.pivot).toBe('Shoulders');
     const staleBench = buildScenario('pivot-rotation-staleness', '2026-07-18').documents.find(document => document.id === 'scenario-stale-chest');
     expect(Math.round((Date.parse('2026-07-18T12:00:00-05:00') - Date.parse(staleBench.date)) / 86_400_000)).toBeGreaterThan(settings.staleThreshold);
-    const legs = generateWorkout(60, [], false, catalog, buildScenario('recent-primary-leg-suppresses-tier4', '2026-07-18').documents, settings);
-    expect(legs.filter(exercise => exercise.tier === 4 && exercise.muscleGroup === 'Legs')).toEqual([]);
     const quota = buildScenario('tier4-quota-closed-open', '2026-07-18');
-    const quotaCatalog = catalog.filter(exercise => ['bench-press', 'cable-row', 'standing-calf-raise'].includes(exercise.id)).map(exercise => ({ ...exercise, sets: 1 }));
-    const quotaSettings = { ...settings, staleThreshold: 99 };
-    const closed = generateWorkout(1.75, [], false, quotaCatalog, quota.documents.slice(0, 3), quotaSettings);
-    const open = generateWorkout(1.75, [], false, quotaCatalog, quota.documents, quotaSettings);
-    expect(closed.map(exercise => exercise.id)).toEqual(quota.expected.quota.closedOutput);
-    expect(open.map(exercise => exercise.id)).toEqual(quota.expected.quota.openOutput);
+    expect(signals.legs).toEqual([]);
+    expect(signals.closedQuota).toEqual(quota.expected.quota.closedOutput);
+    expect(signals.openQuota).toEqual(quota.expected.quota.openOutput);
+  });
+
+  it('keeps production-algorithm scenario outcomes tied to the supplied reference date when the wall clock shifts', () => {
+    if (!isScenarioOutcomeChild) return runScenarioOutcomeChild('keeps production-algorithm scenario outcomes');
+    expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe('America/Chicago');
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 10, 18, 12));
+    const quota = buildScenario('tier4-quota-closed-open', '2026-07-18');
+    const expected = {
+      pivot: 'Shoulders',
+      legs: [],
+      closedQuota: quota.expected.quota.closedOutput,
+      openQuota: quota.expected.quota.openOutput,
+    };
+    expect(productionScenarioSignals('2026-07-18')).not.toEqual(expected);
+    atChicagoReferenceNoon('2026-07-18');
+    expect(productionScenarioSignals('2026-07-18')).toEqual(expected);
   });
 
   it('replaces only scratch history idempotently, including overlaps and transaction retries', async () => {

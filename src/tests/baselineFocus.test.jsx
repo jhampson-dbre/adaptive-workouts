@@ -70,4 +70,29 @@ describe('baseline success focus', () => {
     import.meta.env.MODE = priorMode;
     vi.unstubAllGlobals();
   });
+
+  it('does not add baseline-only focus targets or outline hooks in normal mode', async () => {
+    const priorMode = import.meta.env.MODE;
+    import.meta.env.MODE = 'test';
+    vi.doMock('../utils/firebase', () => ({ auth: {}, db: {} }));
+    vi.doMock('../utils/auth', () => ({
+      subscribeToAuthChanges: callback => {
+        callback({ uid: 'normal-user' });
+        return vi.fn();
+      },
+    }));
+    vi.doMock('../utils/storage', () => ({ migrateLocalData: vi.fn() }));
+    vi.doMock('../components/Generator', () => ({
+      default: ({ headingRef, baselineFocus }) => <h2 ref={headingRef} tabIndex={baselineFocus ? '-1' : undefined}>Generate Workout</h2>,
+    }));
+    const { default: App } = await import('../App');
+    render(<App />);
+
+    const heading = await screen.findByRole('heading', { name: 'Generate Workout' });
+    const main = heading.closest('main');
+    expect(main.getAttribute('tabindex')).toBeNull();
+    expect(main.classList.contains('baseline-focus-target')).toBe(false);
+    expect(heading.getAttribute('tabindex')).toBeNull();
+    import.meta.env.MODE = priorMode;
+  });
 });

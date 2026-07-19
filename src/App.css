@@ -28,7 +28,7 @@
 
 .baseline-bootstrap h2:focus,
 .baseline-bootstrap:focus,
-main:focus {
+.baseline-focus-target:focus {
   outline: 2px solid var(--accent, #2563eb);
   outline-offset: 4px;
 }
