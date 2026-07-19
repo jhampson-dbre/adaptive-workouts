@@ -3,13 +3,18 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ command, mode }) => {
+  if (command === 'build' && mode === 'baseline') {
+    throw new Error('Baseline mode is development-only. Run a normal production build instead.');
+  }
+  const baselineMode = mode === 'baseline';
+  return {
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
       devOptions: {
-        enabled: true
+        enabled: !baselineMode
       },
       includeAssets: ['favicon.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
@@ -37,4 +42,5 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
   },
+  };
 })

@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Generated Vite output and local Firebase emulator state
+/dev-dist/
+/.firebase/emulator-scratch/
+
 # Environment variables — never commit real credentials
 .env
 .env.production

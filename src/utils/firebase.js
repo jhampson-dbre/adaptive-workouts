@@ -1,6 +1,9 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, connectAuthEmulator } from 'firebase/auth';
-import { connectFirestoreEmulator, initializeFirestore, persistentLocalCache } from 'firebase/firestore';
+import { getAuth, connectAuthEmulator, initializeAuth, inMemoryPersistence } from 'firebase/auth';
+import { connectFirestoreEmulator, initializeFirestore, memoryLocalCache, persistentLocalCache } from 'firebase/firestore';
+import { createAuthForMode } from './firebaseMode';
+
+export const isBaselineBuild = import.meta.env.DEV && import.meta.env.MODE === 'baseline';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "demo-key",
@@ -12,9 +15,9 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+const auth = createAuthForMode(app, isBaselineBuild, { initializeAuth, getAuth, inMemoryPersistence });
 const db = initializeFirestore(app, {
-  localCache: persistentLocalCache()
+  localCache: isBaselineBuild ? memoryLocalCache() : persistentLocalCache()
 });
 
 if (import.meta.env.DEV) {
