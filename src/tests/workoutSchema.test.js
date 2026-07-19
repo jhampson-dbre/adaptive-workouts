@@ -3,14 +3,19 @@ import { describe, expect, it } from 'vitest';
 import {
   TRACKING_MODES,
   buildCompletedWorkoutDocument,
+  buildCompletedV3WorkoutDocument,
   classifyWorkoutDocument,
+  hasConfirmedWork,
   isLegacyWorkoutDocument,
   isMalformedV2WorkoutDocument,
   isValidCatalogExercise,
   isValidV2ExerciseOccurrence,
   isValidV2WorkoutDocument,
   isValidV2WorkoutEnvelope,
+  isValidV3ExerciseOccurrence,
+  isValidV3WorkoutDocument,
   normalizeCatalogExercise,
+  normalizeWorkoutSettings,
   wasPerformed,
 } from '../utils/workoutSchema';
 
@@ -81,7 +86,69 @@ const bodyweightExercise = {
   }],
 };
 
+const withTiming = (record, index, count, completed = record.completed) => ({
+  ...record,
+  completed,
+  plannedRestSeconds: index === count - 1 ? null : 60,
+  workDurationSeconds: completed ? 0 : null,
+  actualRestSeconds: completed && index < count - 1 ? 0 : null,
+});
+
+const v3WeightedExercise = {
+  ...weightedExercise,
+  occurrenceId: 'bench:0',
+  setRecords: weightedExercise.setRecords.map((record, index) => (
+    withTiming(record, index, weightedExercise.setRecords.length)
+  )),
+};
+
+const v3BodyweightExercise = {
+  ...bodyweightExercise,
+  occurrenceId: 'pull-up:1',
+  setRecords: bodyweightExercise.setRecords.map((record, index) => (
+    withTiming(record, index, bodyweightExercise.setRecords.length)
+  )),
+};
+
+const v3SimpleExercise = {
+  id: 'plank',
+  occurrenceId: 'plank:2',
+  name: 'Plank',
+  muscleGroup: 'Core',
+  tier: 4,
+  trackingMode: 'simple',
+  sets: 2,
+  prescribedSetCount: 2,
+  setRecords: [
+    withTiming({ index: 0, completed: true }, 0, 2),
+    withTiming({ index: 1, completed: false }, 1, 2),
+  ],
+};
+
+const validV3Workout = {
+  schemaVersion: 3,
+  status: 'completed',
+  date: '2026-07-12T12:00:00.000Z',
+  actualDurationSeconds: 0,
+  exercises: [v3WeightedExercise, v3BodyweightExercise, v3SimpleExercise],
+};
+
 describe('workout schema', () => {
+  it('normalizes missing and invalid default rest values without changing valid settings', () => {
+    expect(normalizeWorkoutSettings({ staleThreshold: 4 })).toEqual({ staleThreshold: 4, defaultRestSeconds: 60 });
+    expect(normalizeWorkoutSettings({ defaultRestSeconds: 4 })).toEqual({ defaultRestSeconds: 60 });
+    expect(normalizeWorkoutSettings({ defaultRestSeconds: 601 })).toEqual({ defaultRestSeconds: 60 });
+    expect(normalizeWorkoutSettings({ defaultRestSeconds: 60.5 })).toEqual({ defaultRestSeconds: 60 });
+    expect(normalizeWorkoutSettings({ defaultRestSeconds: 90 })).toEqual({ defaultRestSeconds: 90 });
+  });
+
+  it('accepts optional valid catalog rest and rejects invalid explicit overrides', () => {
+    expect(isValidCatalogExercise({ ...weightedExercise, restSeconds: 5 })).toBe(true);
+    expect(isValidCatalogExercise({ ...weightedExercise, restSeconds: 600 })).toBe(true);
+    expect(isValidCatalogExercise({ ...weightedExercise, restSeconds: 4 })).toBe(false);
+    expect(isValidCatalogExercise({ ...weightedExercise, restSeconds: 60.5 })).toBe(false);
+  });
+
   it('defines the three canonical tracking modes and only normalizes an absent mode', () => {
     expect(TRACKING_MODES).toEqual(['simple', 'weighted', 'bodyweight']);
     const original = { id: 'curl', name: 'Curl', muscleGroup: 'Biceps', tier: 1, sets: 3 };
@@ -183,13 +250,13 @@ describe('workout schema', () => {
     const malformedOccurrence = { ...valid, exercises: [{ ...weightedExercise, sets: 3 }] };
     expect(isValidV2WorkoutEnvelope(malformedOccurrence)).toBe(true);
     expect(isValidV2WorkoutDocument(malformedOccurrence)).toBe(false);
-    expect(classifyWorkoutDocument(malformedOccurrence)).toBe('malformed-v2');
+    expect(classifyWorkoutDocument(malformedOccurrence)).toBe('malformed-versioned');
 
     expect(isLegacyWorkoutDocument({ date: '2020-01-01', exercises: [] })).toBe(true);
     expect(isLegacyWorkoutDocument({ schemaVersion: undefined, exercises: [] })).toBe(false);
-    expect(classifyWorkoutDocument({ schemaVersion: 1, exercises: [] })).toBe('malformed-v2');
+    expect(classifyWorkoutDocument({ schemaVersion: 1, exercises: [] })).toBe('malformed-versioned');
     expect(isMalformedV2WorkoutDocument({ schemaVersion: 1, exercises: [] })).toBe(true);
-    expect(classifyWorkoutDocument({ schemaVersion: 99, exercises: [] })).toBe('malformed-v2');
+    expect(classifyWorkoutDocument({ schemaVersion: 99, exercises: [] })).toBe('malformed-versioned');
   });
 
   it('builds an allowlisted, immutable completed v2 document and rejects zero-confirmed work', () => {
@@ -330,6 +397,14 @@ describe('workout schema', () => {
     expect(wasPerformed({ ...envelope, exercises: [zeroRepAttempt] }, zeroRepAttempt)).toBe(true);
   });
 
+  it('preserves v2 simple completion while additive set records are transitional', () => {
+    expect(hasConfirmedWork([{
+      trackingMode: 'simple',
+      completed: true,
+      setRecords: [{ index: 0, completed: false }],
+    }])).toBe(true);
+  });
+
   it('fails malformed v2 closed while preserving valid siblings', () => {
     const valid = weightedExercise;
     const malformed = { ...weightedExercise, sets: 3 };
@@ -343,5 +418,163 @@ describe('workout schema', () => {
     expect(wasPerformed(workout, malformed)).toBe(false);
     expect(wasPerformed(workout, valid)).toBe(true);
     expect(wasPerformed({ ...workout, status: 'draft' }, valid)).toBe(false);
+  });
+
+  it('classifies valid v3 documents and validates timing for all tracking modes', () => {
+    expect(isValidV3WorkoutDocument(validV3Workout)).toBe(true);
+    expect(classifyWorkoutDocument(validV3Workout)).toBe('valid-v3');
+    expect(validV3Workout.exercises.every(exercise => isValidV3ExerciseOccurrence(exercise))).toBe(true);
+    expect(wasPerformed(validV3Workout, v3WeightedExercise)).toBe(true);
+    expect(wasPerformed(validV3Workout, v3BodyweightExercise)).toBe(true);
+    expect(wasPerformed(validV3Workout, v3SimpleExercise)).toBe(true);
+  });
+
+  it('requires unique occurrence identities and rejects malformed v3 as a whole', () => {
+    const duplicateId = {
+      ...validV3Workout,
+      exercises: [v3WeightedExercise, { ...v3BodyweightExercise, occurrenceId: v3WeightedExercise.occurrenceId }],
+    };
+    const malformedTiming = {
+      ...validV3Workout,
+      exercises: [v3WeightedExercise, {
+        ...v3BodyweightExercise,
+        setRecords: [{ ...v3BodyweightExercise.setRecords[0], workDurationSeconds: null }],
+      }],
+    };
+
+    expect(isValidV3WorkoutDocument(duplicateId)).toBe(false);
+    expect(isValidV3WorkoutDocument(malformedTiming)).toBe(false);
+    expect(classifyWorkoutDocument(malformedTiming)).toBe('malformed-versioned');
+    expect(wasPerformed(malformedTiming, v3WeightedExercise)).toBe(false);
+  });
+
+  it('enforces saved timing coherence while admitting a live rest only in active state', () => {
+    const liveRest = {
+      ...v3WeightedExercise,
+      setRecords: [
+        { ...v3WeightedExercise.setRecords[0], actualRestSeconds: null },
+        v3WeightedExercise.setRecords[1],
+      ],
+    };
+
+    expect(isValidV3ExerciseOccurrence(liveRest)).toBe(false);
+    expect(isValidV3ExerciseOccurrence(liveRest, { allowLiveRest: true })).toBe(true);
+    expect(isValidV3ExerciseOccurrence({
+      ...liveRest,
+      setRecords: [
+        { ...liveRest.setRecords[0], completed: false, workDurationSeconds: 0 },
+        liveRest.setRecords[1],
+      ],
+    }, { allowLiveRest: true })).toBe(false);
+  });
+
+  it.each([
+    ['missing confirmed work duration', exercise => ({
+      ...exercise,
+      setRecords: [{ ...exercise.setRecords[0], workDurationSeconds: null }, exercise.setRecords[1]],
+    })],
+    ['work duration on an unconfirmed set', exercise => ({
+      ...exercise,
+      setRecords: [exercise.setRecords[0], { ...exercise.setRecords[1], workDurationSeconds: 0 }],
+    })],
+    ['missing actual rest on a confirmed non-final set', exercise => ({
+      ...exercise,
+      setRecords: [{ ...exercise.setRecords[0], actualRestSeconds: null }, exercise.setRecords[1]],
+    })],
+    ['actual rest on a final set', exercise => ({
+      ...exercise,
+      setRecords: [exercise.setRecords[0], { ...exercise.setRecords[1], actualRestSeconds: 0 }],
+    })],
+    ['planned rest on a final set', exercise => ({
+      ...exercise,
+      setRecords: [exercise.setRecords[0], { ...exercise.setRecords[1], plannedRestSeconds: 60 }],
+    })],
+    ['out-of-range planned rest', exercise => ({
+      ...exercise,
+      setRecords: [{ ...exercise.setRecords[0], plannedRestSeconds: 601 }, exercise.setRecords[1]],
+    })],
+    ['an occurrence-level simple completion flag', exercise => ({ ...exercise, completed: true })],
+  ])('rejects v3 timing incoherence: %s', (_label, mutate) => {
+    const malformedSimple = mutate(v3SimpleExercise);
+    expect(isValidV3WorkoutDocument({ ...validV3Workout, exercises: [malformedSimple] })).toBe(false);
+  });
+
+  it.each([
+    ['persists actualDuration instead of seconds', { actualDuration: 2 }],
+    ['uses a negative duration', { actualDurationSeconds: -1 }],
+    ['uses a fractional duration', { actualDurationSeconds: 1.5 }],
+  ])('rejects v3 that %s', (_label, change) => {
+    expect(isValidV3WorkoutDocument({ ...validV3Workout, ...change })).toBe(false);
+  });
+
+  it('builds an allowlisted immutable v3 document without changing the v2 writer', () => {
+    const transientInput = {
+      ...validV3Workout,
+      draft: true,
+      exercises: validV3Workout.exercises.map(exercise => ({
+        ...exercise,
+        expanded: true,
+        activeRestAttemptId: 'transient',
+        setRecords: exercise.setRecords.map(record => ({
+          ...record,
+          workStartedAt: 100,
+          restStartedAt: 200,
+          inputDirty: true,
+        })),
+      })),
+    };
+
+    const built = buildCompletedV3WorkoutDocument(transientInput);
+    expect(built).toMatchObject({
+      schemaVersion: 3,
+      status: 'completed',
+      date: validV3Workout.date,
+      actualDurationSeconds: 0,
+    });
+    expect(built.exercises.map(exercise => exercise.trackingMode))
+      .toEqual(['weighted', 'bodyweight', 'simple']);
+    expect(isValidV3WorkoutDocument(built)).toBe(true);
+    expect(built).not.toBe(transientInput);
+    expect(transientInput.exercises[0]).toHaveProperty('expanded', true);
+    expect(built.exercises[0]).not.toHaveProperty('expanded');
+    expect(built.exercises[0].setRecords[0]).not.toHaveProperty('workStartedAt');
+    expect(built.exercises[0].setRecords[0]).not.toHaveProperty('restStartedAt');
+    expect(built.exercises[0].setRecords[0]).not.toHaveProperty('inputDirty');
+    expect(built.exercises[0].setRecords[1].recommendationReason).not.toHaveProperty('priorSetIndex');
+    expect(built).not.toHaveProperty('actualDuration');
+
+    const v2 = buildCompletedWorkoutDocument({
+      date: validV3Workout.date,
+      actualDuration: 2,
+      exercises: [weightedExercise],
+    });
+    expect(v2).toMatchObject({ schemaVersion: 2, actualDuration: 2 });
+    expect(v2).not.toHaveProperty('actualDurationSeconds');
+  });
+
+  it('rejects malformed saved v3 timing instead of partially building it', () => {
+    const invalid = {
+      ...validV3Workout,
+      exercises: [{
+        ...v3SimpleExercise,
+        setRecords: [
+          { ...v3SimpleExercise.setRecords[0], plannedRestSeconds: null },
+          v3SimpleExercise.setRecords[1],
+        ],
+      }],
+    };
+    expect(() => buildCompletedV3WorkoutDocument(invalid)).toThrow(/invalid/i);
+    expect(isValidV3WorkoutDocument({
+      ...validV3Workout,
+      exercises: [{
+        ...v3SimpleExercise,
+        setRecords: v3SimpleExercise.setRecords.map(record => ({
+          ...record,
+          completed: false,
+          workDurationSeconds: null,
+          actualRestSeconds: null,
+        })),
+      }],
+    })).toBe(false);
   });
 });

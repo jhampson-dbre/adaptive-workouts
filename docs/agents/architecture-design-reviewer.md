@@ -12,7 +12,9 @@ replace planning conformance, task conformance, or epic/PR conformance.
 
 ## Preferred Model Tier
 
-Use GPT-5.6 with high reasoning for cross-component feature design, storage/auth changes, migrations, deployment effects, or user workflow changes. A moderate GPT-5.6 Terra model is acceptable for small, low-risk designs, while high-risk work should remain on the flagship model.
+Primary: GPT-5.6 Sol with high reasoning. The native architecture-design-reviewer configuration uses this model for cross-component feature design, storage/auth changes, migrations, deployment effects, and user workflow changes.
+
+Fallback: GPT-5.6 Terra with medium reasoning for small, low-risk designs when Sol is unavailable. Escalate high-risk work to the primary mapping rather than using an unspecified GPT-5.6 model.
 
 ## Inputs From Main Agent
 
@@ -26,6 +28,16 @@ Use GPT-5.6 with high reasoning for cross-component feature design, storage/auth
 
 ## Review Focus
 
+### UX Quality Gate handoff
+
+Check that discovery classified UI work as `required`, `optional`, or
+`skip-recorded`, with a durable rationale for optional or skip-recorded work. Required
+work must arrive after a fresh ux-design-reviewer before architecture-design-reviewer
+and include the proportional scenario-indexed artifact. Architecture retains authority
+for system boundaries, data, security, and feasibility. If a material architecture
+change alters the approved UX contract, return it through UX design review before user
+approval; do not silently rewrite the UX contract.
+
 - Does the design solve the stated user problem?
 - Are goals, non-goals, and acceptance criteria explicit?
 - Are data model, storage, auth, migration, deployment, and PWA implications covered when relevant?
@@ -37,6 +49,10 @@ Use GPT-5.6 with high reasoning for cross-component feature design, storage/auth
 - Are mixed legacy and current duration units deterministically distinguishable and
   convertible, including safe coexistence, rather than left for implementation to
   infer?
+- When reload restoration is in scope, does the contract enumerate epoch/clock
+  timestamps, elapsed and phase-boundary ledgers, ownership/generation,
+  save-operation identity, reader/writer units, fallback, and null/missing/zero
+  semantics needed for deterministic recovery?
 - Are edge cases and failure modes identified?
 - Are UI surfaces and user workflows concrete enough to plan implementation?
 - Is the design over-scoped for the likely epic?

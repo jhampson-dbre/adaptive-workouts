@@ -16,9 +16,9 @@ const exercise = {
   isActive: true,
 };
 
-function renderSettings(catalog = []) {
+function renderSettings(catalog = [], settings = {}) {
   storage.getCatalog.mockResolvedValue(catalog);
-  storage.getSettings.mockResolvedValue({});
+  storage.getSettings.mockResolvedValue(settings);
   return render(
     <AuthContext.Provider value={{ uid: 'user-1' }}>
       <Settings onClose={vi.fn()} />
@@ -34,6 +34,72 @@ describe('Settings tracking configuration', () => {
   });
 
   afterEach(cleanup);
+
+  it('shows normalized default rest and saves only whole values from 5 through 600', async () => {
+    renderSettings([], { defaultRestSeconds: 60 });
+    const input = await screen.findByLabelText('Default rest seconds');
+    expect(input.value).toBe('60');
+
+    fireEvent.change(input, { target: { value: '4' } });
+    fireEvent.blur(input);
+    expect(await screen.findByText(/default rest must be a whole number from 5 through 600/i)).toBeTruthy();
+    expect(storage.saveSettings).not.toHaveBeenCalled();
+
+    fireEvent.change(input, { target: { value: '90' } });
+    fireEvent.blur(input);
+    await waitFor(() => expect(storage.saveSettings).toHaveBeenCalledWith(
+      'user-1', expect.objectContaining({ defaultRestSeconds: 90 }),
+    ));
+  });
+
+  it('preserves default rest and Leg Day when their saves overlap and finish out of order', async () => {
+    let resolveRest;
+    let resolveLegDay;
+    storage.saveSettings
+      .mockReturnValueOnce(new Promise(resolve => { resolveRest = resolve; }))
+      .mockReturnValueOnce(new Promise(resolve => { resolveLegDay = resolve; }));
+    renderSettings([], { defaultRestSeconds: 60, legDayOfWeek: 'None' });
+
+    const rest = await screen.findByLabelText('Default rest seconds');
+    fireEvent.change(rest, { target: { value: '90' } });
+    fireEvent.blur(rest);
+    const legDay = screen.getAllByRole('combobox')[0];
+    fireEvent.change(legDay, { target: { value: 'Tuesday' } });
+
+    expect(storage.saveSettings).toHaveBeenNthCalledWith(1, 'user-1', { defaultRestSeconds: 90 });
+    expect(storage.saveSettings).toHaveBeenNthCalledWith(2, 'user-1', { legDayOfWeek: 'Tuesday' });
+    resolveLegDay();
+    await waitFor(() => expect(legDay.value).toBe('Tuesday'));
+    resolveRest();
+    await waitFor(() => {
+      expect(rest.value).toBe('90');
+      expect(legDay.value).toBe('Tuesday');
+    });
+  });
+
+  it('saves optional per-exercise rest overrides and clearing restores inheritance', async () => {
+    renderSettings([{ ...exercise, trackingMode: 'simple', restSeconds: 120 }]);
+    await screen.findByRole('button', { name: 'Edit' });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    const editRest = screen.getByLabelText('Edit rest override seconds');
+    expect(editRest.value).toBe('120');
+    fireEvent.change(editRest, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(storage.saveCatalogItem).toHaveBeenCalled());
+    expect(storage.saveCatalogItem.mock.calls[0][1]).not.toHaveProperty('restSeconds');
+  });
+
+  it('blocks invalid explicit catalog rest overrides', async () => {
+    renderSettings();
+    await screen.findByRole('heading', { name: 'Add New Exercise' });
+    fireEvent.change(screen.getByLabelText('Exercise name'), { target: { value: 'Incline Press' } });
+    fireEvent.change(screen.getByLabelText('Rest override seconds'), { target: { value: '600.5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(/rest.*whole number.*5.*600/i);
+    expect(storage.saveCatalogItem).not.toHaveBeenCalled();
+  });
 
   it('adds new exercises in explicit simple mode by default', async () => {
     renderSettings();

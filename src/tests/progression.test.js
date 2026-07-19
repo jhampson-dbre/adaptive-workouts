@@ -72,6 +72,29 @@ function workout({
   return { id, schemaVersion: 2, status, date, actualDuration: 30, exercises };
 }
 
+function v3Occurrence(options = {}) {
+  const occurrence = weightedOccurrence(options);
+  return {
+    ...occurrence,
+    occurrenceId: options.occurrenceId ?? `${occurrence.id}-occurrence`,
+    setRecords: occurrence.setRecords.map((record, index) => ({
+      ...record,
+      plannedRestSeconds: index === occurrence.setRecords.length - 1 ? null : 90,
+      workDurationSeconds: record.completed ? 30 : null,
+      actualRestSeconds: index === occurrence.setRecords.length - 1 || !record.completed ? null : 80,
+    })),
+  };
+}
+
+function v3Workout({
+  id = 'workout-v3',
+  date = '2026-07-11T10:00:00.000Z',
+  status = 'completed',
+  exercises = [v3Occurrence()],
+} = {}) {
+  return { id, schemaVersion: 3, status, date, actualDurationSeconds: 1800, exercises };
+}
+
 describe('next-session weighted progression', () => {
   it('requires successfully loaded history to be an array', () => {
     expect(() => getNextSessionRecommendation(currentExercise, null)).toThrow(/history.*array/i);
@@ -148,6 +171,90 @@ describe('next-session weighted progression', () => {
     const source = weightedOccurrence({ actualWeight: 137.5, weightStep: 2.5, reps: [8, 6, 5] });
     expect(getNextSessionRecommendation({ ...currentExercise, weightStep: 7.5 }, [workout({ exercises: [source] })]))
       .toMatchObject({ sourceAnchorWeight: 137.5, recommendedWeight: 145, appliedWeightStep: 7.5 });
+  });
+
+  it.each([
+    {
+      reps: [8, 5, 6], completed: [true, true, true], decision: 'increase', recommendedWeight: 115,
+      appliedWeightStep: 10, reasonCode: PROGRESSION_REASON_CODES.INCREASE_ALL_SETS_QUALIFIED,
+    },
+    {
+      reps: [4, 0, 0], completed: [true, false, false], decision: 'decrease', recommendedWeight: 95,
+      appliedWeightStep: 10, reasonCode: PROGRESSION_REASON_CODES.DECREASE_TOP_BELOW_FLOOR,
+    },
+    {
+      reps: [7, 5, 5], completed: [true, true, true], decision: 'hold', recommendedWeight: 105,
+      appliedWeightStep: 0, reasonCode: PROGRESSION_REASON_CODES.HOLD_TOP_BELOW_TARGET,
+    },
+    {
+      reps: [8, 5, 0], completed: [true, true, false], decision: 'hold', recommendedWeight: 105,
+      appliedWeightStep: 0, reasonCode: PROGRESSION_REASON_CODES.HOLD_INCOMPLETE_SETS,
+    },
+    {
+      reps: [8, 4, 5], completed: [true, true, true], decision: 'hold', recommendedWeight: 105,
+      appliedWeightStep: 0, reasonCode: PROGRESSION_REASON_CODES.HOLD_BACKOFF_BELOW_FLOOR,
+    },
+  ])('applies existing progression rules to valid v3 weighted history ($decision)', ({
+    reps, completed, decision, recommendedWeight, appliedWeightStep, reasonCode,
+  }) => {
+    const source = v3Occurrence({
+      occurrenceId: 'session-bench',
+      actualWeight: 105,
+      reps,
+      completed,
+    });
+
+    expect(getNextSessionRecommendation(currentExercise, [v3Workout({ exercises: [source] })]))
+      .toMatchObject({
+        decision,
+        sourceWorkoutId: 'workout-v3',
+        sourceWorkoutDate: '2026-07-11T10:00:00.000Z',
+        sourceAnchorWeight: 105,
+        appliedWeightStep,
+        recommendedWeight,
+        reasonCode,
+      });
+  });
+
+  it('excludes a malformed v3 workout as a whole but preserves v2 per-occurrence fallback', () => {
+    const validV3Match = v3Occurrence({ actualWeight: 250, reps: [8] });
+    const malformedV3Sibling = {
+      ...v3Occurrence({ id: 'row', occurrenceId: 'row-occurrence', reps: [8] }),
+      setRecords: [],
+    };
+    const malformedV2Sibling = { ...weightedOccurrence({ id: 'row' }), sets: 4 };
+    const validV2Match = weightedOccurrence({ actualWeight: 130, reps: [7] });
+    const history = [
+      v3Workout({
+        id: 'malformed-v3',
+        date: '2026-07-13T10:00:00.000Z',
+        exercises: [validV3Match, malformedV3Sibling],
+      }),
+      workout({
+        id: 'valid-v2-partial',
+        date: '2026-07-12T10:00:00.000Z',
+        exercises: [malformedV2Sibling, validV2Match],
+      }),
+    ];
+
+    expect(getNextSessionRecommendation(currentExercise, history))
+      .toMatchObject({ sourceWorkoutId: 'valid-v2-partial', sourceAnchorWeight: 130 });
+  });
+
+  it('matches v3 history by catalog id and scans occurrences in persisted order', () => {
+    const occurrenceIdOnlyMatch = v3Occurrence({
+      id: 'row', occurrenceId: 'bench', actualWeight: 250, reps: [7],
+    });
+    const firstCatalogMatch = v3Occurrence({
+      occurrenceId: 'bench-first', actualWeight: 125, reps: [7],
+    });
+    const secondCatalogMatch = v3Occurrence({
+      occurrenceId: 'bench-second', actualWeight: 175, reps: [7],
+    });
+
+    expect(getNextSessionRecommendation(currentExercise, [v3Workout({
+      exercises: [occurrenceIdOnlyMatch, firstCatalogMatch, secondCatalogMatch],
+    })])).toMatchObject({ sourceAnchorWeight: 125 });
   });
 
   it('uses historical snapshots and permits prospective set-count changes and single-set progression', () => {

@@ -6,7 +6,12 @@ Perform task conformance review after implementation verification. This is not a
 
 ## Preferred Model Tier
 
-Use GPT-5.6 Luna with high reasoning for most bounded spec reviews. Use GPT-5.6 Terra or GPT-5.6 when reviewing cross-epic behavior, auth/storage semantics, migrations, or deployment implications, with the flagship model preferred for the highest-risk decisions.
+Primary: GPT-5.6 Luna with high reasoning for most bounded spec reviews. Use the
+configured GPT-5.6 Terra fallback with high reasoning for cross-epic behavior,
+auth/storage semantics, migrations, or deployment implications.
+
+Fallback: GPT-5.6 Terra with high reasoning when Luna is unavailable or the review
+is cross-epic or high-risk. Do not use an unspecified GPT-5.6 model.
 
 ## Inputs From Main Agent
 
@@ -34,6 +39,14 @@ task-start spec-review dispatch is prohibited. Do not use this role to refine ro
 task-start requirements, create acceptance criteria, or invent requirements after the
 fact. When an approved-intent clarification is needed, label it as such; when the
 request would change approved intent, escalate it rather than treating it as a defect.
+
+For UI work classified `required`, review only after the coordinator records the
+per-run bounded capability probes and the prescribed rendered evidence in the
+canonical matrix. A direct changed-surface usability finding blocks.
+Unsupported-by-harness is nonblocking only with complete metadata, fallback,
+and evidence obligation. This reviewer cannot grant product, architecture, or Trekker
+authority: route those changes through the existing escalation and approval path.
+This reviewer cannot redesign or expand approved UX scope.
 
 The sole pre-implementation exception is a coordinator-owned issue-class audit for a
 non-mechanical or user-facing behavior bug, prepared with

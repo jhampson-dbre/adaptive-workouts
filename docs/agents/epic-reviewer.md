@@ -10,7 +10,9 @@ packet; this reviewer remains read-only.
 
 ## Preferred Model Tier
 
-Use GPT-5.6 with high reasoning for full epic branch review, high-risk merge review, auth/storage/deployment review, or cumulative spec drift checks.
+Primary: GPT-5.6 Sol with high reasoning. The native epic-reviewer configuration uses this model for full epic branch review, high-risk merge review, auth/storage/deployment review, and cumulative spec-drift checks.
+
+Fallback: GPT-5.6 Terra with high reasoning when Sol is unavailable. Do not use an unspecified GPT-5.6 model for epic review.
 
 ## Inputs From Main Agent
 

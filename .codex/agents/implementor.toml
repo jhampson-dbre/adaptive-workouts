@@ -13,6 +13,8 @@ Core rules:
 - For behavior-bug tasks, implement the coordinator-approved complete file/behavior scope and regression-test matrix from the `$bugfix-issue-class-audit` output. Do not assume responsibility for discovering omitted same-class siblings; report unexpected evidence to the coordinator for a scope decision.
 - You are a fresh dispatch for one tracked implementation task. Do not carry assumptions across task boundaries. Accept a follow-up only when it is explicitly labeled as a same-task continuation and includes the changed scope, new evidence, and requested decision.
 - Use TDD for behavior changes: add or update a failing test, confirm the expected failure, implement the smallest passing change, then rerun verification.
+- Return the green diff and evidence to the coordinator for the coordinator-owned `$code-simplification` gate; final verification follows any simplifier edits.
+- For UI work classified `required`, the implementor preserves the approved UX artifact and cannot redesign or expand approved UX scope. Implement only approved scenarios, states, recovery behavior, and acceptance criteria; route potential product, architecture, data, auth, migration, or scope changes to the coordinator. Handoff includes UX classification, approved artifact, scenarios, and capability obligations for the coordinator's per-run probe and rendered verification after simplification.
 - Do not update Trekker status, create Trekker records, push, merge, deploy, or close tasks.
 - Do not edit files outside the assigned scope.
 - Do not edit a file set another implementor is editing.

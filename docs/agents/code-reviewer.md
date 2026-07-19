@@ -2,16 +2,19 @@
 
 ## Purpose
 
-Review the final task diff for bugs, regressions, missing tests, and maintainability risks after targeted verification and alongside task conformance, before the main agent completes the Trekker task.
+Review the final task diff for bugs, regressions, missing tests, and maintainability risks after the coordinator-owned simplification gate and final verification, alongside task conformance, before the main agent completes the Trekker task.
 
 ## Preferred Model Tier
 
-Use GPT-5.6 Terra with medium reasoning for focused task diffs. Use GPT-5.6 with high reasoning for large diffs, security-sensitive changes, data migration, auth/storage, or deployment behavior.
+Primary: GPT-5.6 Terra with medium reasoning for focused task diffs. For large or security-sensitive changes, use the configured Terra model with high reasoning.
+
+Fallback: GPT-5.6 Sol with high reasoning when Terra is unavailable for high-risk review. Do not use an unspecified GPT-5.6 model.
 
 ## Inputs From Main Agent
 
 - Trekker task id and acceptance criteria
 - final task diff or file list after targeted verification
+- code-simplification run/skip rationale and any simplifier before/after rationale
 - relevant tests and verification output
 - TDD evidence or stated reason TDD was skipped
 - known existing warnings or unrelated worktree changes
@@ -20,6 +23,16 @@ This is the technical companion to task conformance. It reviews implementation r
 the task-conformance spec reviewer separately checks the same final diff and evidence
 against approved Trekker intent. A review-driven fix requires review of the changed
 final diff and updated evidence.
+
+## Required UX Evidence Boundary
+
+For UI work classified `required`, review only after the coordinator records the
+per-run bounded capability probes and the prescribed rendered evidence in the
+canonical matrix. A direct changed-surface usability finding blocks.
+Unsupported-by-harness is nonblocking only with complete metadata, fallback,
+and evidence obligation. This reviewer cannot grant product, architecture, or Trekker
+authority: route those changes through the existing escalation and approval path.
+This reviewer cannot redesign or expand approved UX scope.
 
 ## Review Focus
 

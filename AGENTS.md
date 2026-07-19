@@ -15,6 +15,7 @@ Use the role contracts in `docs/agents/`:
 - `docs/agents/architecture-design-reviewer.md`: design-spec architecture and product-fit review
 - `docs/agents/senior-developer-reviewer.md`: implementation-plan sequencing, TDD, and execution-risk review
 - `docs/agents/implementor.md`: TDD implementation work
+- `docs/agents/code-simplifier.md`: behavior-preserving simplification of the green task diff
 - `docs/agents/spec-reviewer.md`: post-verification task-conformance review
 - `docs/agents/code-reviewer.md`: focused bug/regression review
 - `docs/agents/epic-reviewer.md`: full epic or branch review before merge
@@ -22,6 +23,7 @@ Use the role contracts in `docs/agents/`:
 Native Codex custom agents live in `.codex/agents/`:
 
 - `.codex/agents/implementor.toml`
+- `.codex/agents/code-simplifier.toml`
 - `.codex/agents/spec-reviewer.toml`
 - `.codex/agents/code-reviewer.toml`
 - `.codex/agents/epic-reviewer.toml`
@@ -88,10 +90,11 @@ Do not let subagents edit their own role contracts unless the main coordinator e
 Use subagents deliberately:
 
 - New feature planning: after discovery approval, the main agent enters actual Codex Plan Mode and follows the feature-planner protocol before creating Trekker items.
-- Feature design review: use the architecture-design-reviewer before presenting an epic design spec as ready for user approval.
+- Feature design review: classify UI work as `required`, `optional`, or `skip-recorded` during discovery. Required work has a proportional scenario-indexed artifact using `docs/templates/ux-evidence-matrix.md` and a fresh ux-design-reviewer before architecture-design-reviewer; optional and skip-recorded decisions require durable rationale. Architecture retains authority for system boundaries, data, security, and feasibility. Material architecture changes that alter the approved UX contract return through UX design review before user approval.
 - Planning conformance: after the user approves the design and before presenting Trekker task/subtask creation for approval, use the senior-developer-reviewer to review the proposed Trekker plan.
 - Documentation-only, copy-only, or tiny config changes: main agent may handle directly.
-- Every tracked implementation task: dispatch a fresh implementor. After targeted verification produces the final task diff and evidence, dispatch a fresh code reviewer and a fresh task-conformance spec reviewer; do not reuse either reviewer across task boundaries, even within the same epic.
+- Every tracked implementation task: dispatch a fresh implementor. After the implementor produces a green diff, invoke `$code-simplification` and dispatch a fresh code simplifier for non-trivial code changes. The coordinator then runs final targeted and proportionate broader verification before dispatching a fresh code reviewer and a fresh task-conformance spec reviewer; do not reuse either reviewer across task boundaries, even within the same epic.
+- For UI work classified `required`, the implementor preserves the approved artifact and cannot redesign or expand scope. After simplification, the coordinator performs per-run bounded capability probes and records task evidence using the canonical matrix template at `docs/templates/ux-evidence-matrix.md`, with build, viewport, state, actions, results, and limitations using synthetic or de-identified local data. Missing prescribed rendered evidence blocks task completion and requires a resumable `Checkpoint:`. Then dispatch the fresh ux-usability-reviewer, code reviewer, and task-conformance reviewer in parallel. A direct changed-surface usability finding blocks; unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation. No reviewer grants product, architecture, or Trekker authority or may redesign or expand approved UX scope.
 - Any behavior change or bug fix: use the fresh implementor role unless the change is truly mechanical.
 - Before dispatching an implementor for a behavior-bug task, reproduce the problem and identify its root cause, then use the repository `$bugfix-issue-class-audit` skill for every non-mechanical or user-facing behavior bug. A genuinely mechanical localized correction does not require the full audit when the coordinator documents why. For non-mechanical or user-facing bugs, a read-only spec reviewer validates the audit only; this narrow pre-implementation check is not routine task-start requirements discovery and does not replace the post-verification task-conformance review.
 - Task-start spec-review dispatch is prohibited. Do not use the spec reviewer to invent, refine, or gate routine task-start requirements.
@@ -103,6 +106,19 @@ Use subagents deliberately:
   epic-completion handoff.
 
 Parallel reviewers are allowed. Only one implementor may edit a given file set at a time. Reviewers are read-only unless the main agent explicitly asks them to prepare a patch.
+
+The code-simplification gate is coordinator-owned. Its default scope is only code
+modified by the active task in the current session, and the handoff must explicitly
+authorize every editable file. Repository-wide simplification requires separate,
+explicit authorization. Every non-trivial green code diff requires a fresh
+code-simplifier dispatch, even when it may return no edits. Pre-dispatch skip is allowed
+only for documentation/copy-only work or tiny mechanical configuration changes. No
+meaningful simplification opportunity is a valid no-edit simplifier result, not a
+pre-dispatch skip. Simplifier edits become part of the final task diff and require
+final verification plus fresh code and task-conformance reviews. After substantive
+review-driven fixes, rerun simplification only when those fixes materially reshape or
+reintroduce complexity, and at most once after review per task. Simplifier edits and
+reviewer requests to re-verify do not by themselves start another simplification loop.
 
 An agent may receive a follow-up only for the same Trekker task when the coordinator
 labels it as a same-task continuation and supplies the changed scope, new evidence,
@@ -121,6 +137,7 @@ Conformance escalation and re-review are explicit:
 - For a material conflict with the approved task plan, stop task completion and return the plan to the senior-developer implementation-plan reviewer before changing Trekker planning records.
 - For a product, architecture, data, auth, migration, or scope change, return to architecture/design review and obtain the applicable user approval before changing the design or plan.
 - Any fix or clarification that changes the final task diff requires renewed code review and task-conformance review of that changed final diff; after committing a substantive final-integration change, rerun both the epic branch review and fresh epic spec/conformance review.
+- A substantive review-driven task fix gets the single allowed post-review simplification rerun only when complexity was materially reintroduced or reshaped. Whether run or skipped, record the rationale; then verify and review the changed final diff again.
 
 ## Subagent Handoff Packet
 
@@ -284,20 +301,23 @@ Planning flow:
 2. Search Trekker for duplicates or related work as the formal planning gate (even
    if exploratory Trekker context was inspected to ground discovery).
 3. Brainstorm and identify open questions without creating Trekker items.
-4. Draft an epic-level design spec.
-5. Run architecture/design review, validate the feedback, and either incorporate it or record why it was not accepted.
-6. Present the revised design spec to the user for approval.
-7. Choose the durable spec path under `docs/specs/`; every approved feature plan
+4. Classify UI work as `required`, `optional`, or `skip-recorded`. For required work, create the proportional scenario-indexed UX artifact using `docs/templates/ux-evidence-matrix.md`; optional and skip-recorded decisions require durable rationale.
+   Re-probe capability on every future required run; do not cache waivers.
+5. Draft an epic-level design spec.
+6. For required work, run a fresh ux-design-reviewer before architecture-design-reviewer. Architecture retains authority for system boundaries, data, security, and feasibility.
+7. Run architecture/design review, validate the feedback, and either incorporate it or record why it was not accepted. Material architecture changes that alter the approved UX contract return through UX design review before user approval.
+8. Present the revised design spec to the user for approval.
+9. Choose the durable spec path under `docs/specs/`; every approved feature plan
    will save its spec there during planning Task 1.
-8. Convert the approved design into an implementation plan: epic, tasks, subtasks, dependencies, and verification. Task 1 must create or switch to the focused `codex/` epic feature branch, save and commit the approved spec, and record the branch name, spec path, and planning commit hash on the epic.
-9. Run planning conformance with the senior-developer implementation-plan reviewer, validate the feedback, and either incorporate it or record why it was not accepted.
-10. While still in Codex Plan Mode, ask the user to approve the implementation plan and authorize Trekker creation plus planning Task 1 only.
-11. After approval, transition out of Codex Plan Mode into write-capable Default mode before any Trekker write, branch creation, spec persistence, commit, or Task 1 execution.
-12. In Default mode, create Trekker epic/task/subtask records and dependencies.
-13. In Default mode, execute only Task 1. Complete it with its scoped planning commit and `Summary:`, and record the branch/spec/planning-commit references on the epic. Task 1 completion is the explicit end of the overall discovery, design, and planning handoff, although Codex Plan Mode ended after approval in step 10.
-14. Validate and capture planning-funnel workflow feedback under `EPIC-6`, or explicitly record why it is deferred.
-15. Leave Task 2 and every later implementation task `todo`, leave the epic open, and hand off from Trekker. Ask for a fresh explicit user approval to continue before starting or marking Task 2 (or any implementation task) `in_progress`.
-16. Mirror only the current session in `update_plan` after Trekker is correct.
+10. Convert the approved design into an implementation plan: epic, tasks, subtasks, dependencies, and verification. Classify each dependency as artifact-blocking (prevents safe durable-spec persistence) or implementation-only (blocks later product work only). Task 1 must create or switch to the focused `codex/` epic feature branch, save and commit the approved spec, and record the branch name, spec path, and planning commit hash on the epic; external merge and fresh-authorization gates attach to the first implementation task that needs them. Record a concrete rationale for any artifact-blocking delay.
+11. Run planning conformance with the senior-developer implementation-plan reviewer, validate the feedback, and either incorporate it or record why it was not accepted.
+12. While still in Codex Plan Mode, ask the user to approve the implementation plan and authorize Trekker creation plus planning Task 1 only.
+13. After approval, transition out of Codex Plan Mode into write-capable Default mode before any Trekker write, branch creation, spec persistence, commit, or Task 1 execution.
+14. In Default mode, create Trekker epic/task/subtask records and dependencies.
+15. In Default mode, execute only Task 1. Complete it with its scoped planning commit and `Summary:`, and record the branch/spec/planning-commit references on the epic. Task 1 completion is the explicit end of the overall discovery, design, and planning handoff, although Codex Plan Mode ended after approval in step 12.
+16. Validate and capture planning-funnel workflow feedback under `EPIC-6`, or explicitly record why it is deferred.
+17. Leave Task 2 and every later implementation task `todo`, leave the epic open, and hand off from Trekker. Ask for a fresh explicit user approval to continue before starting or marking Task 2 (or any implementation task) `in_progress`.
+18. Mirror only the current session in `update_plan` after Trekker is correct.
 
 Do not create Trekker epics, tasks, or subtasks from brainstorming unless the user has approved the design and implementation plan.
 Approval of the implementation plan plus authorization for Trekker creation and
@@ -401,6 +421,7 @@ See also:
 - `docs/agents/architecture-design-reviewer.md`
 - `docs/agents/senior-developer-reviewer.md`
 - `docs/agents/implementor.md`
+- `docs/agents/code-simplifier.md`
 - `docs/agents/spec-reviewer.md`
 - `docs/agents/code-reviewer.md`
 - `docs/agents/epic-reviewer.md`

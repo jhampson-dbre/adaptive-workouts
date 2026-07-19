@@ -17,6 +17,28 @@
   }
 }
 
+.baseline-bootstrap {
+  box-sizing: border-box;
+  max-width: 42rem;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 2rem 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.baseline-bootstrap h2:focus,
+.baseline-bootstrap:focus,
+.baseline-focus-target:focus {
+  outline: 2px solid var(--accent, #2563eb);
+  outline-offset: 4px;
+}
+
+.baseline-retry {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.6rem 1rem;
+}
+
 .hero {
   position: relative;
 

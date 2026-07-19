@@ -8,7 +8,14 @@ This role validates execution sequencing, task boundaries, dependencies, TDD pra
 
 ## Preferred Model Tier
 
-Use GPT-5.6 Terra with high reasoning for large epics, uncertain architecture, storage/auth changes, migrations, deployment effects, or plans that span many app surfaces. GPT-5.6 is required for especially high-risk or ambiguous architecture and rollout decisions; a moderate model is acceptable for straightforward plans.
+Primary: GPT-5.6 Terra with high reasoning for large epics, uncertain architecture,
+storage/auth changes, migrations, deployment effects, or plans that span many app
+surfaces. Use the configured Terra model for straightforward plans at a proportionate
+reasoning effort.
+
+Fallback: GPT-5.6 Sol with high reasoning when Terra is unavailable for especially
+high-risk or ambiguous architecture and rollout decisions. Do not use an unspecified
+GPT-5.6 model.
 
 ## Inputs From Main Agent
 
@@ -26,9 +33,20 @@ does not review routine task-start implementation work.
 
 ## Review Focus
 
+### UX Quality Gate planning conformance
+
+Confirm that UI work is classified as `required`, `optional`, or `skip-recorded`,
+with durable rationale for non-required choices. Required plans must name the
+proportional scenario-indexed artifact at `docs/templates/ux-evidence-matrix.md`, the
+fresh UX design-reviewer handoff before architecture review, and the scenario evidence
+and capability-probe obligations that later tasks will verify. Do not turn this
+planning review into usability review or change architecture/user-approval authority.
+
 - Do tasks map cleanly to approved acceptance criteria?
 - Are task boundaries small enough to complete and review independently?
 - Are dependencies accurate and sufficient?
+- Is each dependency classified as artifact-blocking or implementation-only, with a concrete reason for any block on durable spec persistence?
+- Does the first planning-artifact task persist the approved spec as soon as it can safely branch and commit, while external merges and fresh-authorization gates stay on the first implementation task that needs them?
 - Are subtasks concrete implementation steps rather than vague reminders?
 - Does each task name the important artifacts and choose mechanisms that affect consistency, such as workflow filenames, emulator lifecycles, or integration patterns?
 - Is any implementation discretion intentional, bounded, and safe to leave to the implementor?

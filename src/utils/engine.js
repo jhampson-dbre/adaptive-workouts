@@ -2,6 +2,7 @@ import {
     isValidCatalogExercise,
     isValidV2ExerciseOccurrence,
     normalizeCatalogExercise,
+    normalizeWorkoutSettings,
     wasPerformed,
 } from './workoutSchema';
 import { getNextSessionRecommendation } from './progression';
@@ -33,19 +34,33 @@ function createOccurrenceSnapshot(exercise) {
     return snapshot;
 }
 
-function enrichSelectedExercise(exercise, history) {
+function createTimingRecord(index, setCount, restSeconds) {
+    return {
+        index,
+        completed: false,
+        plannedRestSeconds: index === setCount - 1 ? null : restSeconds,
+        workDurationSeconds: null,
+        actualRestSeconds: null,
+    };
+}
+
+function enrichSelectedExercise(exercise, history, defaultRestSeconds, ordinal) {
     const occurrence = createOccurrenceSnapshot(exercise);
+    occurrence.occurrenceId = `${exercise.id}:${ordinal}`;
+    const restSeconds = exercise.restSeconds ?? defaultRestSeconds;
     if (exercise.trackingMode === 'simple') {
         occurrence.completed = false;
+        occurrence.setRecords = Array.from({ length: exercise.sets }, (_, index) => (
+            createTimingRecord(index, exercise.sets, restSeconds)
+        ));
     } else if (exercise.trackingMode === 'bodyweight') {
         occurrence.targetReps = exercise.targetReps;
         occurrence.setRecords = Array.from({ length: exercise.sets }, (_, index) => ({
-            index,
+            ...createTimingRecord(index, exercise.sets, restSeconds),
             targetReps: exercise.targetReps,
             fullReps: 0,
             assistedReps: 0,
             eccentricReps: 0,
-            completed: false,
         }));
     } else {
         const recommendation = getNextSessionRecommendation(exercise, history);
@@ -55,12 +70,11 @@ function enrichSelectedExercise(exercise, history) {
             floorReps: exercise.floorReps,
             weightStep: exercise.weightStep,
             setRecords: Array.from({ length: exercise.sets }, (_, index) => ({
-                index,
+                ...createTimingRecord(index, exercise.sets, restSeconds),
                 targetWeight: recommendation.recommendedWeight,
                 targetReps: exercise.targetReps,
                 actualWeight: recommendation.recommendedWeight,
                 actualReps: exercise.targetReps,
-                completed: false,
                 recommendationReason: index === 0 ? { ...recommendation } : {
                     recommendedWeight: recommendation.recommendedWeight,
                     reasonCode: 'BACKOFF_AWAITING_PRIOR_SET',
@@ -95,6 +109,161 @@ function getChronologicalHistory(history = []) {
         })
         .slice()
         .sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
+function compareAtomicUnits(a, b) {
+    if (a.neverPerformed !== b.neverPerformed) return a.neverPerformed ? -1 : 1;
+    if (a.lastPerformedTime !== b.lastPerformedTime) return a.lastPerformedTime - b.lastPerformedTime;
+    if (a.dynamicTier !== b.dynamicTier) return a.dynamicTier - b.dynamicTier;
+    if (a.baseTier !== b.baseTier) return a.baseTier - b.baseTier;
+    return a.catalogIndex - b.catalogIndex;
+}
+
+function formAtomicUnits(candidates, lastDates, today, catalogIndexes) {
+    const candidateMap = new Map(candidates.map(candidate => [candidate.id, candidate]));
+    const assigned = new Set();
+    const units = [];
+
+    for (const candidate of candidates.slice().sort((a, b) => catalogIndexes.get(a.id) - catalogIndexes.get(b.id))) {
+        if (assigned.has(candidate.id)) continue;
+        const linked = candidate.linkedTo
+            ? candidateMap.get(candidate.linkedTo)
+            : candidates.find(other => other.linkedTo === candidate.id);
+        const members = [candidate];
+        if (linked && !assigned.has(linked.id)) members.push(linked);
+        members.sort((a, b) => catalogIndexes.get(a.id) - catalogIndexes.get(b.id));
+        members.forEach(member => assigned.add(member.id));
+
+        const performedTimes = members
+            .map(member => lastDates[member.id]?.getTime())
+            .filter(time => Number.isFinite(time));
+        const lastPerformedTime = performedTimes.length > 0 ? Math.max(...performedTimes) : -Infinity;
+        const neverPerformed = performedTimes.length === 0;
+        units.push({
+            members,
+            groups: new Set(members.map(member => member.muscleGroup)),
+            isTier4: members.some(member => member.tier === 4),
+            time: members.reduce((total, member) => total + member.sets * 1.75, 0),
+            lastPerformedTime,
+            neverPerformed,
+            age: neverPerformed ? Infinity : getCalendarDaysBetween(today, new Date(lastPerformedTime)),
+            dynamicTier: Math.min(...members.map(member => member.dynamicTier)),
+            baseTier: Math.min(...members.map(member => member.tier)),
+            catalogIndex: Math.min(...members.map(member => catalogIndexes.get(member.id))),
+        });
+    }
+    return units;
+}
+
+function isTier4QuotaOpen(history, catalogMap, requiredTier3Groups) {
+    let resetBoundary = -Infinity;
+    const performed = [];
+
+    for (const session of getChronologicalHistory(history)) {
+        if (!Array.isArray(session.exercises)) continue;
+        const time = new Date(session.date).getTime();
+        for (const occurrence of session.exercises) {
+            if (!wasPerformed(session, occurrence)) continue;
+            const classification = session.schemaVersion === 2 || session.schemaVersion === 3
+                ? occurrence
+                : catalogMap.get(occurrence.id);
+            if (!classification) continue;
+            performed.push({ time, tier: classification.tier, muscleGroup: classification.muscleGroup });
+            if (classification.tier === 4) resetBoundary = Math.max(resetBoundary, time);
+        }
+    }
+
+    if (resetBoundary === -Infinity || requiredTier3Groups.size === 0) {
+        return true;
+    }
+    const credited = new Set(
+        performed
+            .filter(item => item.tier === 3 && item.time > resetBoundary && requiredTier3Groups.has(item.muscleGroup))
+            .map(item => item.muscleGroup),
+    );
+    return [...requiredTier3Groups].every(group => credited.has(group));
+}
+
+function selectDiverseUnits({ units, representedGroups, remainingTime, quotaOpen, staleThreshold }) {
+    const selected = [];
+    const remaining = new Set(units);
+
+    const fits = unit => unit.time <= remainingTime;
+    const coversUnrepresented = unit => [...unit.groups].some(group => !representedGroups.has(group));
+    const select = unit => {
+        selected.push(unit);
+        remaining.delete(unit);
+        remainingTime -= unit.time;
+        unit.groups.forEach(group => representedGroups.add(group));
+    };
+    const representativeUnits = predicate => {
+        const representatives = new Set();
+        const groupsWithRepresentative = new Set();
+        const ordered = [...remaining].filter(predicate).sort(compareAtomicUnits);
+        for (const unit of ordered) {
+            for (const group of unit.groups) {
+                if (representedGroups.has(group) || groupsWithRepresentative.has(group)) continue;
+                representatives.add(unit);
+                groupsWithRepresentative.add(group);
+            }
+        }
+        return [...representatives].sort(compareAtomicUnits);
+    };
+    const discardNonFitting = unit => remaining.delete(unit);
+    const isOlderDiverse = unit => unit.age > 1 && coversUnrepresented(unit);
+
+    let tier4Promoted = false;
+    const runDiversityPhase = () => {
+        while (true) {
+            const representatives = representativeUnits(isOlderDiverse);
+            const candidate = representatives.find(unit => (
+                !unit.isTier4
+                || (!tier4Promoted && (quotaOpen || unit.neverPerformed || unit.age > staleThreshold))
+            ));
+            if (!candidate) return;
+            if (!fits(candidate)) {
+                discardNonFitting(candidate);
+                continue;
+            }
+            select(candidate);
+            if (candidate.isTier4) tier4Promoted = true;
+        }
+    };
+
+    runDiversityPhase();
+
+    while (true) {
+        const representatives = representativeUnits(isOlderDiverse);
+        const candidate = representatives.find(unit => unit.isTier4);
+        if (!candidate) break;
+        if (!fits(candidate)) {
+            discardNonFitting(candidate);
+            runDiversityPhase();
+            continue;
+        }
+        select(candidate);
+    }
+
+    for (const unit of [...remaining]
+        .filter(unit => unit.age > 1 && !coversUnrepresented(unit))
+        .sort(compareAtomicUnits)) {
+        if (fits(unit)) select(unit);
+        else discardNonFitting(unit);
+    }
+
+    while (true) {
+        const representatives = representativeUnits(unit => unit.age <= 1 && coversUnrepresented(unit));
+        if (representatives.length === 0) break;
+        const candidate = representatives[0];
+        if (fits(candidate)) select(candidate);
+        else discardNonFitting(candidate);
+    }
+    for (const unit of [...remaining].filter(unit => unit.age <= 1).sort(compareAtomicUnits)) {
+        if (fits(unit)) select(unit);
+        else discardNonFitting(unit);
+    }
+
+    return selected;
 }
 
 /**
@@ -134,7 +303,8 @@ export function checkIsLegDay(date, unrecoveredGroups, history, settings) {
 }
 
 export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay = false, catalog, history, settings) {
-    const staleThreshold = settings.staleThreshold || 5;
+    const normalizedSettings = normalizeWorkoutSettings(settings);
+    const staleThreshold = normalizedSettings.staleThreshold || 5;
     const chronologicalHistory = getChronologicalHistory(history);
     const normalizedCatalog = catalog.map(normalizeCatalogExercise);
     for (const exercise of normalizedCatalog) {
@@ -273,15 +443,18 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
         candidates.push({ ...ex, dynamicTier });
     }
     
-    // Sort by dynamic tier, then by base tier, then arbitrary
-    candidates.sort((a, b) => {
-        if (a.dynamicTier !== b.dynamicTier) return a.dynamicTier - b.dynamicTier;
-        return a.tier - b.tier;
-    });
-    
     const workout = [];
     let totalTime = 0;
     const addedIds = new Set();
+    const representedGroups = new Set();
+    const catalogIndexes = new Map(normalizedCatalog.map((exercise, index) => [exercise.id, index]));
+    const addMembers = members => {
+        for (const member of members) {
+            workout.push(member);
+            addedIds.add(member.id);
+            representedGroups.add(member.muscleGroup);
+        }
+    };
     
     if (isLegDay) {
         const primaryLegs = candidates.filter(ex => ex.muscleGroup === 'Legs' && ex.dynamicTier === 0);
@@ -289,46 +462,55 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
         primaryLegs.forEach(ex => legTime += (ex.sets * 1.75));
         
         if (legTime <= timeBudget) {
-            primaryLegs.forEach(ex => {
-                workout.push(ex);
-                addedIds.add(ex.id);
-            });
+            addMembers(primaryLegs);
             totalTime += legTime;
         } else {
             // If they don't fit, mark as added so the main loop skips them entirely
             primaryLegs.forEach(ex => addedIds.add(ex.id));
         }
     }
-    
-    for (const ex of candidates) {
-        if (addedIds.has(ex.id)) continue;
 
-        let linkedEx = null;
-        if (ex.linkedTo) {
-            linkedEx = candidates.find(c => c.id === ex.linkedTo);
+    let selectableCandidates = candidates.filter(candidate => !addedIds.has(candidate.id));
+    let atomicUnits = formAtomicUnits(selectableCandidates, lastDates, today, catalogIndexes);
+    const pivotUnit = atomicUnits.find(unit => unit.members.some(member => member.id === chosenPivotExId));
+    if (pivotUnit) {
+        if (totalTime + pivotUnit.time <= timeBudget) {
+            const pivotFirstMembers = [
+                pivotUnit.members.find(member => member.id === chosenPivotExId),
+                ...pivotUnit.members.filter(member => member.id !== chosenPivotExId),
+            ];
+            addMembers(pivotFirstMembers);
+            totalTime += pivotUnit.time;
         } else {
-            // Also check if any candidate is linked TO this one
-            linkedEx = candidates.find(c => c.linkedTo === ex.id);
-        }
-
-        if (linkedEx && !addedIds.has(linkedEx.id)) {
-            const estTime1 = ex.sets * 1.75;
-            const estTime2 = linkedEx.sets * 1.75;
-            if (totalTime + estTime1 + estTime2 <= timeBudget) {
-                workout.push(ex, linkedEx);
-                totalTime += (estTime1 + estTime2);
-                addedIds.add(ex.id);
-                addedIds.add(linkedEx.id);
-            }
-        } else {
-            const estTime = ex.sets * 1.75;
-            if (totalTime + estTime <= timeBudget) {
-                workout.push(ex);
-                totalTime += estTime;
-                addedIds.add(ex.id);
-            }
+            pivotUnit.members.forEach(member => addedIds.add(member.id));
         }
     }
+
+    selectableCandidates = candidates.filter(candidate => (
+        !addedIds.has(candidate.id)
+        && candidate.tier !== 1
+        && candidate.dynamicTier !== 0
+    ));
+    atomicUnits = formAtomicUnits(selectableCandidates, lastDates, today, catalogIndexes);
+    const requiredTier3Groups = new Set(
+        selectableCandidates
+            .filter(candidate => candidate.tier === 3)
+            .map(candidate => candidate.muscleGroup),
+    );
+    const quotaOpen = isTier4QuotaOpen(history, catalogMap, requiredTier3Groups);
+    const selectedUnits = selectDiverseUnits({
+        units: atomicUnits,
+        representedGroups,
+        remainingTime: timeBudget - totalTime,
+        quotaOpen,
+        staleThreshold,
+    });
+    for (const unit of selectedUnits) addMembers(unit.members);
     
-    return workout.map(exercise => enrichSelectedExercise(exercise, history));
+    return workout.map((exercise, ordinal) => enrichSelectedExercise(
+        exercise,
+        history,
+        normalizedSettings.defaultRestSeconds,
+        ordinal,
+    ));
 }

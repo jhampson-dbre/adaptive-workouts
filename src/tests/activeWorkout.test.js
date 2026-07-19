@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { activeWorkoutReducer, initializeActiveWorkout } from '../utils/activeWorkout';
+import {
+  activeWorkoutReducer,
+  initializeActiveWorkout,
+  resolveFinishCandidate,
+} from '../utils/activeWorkout';
+import { buildCompletedV3WorkoutDocument } from '../utils/workoutSchema';
 
 const topReason = {
   decision: 'starting', sourceWorkoutId: null, sourceWorkoutDate: null,
@@ -199,5 +204,226 @@ describe('active workout state', () => {
     state = reduce(state, toggle(0, 0));
     state = reduce(state, toggle(0, 1));
     expect(state.exercises[0].setRecords[1].completed).toBe(true);
+  });
+});
+
+describe('active workout timing state machine', () => {
+  const timedWeighted = (id = 'bench', sets = 3) => {
+    const exercise = weighted(id, sets);
+    exercise.occurrenceId = `${id}:0`;
+    exercise.setRecords = exercise.setRecords.map((record, index) => ({
+      ...record,
+      plannedRestSeconds: index === sets - 1 ? null : 60,
+      workDurationSeconds: null,
+      actualRestSeconds: null,
+    }));
+    return exercise;
+  };
+
+  const timedSimple = () => ({
+    id: 'plank', occurrenceId: 'plank:0', name: 'Plank', muscleGroup: 'Core', tier: 1,
+    trackingMode: 'simple', sets: 2, prescribedSetCount: 2, completed: false,
+    setRecords: [0, 1].map(index => ({
+      index, completed: false, plannedRestSeconds: index === 0 ? 30 : null,
+      workDurationSeconds: null, actualRestSeconds: null,
+    })),
+  });
+
+  const startWorkout = (state, timestamp = 1_000) => reduce(state, { type: 'startWorkout', timestamp });
+  const startSet = (state, exerciseIndex, setIndex, timestamp) => reduce(state, {
+    type: 'startSet', exerciseIndex, setIndex, timestamp,
+  });
+  const confirmSet = (state, exerciseIndex, setIndex, timestamp) => reduce(state, {
+    type: 'confirmSet', exerciseIndex, setIndex, timestamp,
+  });
+  const cancelSet = (state, exerciseIndex, setIndex) => reduce(state, {
+    type: 'cancelSet', exerciseIndex, setIndex,
+  });
+  const undoSet = (state, exerciseIndex, setIndex) => reduce(state, {
+    type: 'undoSet', exerciseIndex, setIndex,
+  });
+
+  it('requires an explicit workout start and permits only one global work timer', () => {
+    let state = initializeActiveWorkout([timedWeighted(), timedSimple()]);
+    expect(state).toMatchObject({ workoutStartedAt: null, activeWorkTimer: null });
+    expect(startSet(state, 0, 0, 2_000)).toBe(state);
+
+    state = startWorkout(state, 1_000);
+    expect(state.workoutStartedAt).toBe(1_000);
+    expect(startWorkout(state, 9_000)).toBe(state);
+    state = startSet(state, 0, 0, 2_000);
+    expect(state.activeWorkTimer).toMatchObject({
+      id: 'work-1', occurrenceId: 'bench:0', exerciseIndex: 0, setIndex: 0, startedAt: 2_000,
+    });
+    expect(startSet(state, 1, 0, 2_500)).toBe(state);
+  });
+
+  it('rejects legacy completion toggles after timed workout start', () => {
+    let state = initializeActiveWorkout([timedWeighted(), timedSimple()]);
+    state = reduce(state, toggle(0, 0));
+    state = reduce(state, { type: 'toggleSimpleExercise', exerciseIndex: 1 });
+    expect(state.exercises[0].setRecords[0].completed).toBe(true);
+    expect(state.exercises[1].completed).toBe(true);
+
+    state = initializeActiveWorkout([timedWeighted(), timedSimple()]);
+    state = startWorkout(state);
+    expect(reduce(state, toggle(0, 0))).toBe(state);
+    expect(reduce(state, { type: 'toggleSimpleExercise', exerciseIndex: 1 })).toBe(state);
+
+    state = startSet(state, 0, 0, 2_000);
+    state = confirmSet(state, 0, 0, 3_000);
+    const confirmed = state;
+    expect(reduce(state, toggle(0, 0))).toBe(confirmed);
+    const result = resolveFinishCandidate(state, 4_000);
+    expect(() => buildCompletedV3WorkoutDocument({
+      ...result.candidate,
+      date: '2026-07-16T12:00:00.000Z',
+    })).not.toThrow();
+  });
+
+  it('validates confirmation by mode, clamps duration, and supports cancel without rest', () => {
+    let state = startWorkout(initializeActiveWorkout([timedWeighted(), timedSimple()]));
+    state = reduce(state, editWeight(0, 0, 'actualReps', ''));
+    state = startSet(state, 0, 0, 2_000);
+    expect(confirmSet(state, 0, 0, 3_000)).toBe(state);
+
+    state = cancelSet(state, 0, 0);
+    expect(state.activeWorkTimer).toBeNull();
+    expect(state.exercises[0].setRecords[0]).toMatchObject({
+      completed: false, workDurationSeconds: null, actualRestSeconds: null,
+    });
+    expect(state.exercises[0].setRecords[0]._activeRest).toBeUndefined();
+
+    state = reduce(state, editWeight(0, 0, 'actualReps', 8));
+    state = startSet(state, 0, 0, 4_000);
+    state = confirmSet(state, 0, 0, 3_000);
+    expect(state.exercises[0].setRecords[0]).toMatchObject({
+      completed: true, workDurationSeconds: 0, actualRestSeconds: null,
+      _activeRest: { id: 'rest-3', startedAt: 3_000 },
+    });
+
+    state = startSet(state, 1, 0, 5_000);
+    state = confirmSet(state, 1, 0, 5_501);
+    expect(state.exercises[1].setRecords[0]).toMatchObject({ completed: true, workDurationSeconds: 1 });
+  });
+
+  it('requires all bodyweight inputs and ignores render-only tick actions', () => {
+    const timedBodyweight = bodyweight();
+    timedBodyweight.occurrenceId = 'pullup:0';
+    timedBodyweight.setRecords = timedBodyweight.setRecords.map((record, index) => ({
+      ...record,
+      plannedRestSeconds: index === 0 ? 60 : null,
+      workDurationSeconds: null,
+      actualRestSeconds: null,
+    }));
+    let state = startWorkout(initializeActiveWorkout([timedBodyweight]));
+    state = reduce(state, {
+      type: 'editBodyweightActual', exerciseIndex: 0, setIndex: 0, field: 'fullReps', value: '',
+    });
+    state = startSet(state, 0, 0, 2_000);
+    expect(confirmSet(state, 0, 0, 3_000)).toBe(state);
+    const ticking = reduce(state, { type: 'renderTick', timestamp: 30_000 });
+    expect(ticking).toBe(state);
+
+    state = reduce(state, {
+      type: 'editBodyweightActual', exerciseIndex: 0, setIndex: 0, field: 'fullReps', value: 0,
+    });
+    state = confirmSet(state, 0, 0, 3_000);
+    expect(state.exercises[0].setRecords[0].completed).toBe(true);
+  });
+
+  it('keeps rests concurrent across occurrences and closes only the prior same-occurrence rest', () => {
+    let state = startWorkout(initializeActiveWorkout([timedWeighted('one'), timedWeighted('two')]));
+    state = startSet(state, 0, 0, 2_000);
+    state = confirmSet(state, 0, 0, 4_000);
+    const firstRest = state.exercises[0].setRecords[0]._activeRest;
+    state = startSet(state, 1, 0, 5_000);
+    state = confirmSet(state, 1, 0, 6_000);
+    expect(state.exercises[0].setRecords[0]._activeRest).toEqual(firstRest);
+    expect(state.exercises[1].setRecords[0]._activeRest).toBeDefined();
+
+    state = startSet(state, 0, 1, 9_499);
+    expect(state.exercises[0].setRecords[0]).toMatchObject({ actualRestSeconds: 5 });
+    expect(state.exercises[0].setRecords[0]._activeRest).toBeUndefined();
+    expect(state.exercises[1].setRecords[0]._activeRest).toBeDefined();
+    expect(startSet(state, 0, 2, 10_000)).toBe(state);
+  });
+
+  it('never starts rest after a final set', () => {
+    let state = startWorkout(initializeActiveWorkout([timedSimple()]));
+    state = startSet(state, 0, 0, 2_000);
+    state = confirmSet(state, 0, 0, 3_000);
+    state = startSet(state, 0, 1, 4_000);
+    state = confirmSet(state, 0, 1, 6_000);
+    expect(state.exercises[0].setRecords[1]).toMatchObject({
+      completed: true, workDurationSeconds: 2, actualRestSeconds: null,
+    });
+    expect(state.exercises[0].setRecords[1]._activeRest).toBeUndefined();
+    expect(state.exercises[0].completed).toBe(true);
+  });
+
+  it('keeps simple occurrence completion compatible with confirmed timed sets', () => {
+    let state = startWorkout(initializeActiveWorkout([timedSimple()]));
+    state = startSet(state, 0, 0, 2_000);
+    state = confirmSet(state, 0, 0, 3_000);
+    expect(state.exercises[0].completed).toBe(true);
+    state = undoSet(state, 0, 0);
+    expect(state.exercises[0].completed).toBe(false);
+  });
+
+  it('undoes only the latest live-rest prefix, relocks weighted next, and gives reconfirmed rest a new identity', () => {
+    let state = startWorkout(initializeActiveWorkout([timedWeighted()]));
+    state = startSet(state, 0, 0, 2_000);
+    state = confirmSet(state, 0, 0, 3_000);
+    const firstRestId = state.exercises[0].setRecords[0]._activeRest.id;
+    state = undoSet(state, 0, 0);
+    expect(state.exercises[0].setRecords[0]).toMatchObject({
+      completed: false, plannedRestSeconds: 60, workDurationSeconds: null, actualRestSeconds: null,
+      actualWeight: 100, actualReps: 8,
+    });
+    expect(state.exercises[0].setRecords[0]._activeRest).toBeUndefined();
+    expect(state.exercises[0].setRecords[1].recommendationReason.reasonCode)
+      .toBe('BACKOFF_AWAITING_PRIOR_SET');
+
+    state = startSet(state, 0, 0, 4_000);
+    state = confirmSet(state, 0, 0, 5_000);
+    expect(state.exercises[0].setRecords[0]._activeRest.id).not.toBe(firstRestId);
+    state = startSet(state, 0, 1, 7_000);
+    expect(undoSet(state, 0, 0)).toBe(state);
+  });
+
+  it('resolves a frozen Finish candidate from one timestamp without mutating active state', () => {
+    let state = startWorkout(initializeActiveWorkout([timedWeighted('one'), timedWeighted('two')]), 1_000);
+    state = startSet(state, 0, 0, 2_000);
+    expect(resolveFinishCandidate(state, 9_000)).toMatchObject({
+      status: 'blocked-active-work', activeWorkTimer: { occurrenceId: 'one:0', setIndex: 0 },
+    });
+    state = confirmSet(state, 0, 0, 3_000);
+    state = startSet(state, 1, 0, 4_000);
+    state = confirmSet(state, 1, 0, 5_000);
+    const before = structuredClone(state);
+
+    const result = resolveFinishCandidate(state, 8_501);
+    expect(result.status).toBe('ready');
+    expect(result.candidate.actualDurationSeconds).toBe(8);
+    expect(result.candidate.exercises[0].setRecords[0].actualRestSeconds).toBe(6);
+    expect(result.candidate.exercises[1].setRecords[0].actualRestSeconds).toBe(4);
+    expect(result.candidate.exercises[0].setRecords[0]._activeRest).toBeUndefined();
+    expect(state).toEqual(before);
+    expect(Object.isFrozen(result.candidate)).toBe(true);
+    expect(() => { result.candidate.exercises[0].name = 'changed'; }).toThrow();
+    const document = buildCompletedV3WorkoutDocument({
+      ...result.candidate,
+      date: '2026-07-16T12:00:00.000Z',
+    });
+    expect(document).toMatchObject({
+      schemaVersion: 3,
+      actualDurationSeconds: 8,
+    });
+    expect(document.exercises.map(item => item.setRecords[0].actualRestSeconds)).toEqual([6, 4]);
+
+    const later = resolveFinishCandidate(state, 10_000);
+    expect(later.candidate.actualDurationSeconds).toBe(9);
+    expect(later.candidate.exercises[0].setRecords[0].actualRestSeconds).toBe(7);
   });
 });
