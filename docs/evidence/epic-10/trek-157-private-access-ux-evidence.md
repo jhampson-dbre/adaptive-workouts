@@ -16,7 +16,7 @@
 
 | Field | Record |
 | --- | --- |
-| Evidence build | `trek-157-worktree-2026-07-19`; final post-review-simplification worktree based on commit `4670df46d9bf7c78fb6e514b4769b5114cea50bb`. The scoped task commit is intentionally pending until the renewed reviews accept this exact worktree. |
+| Evidence build | Accepted implementation and rendered-evidence commit `48ac1ec59ecb268c55cbc88afca03b62348ccda0`. The later pre-PR metadata-only reconciliation does not change product code, tests, or screenshots. |
 | Harness | Codex in-app Browser plus `npm run ux:private-access`; browser session `-bdee-4559-b85a-e6673f0bfcef`; manifest `private-access-ux-scenarios-v1`. |
 | Bounded capability probe | Browser viewport override accepted 375x812; DOM snapshots, accessible focus, read-only layout metrics, unique semantic clicks, and viewport screenshots worked. Runner start/stage/stop worked with real Auth/Firestore emulators and Vite. |
 | Capability state | `supported` for rendered-primary viewport observation, semantic actions, focus inspection, and safe synthetic screenshots. Full-page screenshot capture was rejected after a bounded probe produced a DPR-cropped image; viewport capture was independently verified and used instead. |
@@ -50,7 +50,7 @@
 | Evidence obligation | `satisfied` |
 | Disposition | `not-applicable`; no residual limitation or finding requires disposition. |
 | Allowed recommendation | `rendered-usability-pass` |
-| Build / commit | `trek-157-worktree-2026-07-19`, based on `4670df4`; commit pending renewed review. |
+| Build / commit | `48ac1ec59ecb268c55cbc88afca03b62348ccda0`; accepted product and rendered-evidence build. |
 | Fixture / data revision | `emulator-baseline-v1`; auth `emulator-baseline-auth-v2`; actual strict approved readback. |
 | Requested and actual viewport | Requested 375x812 CSS px; actual `window.innerWidth=375`, `innerHeight=812`; body scroll width 375. |
 | Starting state | Protected UI absent; the pre-gate baseline preparation surface focused `Preparing emulator baseline…`; after identity handoff the shared checking surface owns claim evaluation. |
@@ -74,7 +74,7 @@
 | Evidence obligation | `satisfied` |
 | Disposition | `nonblocking-residual`; the bounded timing limitation is covered by the approved automated fallback and has the reactivation trigger above. |
 | Allowed recommendation | `evidence-complete-with-residual-capability-risk` |
-| Build / commit | `trek-157-worktree-2026-07-19`, based on `4670df4`; commit pending renewed review. |
+| Build / commit | `48ac1ec59ecb268c55cbc88afca03b62348ccda0`; accepted product and rendered-evidence build. |
 | Fixture / data revision | Synthetic canonical identity with pending `{}` then strict `{ approved: true }` Admin readback. |
 | Requested and actual viewport | Requested and actual browser viewport 375x812; body/client width 375; surface scroll height 812 with both actions reachable. Saved PNG raster is 375x811 due to the one-row capture limitation recorded above. |
 | Starting state | Authenticated pending user; protected UI absent; `Awaiting approval` heading focused. |
@@ -98,7 +98,7 @@
 | Evidence obligation | `satisfied` |
 | Disposition | `not-applicable`; no residual limitation or finding requires disposition. |
 | Allowed recommendation | `rendered-usability-pass` |
-| Build / commit | `trek-157-worktree-2026-07-19`, based on `4670df4`; commit pending renewed review. |
+| Build / commit | `48ac1ec59ecb268c55cbc88afca03b62348ccda0`; accepted product and rendered-evidence build. |
 | Fixture / data revision | Strict approved synthetic identity; adapter protocol `private-access-scenario-control-v1`. |
 | Requested and actual viewport | Requested and actual 375x812; no horizontal overflow. |
 | Starting state | Approved identity with protected UI absent during evaluation. |
@@ -122,7 +122,7 @@
 | Evidence obligation | `satisfied` |
 | Disposition | `not-applicable`; no residual limitation or finding requires disposition. |
 | Allowed recommendation | `rendered-usability-pass` |
-| Build / commit | `trek-157-worktree-2026-07-19`, based on `4670df4`; commit pending renewed review. |
+| Build / commit | `48ac1ec59ecb268c55cbc88afca03b62348ccda0`; accepted product and rendered-evidence build. |
 | Fixture / data revision | Approved strict claim then exact revoked `{}` readback for the canonical synthetic UID. |
 | Requested and actual viewport | Requested and actual 375x812. |
 | Starting state | Authorized UI visible with `Generate Workout` focused. |
