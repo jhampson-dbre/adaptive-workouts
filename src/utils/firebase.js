@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator, initializeAuth, inMemoryPersistence } from 'firebase/auth';
 import { connectFirestoreEmulator, initializeFirestore, memoryLocalCache, persistentLocalCache } from 'firebase/firestore';
-import { createAuthForMode } from './firebaseMode';
+import { createAuthForMode, parseEmulatorHost } from './firebaseMode';
 
 export const isBaselineBuild = import.meta.env.DEV && import.meta.env.MODE === 'baseline';
 
@@ -21,8 +21,10 @@ const db = initializeFirestore(app, {
 });
 
 if (import.meta.env.DEV) {
-  connectAuthEmulator(auth, 'http://127.0.0.1:9099');
-  connectFirestoreEmulator(db, '127.0.0.1', 8080);
+  const authHost = parseEmulatorHost(import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST, '127.0.0.1:9099');
+  const firestoreHost = parseEmulatorHost(import.meta.env.VITE_FIRESTORE_EMULATOR_HOST, '127.0.0.1:8080');
+  connectAuthEmulator(auth, `http://${authHost.value}`);
+  connectFirestoreEmulator(db, firestoreHost.host, firestoreHost.port);
 }
 
 export { auth, db };

@@ -23,7 +23,8 @@
     "emulators:scenario": "node scripts/emulator/scenarios/load.mjs",
     "test:emulator-baseline": "node scripts/emulator/run-integration-tests.mjs",
     "dev:baseline": "node scripts/emulator/run-baseline-dev.mjs",
-    "verify:baseline-production": "node scripts/emulator/verify-baseline-production.mjs"
+    "verify:baseline-production": "node scripts/emulator/verify-baseline-production.mjs",
+    "ux:private-access": "node scripts/emulator/access-scenarios/run.mjs"
   },
   "dependencies": {
     "firebase": "^12.15.0",

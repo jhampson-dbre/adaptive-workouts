@@ -40,6 +40,15 @@ gcloud auth application-default revoke
 Actual IAM configuration and production mutations are deferred to TREK-158. This
 document will accumulate the later rules-deployment and rollout procedures.
 
+## Client access recovery
+
+The client authorizes only an ID token whose custom claim is the boolean
+`approved: true`. Accounts without that claim see **Awaiting approval** and can use
+**Check again** after an owner changes their claim. Verification failures and the
+15-second client deadline fail closed to **Unable to verify access**. Signing out is
+always available; migration failures for an already approved account remain a
+console-only diagnostic.
+
 ## Firestore rules deployment
 
 TREK-158 performs this deployment only after the strict-claim rules change has passed

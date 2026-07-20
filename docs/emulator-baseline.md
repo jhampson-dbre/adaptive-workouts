@@ -38,6 +38,10 @@ The baseline browser is intentionally isolated:
 
 ## Scratch and scenario use
 
+### Private-access scenarios
+
+`npm run ux:private-access -- start --scenario UX-10-XX --viewport WIDTHxHEIGHT` owns a scratch emulator stack and stages the canonical Auth user's exact claim state before Vite starts. `UX-10-02` starts pending and accepts `approve-user`; `UX-10-03` accepts `reject-next-evaluation`, `hold-next-evaluation`, or `pass`; `UX-10-04` accepts `revoke-user`, `approve-user`, or `pass`. Stage actions through the session returned by `start`; claim actions are read back from the owned Auth emulator, while only reject/hold actions are delivered once to the baseline evaluator.
+
 Start the scratch owner in terminal 1:
 
 ```powershell
@@ -104,7 +108,8 @@ npm run test:emulator-baseline
 npm run verify:baseline-production
 npm run ci:check
 node scripts/emulator/scenarios/validate-manifest.mjs
+node scripts/emulator/access-scenarios/validate-manifest.mjs
 ```
 
 `verify:baseline-production` proves normal production output contains none of the
-fixed identity or fixture markers and rejects a baseline-mode production build.
+fixed identity, fixture, or private-access scenario-control markers and rejects a baseline-mode production build.
