@@ -1,7 +1,7 @@
 import { useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { generateWorkout, getDaysSinceLastLegDay, getDayOfWeek } from '../utils/engine';
-import { getSettings, getHistory, getCatalog } from '../utils/storage';
+import { getSettings, getGenerationHistory, getCatalog } from '../utils/storage';
 
 const MUSCLE_GROUPS = ['Biceps', 'Shoulders', 'Back', 'Chest', 'Triceps', 'Core', 'Legs'];
 const HISTORY_UNAVAILABLE_MESSAGE = 'Workout history is unavailable. Retry before generating a workout.';
@@ -45,7 +45,7 @@ export default function Generator({
     try {
       const [settingsResult, historyResult, catalogResult] = await Promise.allSettled([
         getSettings(user.uid),
-        getHistory(user.uid),
+        getGenerationHistory(user.uid),
         getCatalog(user.uid)
       ]);
       if (historyResult.status === 'rejected') throw new HistoryLoadError(historyResult.reason);

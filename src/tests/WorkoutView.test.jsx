@@ -7,11 +7,11 @@ import { AuthContext } from '../context/AuthContext';
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
-  storage.getHistory.mockResolvedValue([]);
+  storage.getHistoryPage.mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
   vi.useRealTimers();
 });
 
-vi.mock('../utils/storage', () => ({ saveWorkout: vi.fn(), getHistory: vi.fn(() => Promise.resolve([])) }));
+vi.mock('../utils/storage', () => ({ saveWorkout: vi.fn(), getHistoryPage: vi.fn(() => Promise.resolve({ items: [], nextCursor: null, hasMore: false })) }));
 
 const renderWorkout = (workout, onFinish = () => {}, user = { uid: 'test-user-id' }) => render(
   <AuthContext.Provider value={user}><WorkoutView workout={workout} onFinish={onFinish} /></AuthContext.Provider>,
@@ -515,13 +515,14 @@ test('a failed frozen save remains bound to the account that created it', async 
   expect(screen.getByRole('alert').textContent).toMatch(/account changed/i);
 });
 
-test('history loading and failure remain nonblocking', async () => {
-  storage.getHistory.mockRejectedValueOnce(new Error('offline'));
+test('history loading is deferred until disclosure and failures remain nonblocking', async () => {
+  storage.getHistoryPage.mockRejectedValueOnce(new Error('offline'));
   renderWorkout([]);
-  expect(storage.getHistory).toHaveBeenCalledWith('test-user-id');
+  expect(storage.getHistoryPage).not.toHaveBeenCalled();
   expect(screen.queryByText('Failed to load workout history.')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
-  expect(await screen.findByText('Failed to load workout history.')).toBeDefined();
+  expect(await screen.findByText('Couldn’t load workout history.')).toBeDefined();
+  expect(storage.getHistoryPage).toHaveBeenCalledWith('test-user-id', { cursor: null, pageSize: 20 });
   expect(screen.getByRole('button', { name: 'Start Workout' })).toBeDefined();
 });
 
@@ -628,12 +629,12 @@ test('account-switch recovery rebuilds after Back and permits the original owner
 });
 
 test('history fetch failure stays separate while a timed workout saves successfully', async () => {
-  storage.getHistory.mockRejectedValueOnce(new Error('history offline'));
+  storage.getHistoryPage.mockRejectedValueOnce(new Error('history offline'));
   storage.saveWorkout.mockResolvedValueOnce(undefined);
   const onFinish = vi.fn();
   renderWorkout([{ ...timedWorkout[1] }], onFinish);
   fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
-  expect(await screen.findByText('Failed to load workout history.')).toBeDefined();
+  expect(await screen.findByText('Couldn’t load workout history.')).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));

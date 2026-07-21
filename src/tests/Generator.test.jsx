@@ -15,7 +15,7 @@ describe('Generator Component', () => {
         window.confirm = vi.fn();
         
         storage.getSettings.mockResolvedValue({ legDayOfWeek: 'Friday' });
-        storage.getHistory.mockResolvedValue([]);
+        storage.getGenerationHistory.mockResolvedValue([]);
         storage.getCatalog.mockResolvedValue([
             { id: 'leg1', name: 'Squat', muscleGroup: 'Legs', tier: 3, sets: 3, isActive: true }
         ]);
@@ -131,7 +131,7 @@ describe('Generator Component', () => {
 
     it('blocks generation on history failure and retries without an empty-history fallback', async () => {
         storage.getCatalog.mockResolvedValue([]);
-        storage.getHistory.mockRejectedValueOnce(new Error('offline'));
+        storage.getGenerationHistory.mockRejectedValueOnce(new Error('offline'));
         const onGenerate = vi.fn();
 
         renderWithAuth(<Generator
@@ -149,7 +149,7 @@ describe('Generator Component', () => {
         expect(onGenerate).not.toHaveBeenCalled();
 
         let resolveHistory;
-        storage.getHistory.mockReturnValueOnce(new Promise(resolve => { resolveHistory = resolve; }));
+        storage.getGenerationHistory.mockReturnValueOnce(new Promise(resolve => { resolveHistory = resolve; }));
         fireEvent.click(retry);
         expect(screen.getByRole('button', { name: 'Retrying...' }).disabled).toBe(true);
         resolveHistory([]);
