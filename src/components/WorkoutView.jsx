@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext, useReducer, useRef } from 'react';
-import { saveWorkout, getHistory } from '../utils/storage';
+import { saveWorkout, getHistoryPage } from '../utils/storage';
 import { AuthContext } from '../context/AuthContext';
 import {
   activeWorkoutReducer, getSetStatus, initializeActiveWorkout, resolveFinishCandidate,
@@ -191,9 +191,6 @@ export default function WorkoutView({ workout, onFinish }) {
   const [restAnnouncement, setRestAnnouncement] = useState('');
   const [exerciseErrors, setExerciseErrors] = useState({});
   const [finishError, setFinishError] = useState('');
-  const [history, setHistory] = useState([]);
-  const [loadingHistory, setLoadingHistory] = useState(true);
-  const [historyError, setHistoryError] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [finishCandidate, setFinishCandidate] = useState(null);
@@ -254,17 +251,6 @@ export default function WorkoutView({ workout, onFinish }) {
       setRestAnnouncement(current => refreshRepeatedLiveMessage(current, message));
     }
   }, [activeWorkout.exercises, now]);
-
-  useEffect(() => {
-    let mounted = true;
-    if (!user?.uid) { setHistory([]); setLoadingHistory(false); return undefined; }
-    (async () => {
-      try { setLoadingHistory(true); setHistoryError(null); const data = await getHistory(user.uid); if (mounted) setHistory(data); }
-      catch (error) { console.error('Failed to fetch history:', error); if (mounted) setHistoryError('Failed to load workout history.'); }
-      finally { if (mounted) setLoadingHistory(false); }
-    })();
-    return () => { mounted = false; };
-  }, [user]);
 
   useEffect(() => { if (finishCandidate) summaryRef.current?.focus(); }, [finishCandidate]);
 
@@ -393,6 +379,6 @@ export default function WorkoutView({ workout, onFinish }) {
       })}</ul>
       {started && <><button ref={finishRef} className="finish-btn" aria-describedby={finishError ? 'finish-feedback' : undefined} onClick={handleFinish}>Finish Workout</button>{finishError && <p id="finish-feedback" className="error-message" role="alert">{finishError}</p>}</>}
     </>}
-    <WorkoutHistory history={history} loading={loadingHistory} error={historyError} />
+    <WorkoutHistory key={user?.uid ?? null} historyKey={user?.uid ?? null} loadPage={({ cursor, pageSize }) => getHistoryPage(user?.uid, { cursor, pageSize })} />
   </div>;
 }

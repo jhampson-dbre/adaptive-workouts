@@ -5,6 +5,9 @@ const firestore = vi.hoisted(() => ({
     getDocs: vi.fn(),
     query: vi.fn(),
     orderBy: vi.fn(),
+    limit: vi.fn(),
+    startAfter: vi.fn(),
+    documentId: vi.fn(),
     doc: vi.fn(),
     getDoc: vi.fn(),
     setDoc: vi.fn(),
@@ -13,7 +16,7 @@ const firestore = vi.hoisted(() => ({
 
 vi.mock('firebase/firestore', () => firestore);
 vi.mock('../utils/firebase', () => ({ db: { name: 'test-db' } }));
-import { getHistory, saveWorkout, getSettings, getCatalog, migrateLocalData } from '../utils/storage';
+import { getGenerationHistory, getHistoryPage, saveWorkout, getSettings, getCatalog, migrateLocalData } from '../utils/storage';
 
 describe('Storage Layer (Async)', () => {
     beforeEach(() => {
@@ -22,18 +25,20 @@ describe('Storage Layer (Async)', () => {
     });
 
     it('exports all required async functions', () => {
-        expect(typeof getHistory).toBe('function');
+        expect(typeof getGenerationHistory).toBe('function');
+        expect(typeof getHistoryPage).toBe('function');
         expect(typeof saveWorkout).toBe('function');
         expect(typeof getSettings).toBe('function');
         expect(typeof getCatalog).toBe('function');
         expect(typeof migrateLocalData).toBe('function');
     });
 
-    it('requests history in ascending workout-date order and maps documents', async () => {
+    it('bounds generator history to the newest 100 raw documents', async () => {
         const historyCollection = { path: 'users/test-user/history' };
         const orderedQuery = { ordered: true };
         firestore.collection.mockReturnValue(historyCollection);
-        firestore.orderBy.mockReturnValue({ field: 'date', direction: 'asc' });
+        firestore.orderBy.mockReturnValue({ field: 'date', direction: 'desc' });
+        firestore.limit.mockReturnValue({ count: 100 });
         firestore.query.mockReturnValue(orderedQuery);
         firestore.getDocs.mockResolvedValue({
             docs: [
@@ -42,14 +47,74 @@ describe('Storage Layer (Async)', () => {
             ],
         });
 
-        await expect(getHistory('test-user')).resolves.toEqual([
+        await expect(getGenerationHistory('test-user')).resolves.toEqual([
             { id: 'first', date: '2026-07-08T12:00:00Z', exercises: [] },
             { id: 'second', date: '2026-07-09T12:00:00Z', exercises: [] },
         ]);
         expect(firestore.collection).toHaveBeenCalledWith({ name: 'test-db' }, 'users', 'test-user', 'history');
-        expect(firestore.orderBy).toHaveBeenCalledWith('date', 'asc');
-        expect(firestore.query).toHaveBeenCalledWith(historyCollection, { field: 'date', direction: 'asc' });
+        expect(firestore.orderBy).toHaveBeenCalledWith('date', 'desc');
+        expect(firestore.query).toHaveBeenCalledWith(historyCollection, { field: 'date', direction: 'desc' }, { count: 100 });
         expect(firestore.getDocs).toHaveBeenCalledWith(orderedQuery);
+    });
+
+    it('pages newest-first by date then document ID without exposing the lookahead row', async () => {
+        const historyCollection = { path: 'users/test-user/history' };
+        const orderedQuery = { ordered: true };
+        const first = { id: 'z', data: () => ({ date: '2026-07-09' }) };
+        const second = { id: 'a', data: () => ({ date: '2026-07-09' }) };
+        const lookahead = { id: 'older', data: () => ({ date: '2026-07-08' }) };
+        firestore.collection.mockReturnValue(historyCollection);
+        firestore.orderBy.mockImplementation((field, direction) => ({ field, direction }));
+        firestore.documentId.mockReturnValue('DOCUMENT_ID');
+        firestore.limit.mockReturnValue({ count: 3 });
+        firestore.query.mockReturnValue(orderedQuery);
+        firestore.getDocs.mockResolvedValue({ docs: [first, second, lookahead] });
+
+        await expect(getHistoryPage('test-user', { pageSize: 2 })).resolves.toEqual({
+            items: [{ id: 'z', date: '2026-07-09' }, { id: 'a', date: '2026-07-09' }],
+            nextCursor: second,
+            hasMore: true,
+        });
+        expect(firestore.query).toHaveBeenCalledWith(
+            historyCollection,
+            { field: 'date', direction: 'desc' },
+            { field: 'DOCUMENT_ID', direction: 'desc' },
+            { count: 3 },
+        );
+
+        firestore.startAfter.mockReturnValue({ cursor: second });
+        await getHistoryPage('test-user', { cursor: second, pageSize: 2 });
+        expect(firestore.query).toHaveBeenLastCalledWith(
+            historyCollection,
+            { field: 'date', direction: 'desc' },
+            { field: 'DOCUMENT_ID', direction: 'desc' },
+            { cursor: second },
+            { count: 3 },
+        );
+    });
+
+    it('rejects unsafe history page sizes before querying Firestore', async () => {
+        await expect(getHistoryPage('test-user', { pageSize: 0 })).rejects.toThrow(/page size/i);
+        await expect(getHistoryPage('test-user', { pageSize: 101 })).rejects.toThrow(/page size/i);
+        expect(firestore.getDocs).not.toHaveBeenCalled();
+    });
+
+    it('distinguishes an exact 20-document page from a 21-document lookahead', async () => {
+        const historyCollection = { path: 'history' };
+        firestore.collection.mockReturnValue(historyCollection);
+        firestore.orderBy.mockReturnValue({ ordered: true });
+        firestore.documentId.mockReturnValue('DOCUMENT_ID');
+        firestore.limit.mockReturnValue({ count: 21 });
+        firestore.query.mockReturnValue({ ordered: true });
+        const docs = Array.from({ length: 21 }, (_, index) => ({ id: `workout-${index}`, data: () => ({ date: '2026-07-20' }) }));
+        firestore.getDocs.mockResolvedValueOnce({ docs: docs.slice(0, 20) });
+        const exactPage = await getHistoryPage('test-user');
+        expect(exactPage.items).toHaveLength(20);
+        expect(exactPage).toMatchObject({ nextCursor: docs[19], hasMore: false });
+        firestore.getDocs.mockResolvedValueOnce({ docs });
+        const lookaheadPage = await getHistoryPage('test-user');
+        expect(lookaheadPage.items).toHaveLength(20);
+        expect(lookaheadPage).toMatchObject({ nextCursor: docs[19], hasMore: true });
     });
 
     it('normalizes an absent catalog tracking mode in memory without writing', async () => {

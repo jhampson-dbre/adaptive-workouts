@@ -1,4 +1,7 @@
-import { doc, getDoc, setDoc, collection, getDocs, addDoc, query, orderBy } from 'firebase/firestore';
+import {
+  doc, getDoc, setDoc, collection, getDocs, addDoc, query, orderBy,
+  limit, startAfter, documentId,
+} from 'firebase/firestore';
 import { db } from './firebase';
 import { normalizeCatalogExercise, normalizeWorkoutSettings } from './workoutSchema';
 
@@ -61,11 +64,32 @@ export async function saveSettings(userId, settings) {
   await setDoc(doc(db, 'users', userId), settings, { merge: true });
 }
 
-export async function getHistory(userId) {
+export async function getGenerationHistory(userId) {
   const colRef = collection(db, 'users', userId, 'history');
-  const historyQuery = query(colRef, orderBy('date', 'asc'));
+  const historyQuery = query(colRef, orderBy('date', 'desc'), limit(100));
   const snapshot = await getDocs(historyQuery);
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+export async function getHistoryPage(userId, { cursor = null, pageSize = 20 } = {}) {
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+    throw new RangeError('History page size must be an integer from 1 to 100.');
+  }
+  const colRef = collection(db, 'users', userId, 'history');
+  const constraints = [
+    orderBy('date', 'desc'),
+    orderBy(documentId(), 'desc'),
+  ];
+  if (cursor) constraints.push(startAfter(cursor));
+  constraints.push(limit(pageSize + 1));
+  const snapshot = await getDocs(query(colRef, ...constraints));
+  const docs = snapshot.docs;
+  const displayedDocs = docs.slice(0, pageSize);
+  return {
+    items: displayedDocs.map(historyDoc => ({ id: historyDoc.id, ...historyDoc.data() })),
+    nextCursor: displayedDocs.at(-1) ?? null,
+    hasMore: docs.length > pageSize,
+  };
 }
 
 export async function saveWorkout(userId, workout) {

@@ -3,7 +3,7 @@ import {
   isValidV2ExerciseOccurrence,
   isValidV2WorkoutEnvelope,
 } from '../utils/workoutSchema';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const localDateFormatter = new Intl.DateTimeFormat(undefined, {
   year: 'numeric', month: 'long', day: 'numeric',
@@ -184,22 +184,22 @@ function V3Exercise({ exercise }) {
   );
 }
 
-function WorkoutHeading({ entry }) {
+function WorkoutHeading({ entry, headingRef, focusable, onFocusLeave }) {
   return (
     <header className="history-card-heading">
-      <h3>{formatWorkoutDate(entry?.date)}</h3>
+      <h3 ref={headingRef} tabIndex={focusable ? '-1' : undefined} onBlur={focusable ? onFocusLeave : undefined}>{formatWorkoutDate(entry?.date)}</h3>
       {Number.isFinite(entry?.actualDuration) && entry.actualDuration >= 0 && <p>Duration: {entry.actualDuration} mins</p>}
     </header>
   );
 }
 
-function LegacyWorkout({ entry }) {
+function LegacyWorkout({ entry, ...headingProps }) {
   const exercises = Array.isArray(entry.exercises)
     ? entry.exercises.filter(exercise => exercise && typeof exercise === 'object' && !Array.isArray(exercise))
     : [];
   return (
     <article className="history-card history-card-legacy">
-      <WorkoutHeading entry={entry} />
+      <WorkoutHeading entry={entry} {...headingProps} />
       {exercises.length > 0 ? (
         <ul className="history-legacy-list">
           {exercises.map((exercise, index) => (
@@ -214,10 +214,10 @@ function LegacyWorkout({ entry }) {
   );
 }
 
-function V2Workout({ entry }) {
+function V2Workout({ entry, ...headingProps }) {
   return (
     <article className="history-card history-card-v2">
-      <WorkoutHeading entry={entry} />
+      <WorkoutHeading entry={entry} {...headingProps} />
       <ul className="history-exercise-list">
         {entry.exercises.map((exercise, index) => (
           isValidV2ExerciseOccurrence(exercise)
@@ -229,11 +229,11 @@ function V2Workout({ entry }) {
   );
 }
 
-function V3Workout({ entry }) {
+function V3Workout({ entry, headingRef, focusable, onFocusLeave }) {
   return (
     <article className="history-card history-card-v3">
       <header className="history-card-heading">
-        <h3>{formatWorkoutDate(entry.date)}</h3>
+        <h3 ref={headingRef} tabIndex={focusable ? '-1' : undefined} onBlur={focusable ? onFocusLeave : undefined}>{formatWorkoutDate(entry.date)}</h3>
         <p>Duration: {formatDuration(entry.actualDurationSeconds)}</p>
       </header>
       <ul className="history-exercise-list">
@@ -245,26 +245,129 @@ function V3Workout({ entry }) {
   );
 }
 
-function MalformedWorkout({ entry }) {
+function MalformedWorkout({ entry, ...headingProps }) {
   return (
     <article className="history-card history-card-unavailable">
-      <WorkoutHeading entry={entry} />
+      <WorkoutHeading entry={entry} {...headingProps} />
       <p>Saved workout details are unavailable.</p>
     </article>
   );
 }
 
-function HistoryEntry({ entry }) {
+function HistoryEntry({ entry, ...headingProps }) {
   const classification = classifyWorkoutDocument(entry);
-  if (classification === 'legacy') return <LegacyWorkout entry={entry} />;
-  if (classification === 'valid-v2' || isValidV2WorkoutEnvelope(entry)) return <V2Workout entry={entry} />;
-  if (classification === 'valid-v3') return <V3Workout entry={entry} />;
-  return <MalformedWorkout entry={entry} />;
+  if (classification === 'legacy') return <LegacyWorkout entry={entry} {...headingProps} />;
+  if (classification === 'valid-v2' || isValidV2WorkoutEnvelope(entry)) return <V2Workout entry={entry} {...headingProps} />;
+  if (classification === 'valid-v3') return <V3Workout entry={entry} {...headingProps} />;
+  return <MalformedWorkout entry={entry} {...headingProps} />;
 }
 
-export default function WorkoutHistory({ history = [], loading = false, error = null }) {
-  const entries = Array.isArray(history) ? history : [];
+const pageMessage = (count, older = false) => `${count} ${older ? 'older ' : ''}workout${count === 1 ? '' : 's'} loaded.`;
+
+export default function WorkoutHistory({ history, historyKey, loading = false, error = null, loadPage }) {
+  const staticHistory = Array.isArray(history);
+  const [entries, setEntries] = useState(() => staticHistory ? history : []);
   const [isOpen, setIsOpen] = useState(false);
+  const [phase, setPhase] = useState(staticHistory ? 'loaded' : 'idle');
+  const [cursor, setCursor] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+  const [focusIndex, setFocusIndex] = useState(null);
+  const [isRequestPending, setIsRequestPending] = useState(false);
+  const [retryingOlder, setRetryingOlder] = useState(false);
+  const openRef = useRef(false);
+  const requestId = useRef(0);
+  const inFlightRef = useRef(false);
+  const headingRef = useRef(null);
+  const endRef = useRef(null);
+  const retryRef = useRef(null);
+
+  useEffect(() => {
+    if (staticHistory) return;
+    requestId.current += 1;
+    inFlightRef.current = false;
+    openRef.current = false;
+    setEntries([]);
+    setIsOpen(false);
+    setPhase('idle');
+    setCursor(null);
+    setHasMore(false);
+    setFeedback(null);
+    setFocusIndex(null);
+    setIsRequestPending(false);
+    setRetryingOlder(false);
+  }, [historyKey, staticHistory]);
+
+  useEffect(() => {
+    if (staticHistory) setEntries(history);
+  }, [history, staticHistory]);
+
+  useEffect(() => {
+    if (focusIndex === null) return;
+    const target = headingRef.current ?? endRef.current;
+    target?.focus();
+    target?.scrollIntoView?.({ block: 'nearest' });
+  }, [focusIndex]);
+
+  useEffect(() => {
+    if (isOpen && phase === 'olderError') retryRef.current?.focus();
+  }, [isOpen, phase]);
+
+  const fetchPage = async (older = false) => {
+    if (!loadPage || inFlightRef.current) return;
+    inFlightRef.current = true;
+    const expectedCursor = older ? cursor : null;
+    const token = ++requestId.current;
+    const isOlderRetry = older && phase === 'olderError';
+    setRetryingOlder(isOlderRetry);
+    setIsRequestPending(true);
+    setPhase(older ? 'loadingOlder' : 'loadingInitial');
+    if (openRef.current) setFeedback('Loading workout history…');
+    try {
+      const result = await loadPage({ cursor: expectedCursor, pageSize: 20 });
+      if (requestId.current !== token) return;
+      const received = Array.isArray(result?.items) ? result.items : [];
+      const appended = older
+        ? received.filter(item => !entries.some(existing => existing?.id === item?.id))
+        : received;
+      setEntries(current => older
+        ? [...current, ...appended.filter(item => !current.some(existing => existing?.id === item?.id))]
+        : appended);
+      setCursor(result?.nextCursor ?? null);
+      setHasMore(Boolean(result?.hasMore));
+      setPhase(received.length || older ? 'loaded' : 'empty');
+      if (older && (appended.length > 0 || !result?.hasMore)) setFocusIndex(entries.length);
+      if (openRef.current) {
+        setFeedback(older
+          ? result?.hasMore && appended.length > 0 ? pageMessage(appended.length, true) : null
+          : result?.hasMore && appended.length > 0 ? pageMessage(appended.length) : null);
+      }
+    } catch {
+      if (requestId.current !== token) return;
+      setPhase(older ? 'olderError' : 'initialError');
+      if (openRef.current) setFeedback(null);
+    } finally {
+      if (requestId.current === token) {
+        setIsRequestPending(false);
+        setRetryingOlder(false);
+        inFlightRef.current = false;
+      }
+    }
+  };
+
+  const toggleOpen = () => {
+    const next = !isOpen;
+    openRef.current = next;
+    setIsOpen(next);
+    if (!next) setFeedback(null);
+    if (next && !staticHistory && phase === 'idle') fetchPage();
+  };
+
+  const initialError = !staticHistory && phase === 'initialError'
+    ? "Couldn’t load workout history."
+    : error;
+  const hasOlderError = !staticHistory && (phase === 'olderError' || retryingOlder);
+  const isLoading = staticHistory ? loading : phase === 'loadingInitial';
   return (
     <section className="workout-history-section" aria-labelledby="workout-history-heading">
       <h2 id="workout-history-heading" className="visually-hidden">Workout History</h2>
@@ -273,18 +376,41 @@ export default function WorkoutHistory({ history = [], loading = false, error = 
         className="history-disclosure"
         aria-expanded={isOpen}
         aria-controls="workout-history-content"
-        onClick={() => setIsOpen(open => !open)}
+        onClick={toggleOpen}
       >
         Workout history
       </button>
       {isOpen && (
         <div id="workout-history-content">
-          {loading ? <p>Loading history...</p> : error ? (
-            <p className="error-message" role="alert">{error}</p>
-          ) : entries.length === 0 ? <p>No workouts logged yet.</p> : (
-            <div className="history-list">
-              {entries.map((entry, index) => <HistoryEntry entry={entry} key={entry?.id || index} />)}
+          {isLoading ? <p aria-live="polite">Loading workout history…</p> : initialError ? (
+            <div className="error-message" role="alert">
+              <p>{initialError}</p>
+              {!staticHistory && <button type="button" onClick={() => fetchPage()} disabled={isRequestPending} aria-busy={isRequestPending}>
+                Retry
+              </button>}
             </div>
+          ) : (
+            <>
+              {entries.length === 0 ? <p>No workouts logged yet.</p> : (
+                <div className="history-list">
+                  {entries.map((entry, index) => <HistoryEntry entry={entry} key={entry?.id || index} focusable={index === focusIndex} headingRef={index === focusIndex ? headingRef : undefined} onFocusLeave={() => setFocusIndex(null)} />)}
+                </div>
+              )}
+              {hasOlderError && (
+                <div className={retryingOlder ? undefined : 'error-message'} role={retryingOlder ? undefined : 'alert'}>
+                  {!retryingOlder && <p>Couldn’t load older workouts.</p>}
+                  <button ref={phase === 'olderError' ? retryRef : undefined} type="button" onClick={() => fetchPage(true)} disabled={isRequestPending} aria-busy={isRequestPending}>
+                    {retryingOlder ? 'Retrying older workouts…' : 'Retry older workouts'}
+                  </button>
+                </div>
+              )}
+              {!staticHistory && !hasOlderError && entries.length > 0 && (hasMore ? (
+                <button type="button" onClick={() => fetchPage(true)} disabled={isRequestPending} aria-busy={isRequestPending}>
+                  {isRequestPending ? 'Loading older workouts…' : 'Load older'}
+                </button>
+              ) : <p ref={endRef} tabIndex={focusIndex === entries.length ? '-1' : undefined} onBlur={focusIndex === entries.length ? () => setFocusIndex(null) : undefined} aria-live="polite">All available workouts are shown.</p>)}
+              {isOpen && feedback && <p aria-live="polite">{feedback}</p>}
+            </>
           )}
         </div>
       )}
