@@ -71,6 +71,8 @@ describeIntegration('deterministic emulator baseline integration', () => {
     expect(result.user.providerData).toEqual(expect.arrayContaining([
       expect.objectContaining({ providerId: 'google.com', uid: BASELINE_PROVIDER_UID }),
     ]));
+    const token = await result.user.getIdTokenResult();
+    expect(token.claims.approved).toBe(true);
 
     const userRef = doc(firestore, 'users', BASELINE_USER_ID);
     const [user, catalog, history] = await Promise.all([

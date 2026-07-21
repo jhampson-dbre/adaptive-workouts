@@ -43,8 +43,20 @@ describeFirestore('Firestore rules', () => {
     await assertFails(db.doc('users/alex/workouts/workout-1').set({ status: 'draft' }));
   });
 
-  it('allows a user to access their own subtree', async () => {
-    const db = testEnv.authenticatedContext('alex').firestore();
+  it.each([
+    ['missing', {}],
+    ['false', { approved: false }],
+    ['string', { approved: 'true' }],
+    ['number', { approved: 1 }],
+  ])('denies a user with a %s approved claim from their own root and subtree', async (_label, token) => {
+    const db = testEnv.authenticatedContext('alex', token).firestore();
+
+    await assertFails(db.doc('users/alex').set({ settings: { staleThreshold: 5 } }));
+    await assertFails(db.doc('users/alex/workouts/workout-1').set({ status: 'draft' }));
+  });
+
+  it('allows a user with strict approved:true to access their own subtree', async () => {
+    const db = testEnv.authenticatedContext('alex', { approved: true }).firestore();
     const docRef = db.doc('users/alex/workouts/workout-1');
 
     await assertSucceeds(docRef.set({ status: 'complete' }));
@@ -53,8 +65,8 @@ describeFirestore('Firestore rules', () => {
     expect(snapshot.data()).toEqual({ status: 'complete' });
   });
 
-  it('allows a user to access their own settings document', async () => {
-    const db = testEnv.authenticatedContext('alex').firestore();
+  it('allows a user with strict approved:true to access their own settings document', async () => {
+    const db = testEnv.authenticatedContext('alex', { approved: true }).firestore();
     const docRef = db.doc('users/alex');
 
     await assertSucceeds(docRef.set({ settings: { staleThreshold: 5 } }));
@@ -63,8 +75,8 @@ describeFirestore('Firestore rules', () => {
     expect(snapshot.data()).toEqual({ settings: { staleThreshold: 5 } });
   });
 
-  it('denies access to another user subtree', async () => {
-    const db = testEnv.authenticatedContext('alex').firestore();
+  it('denies a strict approved user access to another user root and subtree', async () => {
+    const db = testEnv.authenticatedContext('alex', { approved: true }).firestore();
 
     await assertFails(db.doc('users/bob').get());
     await assertFails(db.doc('users/bob/workouts/workout-1').get());

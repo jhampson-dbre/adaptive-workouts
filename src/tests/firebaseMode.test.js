@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createAuthForMode } from '../utils/firebaseMode';
+import { createAuthForMode, parseEmulatorHost } from '../utils/firebaseMode';
 
 describe('Firebase baseline mode', () => {
   it('initializes baseline Auth with memory persistence before first use', () => {
@@ -20,5 +20,12 @@ describe('Firebase baseline mode', () => {
       .toEqual({ kind: 'normal-auth' });
     expect(getAuth).toHaveBeenCalledOnce();
     expect(initializeAuth).not.toHaveBeenCalled();
+  });
+});
+
+describe('emulator host parsing', () => {
+  it('uses a valid loopback host and rejects malformed input', () => {
+    expect(parseEmulatorHost('127.0.0.1:19099')).toMatchObject({ host: '127.0.0.1', port: 19099 });
+    expect(() => parseEmulatorHost('remote.example:8080')).toThrow(/Invalid emulator host/);
   });
 });
