@@ -24,10 +24,10 @@ local Firebase emulator and synthetic catalog/workout data.
 | Field | Record |
 | --- | --- |
 | Run ID | `CAP-225-2026-07-22-IAB-05` (post-A9 final-integration correction; IAB-04/IAB-03 observations retained where identified below) |
-| Build / commit | Final IAB-05 rendered the clean committed branch `codex/workout-phase-timing` at `047f0ea9b59be11aec456303d9e1d5d67689c891`. Earlier A8 evidence rendered the exact product/test bytes subsequently committed as TREK-224 commit `4b8647cf760f7d0450a3c049473c384ca5973cd7`; IAB-05 specifically re-probes the cumulative-review T-07/T-08 correction on its final commit. |
+| Build / commit | Final IAB-05 rendered the clean committed product branch `codex/workout-phase-timing` at `047f0ea9b59be11aec456303d9e1d5d67689c891`. Final A9 HEAD `496130b` adds only the explicit rejected-promise regression for that already-rendered Review Back behavior, so the rendered product bytes are unchanged. Earlier A8 evidence rendered the exact product/test bytes subsequently committed as TREK-224 commit `4b8647cf760f7d0450a3c049473c384ca5973cd7`. |
 | Fixture / data revision | Canonical emulator seed plus a synthetic generated workout and synthetic v4 History record. No production credentials or personal data. |
 | Harness | Codex in-app browser; Vite 8.1.2 baseline route at `127.0.0.1:5174`/clean `localhost:5174` origin; Firebase Auth/Firestore emulators. IAB-05 used the actual 1280x720 CSS-pixel viewport at device-pixel ratio 1.5. |
-| Verification | Final post-A9-fix `npm run ci:check`: 650 tests passed, 18 skipped; strict lint, production/PWA build and budgets, 14 Firestore-rules tests, workflow and agent-model checks passed. Final `npm run test:emulator-baseline`: canonical seed, baseline, immutable save, rules, scratch export/mutation, and corrupt-scratch refusal passed. |
+| Verification | Final A9 HEAD `496130b` `npm run ci:check`: 651 tests passed, 18 skipped; strict lint, production/PWA build and budgets, 14 Firestore-rules tests, workflow and agent-model checks passed. Final `npm run test:emulator-baseline` on the product-identical `047f0ea` tree: canonical seed, baseline, immutable save, rules, scratch export/mutation, and corrupt-scratch refusal passed. |
 
 | Evidence area | Probe and result | `capability_state` | Fallback / limitation / reactivation |
 | --- | --- | --- | --- |
