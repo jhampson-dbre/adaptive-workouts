@@ -9,7 +9,7 @@
     "lint": "oxlint",
     "ci:test": "vitest run",
     "ci:lint": "oxlint --deny-warnings",
-    "ci:build": "vite build",
+    "ci:build": "vite build && node scripts/check-bundle-budget.mjs",
     "ci:rules": "node scripts/ci-rules.mjs",
     "ci:workflow": "node scripts/validate-ux-quality-gate.mjs",
     "ci:agent-models": "node --test scripts/validate-agent-models.mjs",

@@ -1,6 +1,6 @@
 # TREK-98 Chunk Loading UX Contract
 
-`UX-ARTIFACT: trek-98-chunk-loading@v4`
+`UX-ARTIFACT: trek-98-chunk-loading@v9`
 
 This is the authoritative approved planning artifact for TREK-98. It expands the
 durable implementation contract in Trekker CMT-253 into scenario-indexed UX and
@@ -13,7 +13,7 @@ build-budget requirements. Every wireframe is `planning-only`, not rendered evid
 | Classification | `required` |
 | Applicability rationale | Code splitting changes when three primary authenticated surfaces become available and adds loading/import-failure states affecting hierarchy, focus, feedback, interruption, and recovery. |
 | Proportional artifact | This file; limited to authorization-to-Plan, Plan-to-Catalog, generated-Plan-to-Workout, bundle enforcement, and PWA availability. |
-| Planning artifact revision | `UX-ARTIFACT: trek-98-chunk-loading@v4` at this path; v3 incorporated UX review clarifications and v4 adds architecture constraints that preserve the approved visible contract. |
+| Planning artifact revision | `UX-ARTIFACT: trek-98-chunk-loading@v9` at this path; v3 incorporated UX review clarifications, v4 added architecture constraints, v5-v7 proved and hardened Firestore isolation, v8 restored the original universal application-JavaScript 500,000-byte ceiling after supported Rolldown splitting brought every app chunk below it, and v9 makes the already-approved fresh-retry identity explicit. |
 | Planning wireframe status | `planning-only` |
 | Required UX design review | v2 intent was approved before implementation and summarized in CMT-253; this persisted revision receives fresh UX and architecture conformance checks before product code. |
 | Architecture authority | Architecture owns chunk boundaries, retryable module loading, auth isolation, manifest measurement, cache strategy, security, and feasibility. |
@@ -33,7 +33,9 @@ build-budget requirements. Every wireframe is `planning-only`, not rendered evid
   regardless of the cache mechanism selected by architecture. A first-ever uncached
   visit is not claimed to work offline. No speculative prefetch is required.
 - Retry starts a fresh import attempt instead of replaying a cached rejection or
-  reloading the application.
+  reloading the application. Each retry generation gives the destination's emitted
+  lazy-entry module a fresh fragment-keyed module-map identity; whole-graph
+  re-evaluation is outside this task's contract.
 - Recovery preserves the current account, Generator selections, and generated
   workout input. It does not rerun approval or generate a replacement workout.
 - Same-UID access revalidation preserves that lifted state while authorized content
@@ -53,9 +55,11 @@ build-budget requirements. Every wireframe is `planning-only`, not rendered evid
 - Each destination attempt is identified by authorized UID, destination, and retry
   generation. Navigation, identity/access changes, and newer generations retire the
   prior owner; every state/focus effect verifies current ownership.
-- React lazy loaders and their promises are cached. Retry therefore creates a fresh
-  lazy component type and fresh import invocation and resets the error boundary; it
-  does not merely remount the same rejected lazy type.
+- React lazy loaders, import promises, and browser module-map failures are cached.
+  Retry therefore creates a fresh lazy component type and imports the Vite-resolved
+  emitted destination entry with a unique fragment for each retry generation before
+  resetting the error boundary. The fragment changes module identity without changing
+  the precached network URL; query-string retry keys and app reloads are prohibited.
 - The retry control remains the same mounted, focused element while the fresh attempt
   is pending. It is disabled and named `Retrying…`; the initial Suspense fallback
   must not replace it.
@@ -158,7 +162,7 @@ enforced ceiling is exceeded:
 | --- | ---: | ---: |
 | Boot JavaScript closure | 760,000 bytes | 225,000 bytes |
 | First-Plan JavaScript closure | 760,000 bytes | 225,000 bytes |
-| Each emitted app JavaScript chunk | 500,000 bytes | not separately enforced |
+| Each emitted application JavaScript chunk, including Firestore SDK/support | 500,000 bytes | not separately enforced |
 
 - Boot is entry JavaScript plus its static JavaScript closure before Plan is
   requested. First-Plan is the unique union of boot and the authorized Plan module's
@@ -169,7 +173,9 @@ enforced ceiling is exceeded:
 - Service-worker runtime files and total PWA precache bytes are reported separately
   and excluded from app-JavaScript ceilings. Missing manifest, app assets, service
   worker, or precache output fails instead of reporting zero.
-- Explicit per-app-chunk enforcement replaces the generic recurring 500 kB warning.
+- Explicit universal per-chunk enforcement replaces the generic recurring 500 kB
+  warning. Persistent Firestore caching remains required; memory-only cache or
+  Firestore Lite is not an authorized way to meet the budget.
 
 Machine definitions:
 
@@ -189,6 +195,26 @@ Machine definitions:
 - `sw.js` and emitted Workbox runtime files are required and reported separately in
   raw and deterministic gzip bytes. The checker never treats all files in `dist` as
   proof that a file is precached.
+- The Firestore allowance applies to exactly one explicit code-splitting group named
+  `firestore-sdk`. Vite 8 uses `build.rolldownOptions.output.codeSplitting.groups`
+  with a cross-platform test matching only resolved module IDs under
+  `node_modules/@firebase/firestore/` and `includeDependenciesRecursively: false`, so
+  shared or unrelated dependencies are not absorbed. The supported execution-order
+  safeguards are configured as required by Rolldown; deprecated Rollup
+  `manualChunks` and unsupported `onlyExplicitManualChunks` are prohibited.
+- A build hook emits machine-readable chunk provenance mapping output file to
+  normalized module IDs. The checker requires exactly one JavaScript manifest record
+  named `firestore-sdk`, exactly one matching provenance record, and at least one
+  `@firebase/firestore` module. Every member must be under `node_modules/`; any `src/`
+  module fails. Any Firestore-package module emitted in another chunk also fails.
+- The `firestore-sdk` chunk must not appear in the boot or first-Plan static closure,
+  regardless of those closures' totals. Missing, duplicate, mixed, differently named,
+  or leaked ownership records fail. It remains subject to the same 500,000 raw-byte
+  ceiling as every other manifest JavaScript file and always reports gzip.
+- Synthetic tests cover the passing isolated Firestore group and every failure mode:
+  missing/duplicate manifest or provenance records, no Firestore member, first-party
+  or other-package mixing, Firestore in another chunk, boot/Plan leakage, and each
+  applicable size ceiling.
 
 ## Canonical scenario-indexed planning matrix
 
@@ -201,7 +227,7 @@ reinterpretation.
 | Scenario ID and name | L1 - reach authorized Plan | L2 - reach/recover Catalog | L3 - reach/recover same Workout | B1 - enforce bundle ceilings | P1 - reach lazy destinations offline after full cache |
 | Changed surface | Access-to-Plan | Header and Settings destination | Plan-to-Workout and header | none; build/CI | Installed/offline path |
 | Applicability | `applicable`; new lazy primary job | `applicable`; lazy navigation/recovery | `applicable`; interrupted primary workflow | `applicable`; task enforcement | `applicable`; preserve PWA promise |
-| Approved flow | Exact L1 and identity/retry ownership contracts above | Exact L2 and identity/retry ownership contracts above | Exact L3 contract above; generated input preserved, internal WorkoutView state unchanged across Settings detour | Exact manifest roots/closures, deterministic gzip, artifact failures, and thresholds above | All three destinations listed in captured final precache and available after full cache |
+| Approved flow | Exact L1 and identity/retry ownership contracts above | Exact L2 and identity/retry ownership contracts above | Exact L3 contract above; generated input preserved, internal WorkoutView state unchanged across Settings detour | Exact manifest roots/closures, deterministic gzip, universal application-JavaScript 500,000 per-chunk ceiling, Firestore provenance/boot exclusion, artifact failures, and thresholds above | All three destinations listed in captured final precache and available after full cache |
 | Per-run capability probe | `not-probed` | `not-probed` | `not-probed` | `not-probed` | `not-probed` |
 | `capability_state` | `not-probed` | `not-probed` | `not-probed` | `not-probed` | `not-probed` |
 | Unsupported metadata | `not-applicable-before-probe` | `not-applicable-before-probe` | `not-applicable-before-probe` | `not-applicable-before-probe` | `not-applicable-before-probe` |

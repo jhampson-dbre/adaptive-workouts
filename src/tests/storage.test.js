@@ -14,8 +14,9 @@ const firestore = vi.hoisted(() => ({
     addDoc: vi.fn(),
 }));
 
-vi.mock('firebase/firestore', () => firestore);
-vi.mock('../utils/firebase', () => ({ db: { name: 'test-db' } }));
+vi.mock('../utils/firestoreClient', () => ({
+    loadFirestoreClient: async () => ({ ...firestore, db: { name: 'test-db' } }),
+}));
 import { getGenerationHistory, getHistoryPage, saveWorkout, getSettings, getCatalog, migrateLocalData } from '../utils/storage';
 
 describe('Storage Layer (Async)', () => {
