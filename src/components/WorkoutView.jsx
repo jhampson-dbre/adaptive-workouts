@@ -1,11 +1,11 @@
-import { useState, useEffect, useContext, useReducer, useRef } from 'react';
-import { saveWorkout, getHistoryPage } from '../utils/storage';
+import { useState, useEffect, useContext, useRef } from 'react';
+import { getHistoryPage } from '../utils/storage';
 import { AuthContext } from '../context/AuthContext';
-import {
-  activeWorkoutReducer, getSetStatus, initializeActiveWorkout, resolveFinishCandidate,
-} from '../utils/activeWorkout';
+import { getSetStatus } from '../utils/activeWorkout';
 import { calculateElapsedSeconds } from '../utils/workoutTiming';
-import { buildCompletedV3WorkoutDocument, hasConfirmedWork } from '../utils/workoutSchema';
+import { getPhaseElapsedSeconds } from '../utils/activeWorkout';
+import { hasConfirmedWork } from '../utils/workoutSchema';
+import { RECOVERY_MESSAGES } from '../utils/timingPresentationController';
 import WorkoutHistory from './WorkoutHistory';
 
 function deepFreeze(value) {
@@ -24,6 +24,11 @@ const refreshRepeatedLiveMessage = (current, message) => (
 const normalizeLiveMessage = message => message.replace(/\u2060+$/u, '');
 
 const joinRestAnnouncements = announcements => [...announcements.values()].join(' ');
+
+const EMPTY_ACTIVE_WORKOUT = deepFreeze({
+  exercises: [], workoutStartedAt: null, phase: 'generated', phaseCandidate: null,
+  _phaseTimingEnabled: true, activeWorkTimer: null,
+});
 
 function playRestCue() {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -60,14 +65,37 @@ function findNextIncompleteExercise(exercises, currentIndex) {
   return -1;
 }
 
-function WorkoutSummary({ candidate, isSaving, saveError, onBack, onSave, summaryRef }) {
+function phaseReadout(label, planned, actual, live = false) {
+  if (!live) return `${label}: ${formatTime(actual)} actual / ${formatTime(planned)} planned`;
+  const remaining = planned - actual;
+  return `${label}: ${formatTime(planned)} planned / ${remaining > 0 ? `${formatTime(remaining)} remaining` : remaining === 0 ? '0:00 remaining' : `+${formatTime(Math.abs(remaining))} overtime`}`;
+}
+
+function publicStatusMessage(status, pendingState) {
+  if (pendingState && RECOVERY_MESSAGES[pendingState]) return RECOVERY_MESSAGES[pendingState];
+  if (RECOVERY_MESSAGES[status]) return RECOVERY_MESSAGES[status];
+  if (status === 'handoff-released') return 'This tab released workout ownership to another tab.';
+  if (typeof status === 'string' && /sign in/i.test(status)) return 'Sign in before saving this workout.';
+  if (typeof status === 'string' && /account changed/i.test(status)) return 'Your signed-in account changed. Return to the account that started this workout before saving.';
+  if (typeof status === 'string' && /offline/i.test(status)) return 'Could not save while offline. Try again when connected.';
+  if (typeof status === 'string' && /could not prepare/i.test(status)) return 'Could not prepare this workout to save. Review the workout and try again.';
+  if (['absent', 'cleanup-error'].includes(status)) return 'The exact save needs another check before retrying.';
+  if (['indeterminate', 'fingerprint-error'].includes(status)) return 'The save outcome is still unknown. Check again before retrying.';
+  if (typeof status === 'string' && (status.startsWith('invalid-') || status === 'conflict')) return 'This workout cannot continue safely. Exit and try again.';
+  return status ? 'This workout cannot continue safely.' : null;
+}
+
+function WorkoutSummary({ candidate, phaseTargets, isSaving, saveError, saveStatus, blockedConflict, onBack, onSave, onKeepPending, onExit, summaryRef }) {
   const counts = workoutCounts(candidate.exercises);
   const hasWork = hasConfirmedWork(candidate.exercises);
   return (
-    <section className="workout-summary" role="region" aria-label="Workout summary" tabIndex="-1" ref={summaryRef}>
-      <h2>Review workout</h2>
+    <section className="workout-summary" role="region" aria-label="Workout summary">
+      <h1 tabIndex="-1" ref={summaryRef}>Review</h1>
       <p className="summary-total">{counts.confirmed} of {counts.planned} items confirmed</p>
       <p>Duration: {formatTime(candidate.actualDurationSeconds)}</p>
+      <ul aria-label="Frozen phase timing">
+        {['warmup', 'performance', 'cooldown'].map(phase => <li key={phase}>{phaseReadout(phase[0].toUpperCase() + phase.slice(1), phaseTargets?.[`${phase}Seconds`] ?? 0, candidate.phaseActualSeconds?.[phase] ?? 0)}</li>)}
+      </ul>
       <ul>{candidate.exercises.map((exercise, index) => {
         const records = Array.isArray(exercise.setRecords) ? exercise.setRecords : null;
         const status = records
@@ -78,12 +106,13 @@ function WorkoutSummary({ candidate, isSaving, saveError, onBack, onSave, summar
       {!hasWork && <p className="error-message" role="alert">Confirm at least one exercise or set before saving.</p>}
       {hasWork && counts.confirmed < counts.planned && <p>Some planned work remains unconfirmed. Saving will preserve those unconfirmed records.</p>}
       {saveError && <p className="error-message" role="alert">{saveError}</p>}
-      <p className="refresh-warning">Refreshing or closing this page will lose this unsaved workout summary.</p>
       <div className="summary-actions">
-        <button type="button" onClick={onBack} disabled={isSaving}>Back to workout</button>
-        <button type="button" className="finish-btn" onClick={onSave} disabled={!hasWork || isSaving} aria-busy={isSaving}>
-          {isSaving ? 'Saving...' : 'Save workout'}
-        </button>
+        {blockedConflict ? <><button type="button" onClick={onKeepPending}>Keep pending</button><button type="button" onClick={onExit}>Exit</button></> : <>
+          <button type="button" onClick={onBack} disabled={isSaving}>Back to workout</button>
+          <button type="button" className="finish-btn" onClick={onSave} disabled={!hasWork || isSaving} aria-busy={isSaving}>
+            {isSaving ? 'Saving...' : ['write-pending', 'reconcile-indeterminate'].includes(saveStatus) ? 'Check again' : saveStatus === 'retryable-absent' ? 'Retry exact save' : 'Save workout'}
+          </button>
+        </>}
       </div>
     </section>
   );
@@ -179,33 +208,54 @@ function exerciseTimingStatus(exercise, exerciseIndex, activeTimer, now) {
   return `${remaining} ${remaining === 1 ? 'set' : 'sets'} remaining`;
 }
 
-export default function WorkoutView({ workout, onFinish }) {
+export default function WorkoutView({ session, sessionState, onFinish, onResume }) {
   const user = useContext(AuthContext);
-  const [activeWorkout, dispatch] = useReducer(activeWorkoutReducer, workout, initializeActiveWorkout);
+  const activeWorkout = sessionState?.activeWorkout ?? EMPTY_ACTIVE_WORKOUT;
   const [now, setNow] = useState(Date.now());
   const [expanded, setExpanded] = useState(() => {
-    const firstIncomplete = workout.findIndex(exercise => !Array.isArray(exercise.setRecords)
+    const firstIncomplete = (activeWorkout.exercises ?? []).findIndex(exercise => !Array.isArray(exercise.setRecords)
       || exercise.setRecords.some(record => !record.completed));
     return firstIncomplete >= 0 ? { [firstIncomplete]: true } : {};
   });
   const [restAnnouncement, setRestAnnouncement] = useState('');
+  const [recoveryAcknowledgement, setRecoveryAcknowledgement] = useState('');
+  const dispatch = action => { void (async () => { if (await session.action(action)) setRecoveryAcknowledgement(''); })(); };
   const [exerciseErrors, setExerciseErrors] = useState({});
   const [finishError, setFinishError] = useState('');
-  const [saveError, setSaveError] = useState(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const [earlyFinishPrompt, setEarlyFinishPrompt] = useState(null);
+  const saveStatus = sessionState?.pendingSave?.state ?? sessionState?.error;
+  const blockedSaveConflict = sessionState?.blocked && sessionState?.pendingSave?.state === 'blocked-conflict' && activeWorkout.phase === 'review';
+  const saveError = publicStatusMessage(sessionState?.error, sessionState?.pendingSave?.state);
+  const isSaving = sessionState?.status === 'save-pending';
   const [finishCandidate, setFinishCandidate] = useState(null);
   const summaryRef = useRef(null);
+  const phaseHeadingRef = useRef(null);
+  const recoveryHeadingRef = useRef(null);
+  const promptHeadingRef = useRef(null);
   const finishRef = useRef(null);
   const headerRefs = useRef([]);
   const startRefs = useRef({});
   const alertedRestsRef = useRef(new Set());
   const restAnnouncementsRef = useRef(new Map());
   const saveInFlightRef = useRef(false);
-  const savedDocumentRef = useRef(null);
-  const saveCompletedRef = useRef(false);
-  const activeOwnerUidRef = useRef(user?.uid ?? null);
-  const finishOwnerUidRef = useRef(null);
   const started = activeWorkout.workoutStartedAt !== null;
+  const showingRecovery = (sessionState?.blocked && !blockedSaveConflict) || !sessionState?.activeWorkout;
+  const recoveryPresentation = showingRecovery
+    ? `${sessionState?.status ?? ''}:${sessionState?.error ?? ''}:${sessionState?.snapshot?.draftId ?? ''}:${sessionState?.snapshot?.ownershipGeneration ?? ''}`
+    : null;
+  const phasePresentation = showingRecovery ? null : activeWorkout.phase;
+
+  useEffect(() => {
+    if (activeWorkout.phase !== 'review' || !activeWorkout.phaseCandidate || finishCandidate) return;
+    const candidate = deepFreeze({
+      actualDurationSeconds: activeWorkout.phaseCandidate.actualDurationSeconds,
+      phaseActualSeconds: activeWorkout.phaseCandidate.phaseActualSeconds,
+      finishRequestedAt: activeWorkout.phaseCandidate.finishRequestedAtEpochMs,
+      date: new Date(activeWorkout.phaseCandidate.finishRequestedAtEpochMs).toISOString(),
+      exercises: activeWorkout.exercises,
+    });
+    setFinishCandidate(candidate);
+  }, [activeWorkout.exercises, activeWorkout.phase, activeWorkout.phaseCandidate, finishCandidate]);
 
   useEffect(() => {
     if (!started) return undefined;
@@ -248,11 +298,15 @@ export default function WorkoutView({ workout, onFinish }) {
     if (completedRestAnnouncements.size) {
       restAnnouncementsRef.current = completedRestAnnouncements;
       const message = joinRestAnnouncements(completedRestAnnouncements);
+      setRecoveryAcknowledgement('');
       setRestAnnouncement(current => refreshRepeatedLiveMessage(current, message));
     }
   }, [activeWorkout.exercises, now]);
 
-  useEffect(() => { if (finishCandidate) summaryRef.current?.focus(); }, [finishCandidate]);
+  useEffect(() => { if (finishCandidate) summaryRef.current?.focus(); }, [finishCandidate, blockedSaveConflict]);
+  useEffect(() => { if (phasePresentation) phaseHeadingRef.current?.focus(); }, [phasePresentation]);
+  useEffect(() => { if (recoveryPresentation) recoveryHeadingRef.current?.focus(); }, [recoveryPresentation]);
+  useEffect(() => { if (earlyFinishPrompt) promptHeadingRef.current?.focus(); }, [earlyFinishPrompt]);
 
   const focusNext = (nextIndex, readySetIndex) => setTimeout(() => {
     if (nextIndex >= 0) (startRefs.current[`${nextIndex}-${readySetIndex}`] || headerRefs.current[nextIndex])?.focus();
@@ -305,67 +359,93 @@ export default function WorkoutView({ workout, onFinish }) {
     clearErrorsBlockedBy(exerciseIndex, setIndex);
     clearExerciseError(exerciseIndex);
     setFinishError('');
+    setEarlyFinishPrompt(null);
     if (setIndex === exercise.setRecords.length - 1) {
       const nextIndex = findNextIncompleteExercise(activeWorkout.exercises, exerciseIndex);
       const readySetIndex = nextIndex >= 0
         ? activeWorkout.exercises[nextIndex].setRecords.findIndex(record => !record.completed)
         : -1;
       setExpanded(current => ({ ...current, [exerciseIndex]: false, ...(nextIndex >= 0 ? { [nextIndex]: true } : {}) }));
-      focusNext(nextIndex, readySetIndex);
+      if (nextIndex >= 0) focusNext(nextIndex, readySetIndex);
     }
   };
 
   const handleUndo = (exerciseIndex, setIndex) => {
-    dispatch({ type: 'undoSet', exerciseIndex, setIndex });
+    dispatch({ type: 'undoSet', exerciseIndex, setIndex, timestamp: Date.now() });
     clearExerciseError(exerciseIndex);
     setFinishError('');
+    setEarlyFinishPrompt(null);
     if (setIndex === activeWorkout.exercises[exerciseIndex].setRecords.length - 1) setExpanded(current => ({ ...current, [exerciseIndex]: true }));
   };
 
   const handleFinish = () => {
     const timestamp = Date.now();
-    const result = resolveFinishCandidate(activeWorkout, timestamp);
-    if (result.status === 'blocked-active-work') {
-      const owner = activeWorkout.exercises[result.activeWorkTimer.exerciseIndex];
-      setFinishError(`Finish or cancel ${owner.name} set ${result.activeWorkTimer.setIndex + 1} before finishing the workout.`);
+    if (activeWorkout._phaseTimingEnabled) {
+      if (activeWorkout.phase === 'performance') {
+        const activeTimer = activeWorkout.activeWorkTimer;
+        if (activeTimer) {
+          const owner = activeWorkout.exercises[activeTimer.exerciseIndex];
+          setFinishError(`Finish or cancel ${owner.name} set ${activeTimer.setIndex + 1} before finishing.`);
+          return;
+        }
+        setFinishError('');
+        setEarlyFinishPrompt(hasConfirmedWork(activeWorkout.exercises) ? 'partial' : 'zero');
+        return;
+      }
+      if (activeWorkout.phase === 'cooldown') {
+        dispatch({ type: 'finishWorkout', timestamp });
+        return;
+      }
       return;
     }
-    if (result.status !== 'ready') return;
-    setFinishError('');
-    const candidate = deepFreeze({
-      ...result.candidate,
-      finishRequestedAt: timestamp,
-      date: new Date(timestamp).toISOString(),
-    });
-    finishOwnerUidRef.current = activeOwnerUidRef.current;
-    savedDocumentRef.current = null; saveCompletedRef.current = false; setSaveError(null); setFinishCandidate(candidate);
   };
 
-  const handleBack = () => { if (!saveInFlightRef.current) { savedDocumentRef.current = null; finishOwnerUidRef.current = null; setSaveError(null); setFinishCandidate(null); setNow(Date.now()); } };
+  const confirmEarlyFinish = () => {
+    setEarlyFinishPrompt(null);
+    dispatch({ type: 'confirmEarlyFinish', timestamp: Date.now() });
+  };
+
+  const cancelWorkout = async () => {
+    setEarlyFinishPrompt(null);
+    await session.discard();
+    onFinish?.();
+  };
+
+  const dismissEarlyFinish = () => {
+    setEarlyFinishPrompt(null);
+    setTimeout(() => finishRef.current?.focus(), 0);
+  };
+
+  const handleBack = () => { if (!saveInFlightRef.current) { const timestamp = Date.now(); setFinishCandidate(null); setNow(timestamp); dispatch({ type: 'reviewBack', timestamp }); } };
 
   const handleSave = async () => {
-    if (saveInFlightRef.current || saveCompletedRef.current || !finishCandidate) return;
-    saveInFlightRef.current = true; setSaveError(null);
-    const owner = finishOwnerUidRef.current;
-    if (!owner) { setSaveError('Sign in before saving this workout.'); saveInFlightRef.current = false; return; }
-    if (user?.uid !== owner) { setSaveError('Your signed-in account changed. Switch back to the account that started this summary or return to the workout.'); saveInFlightRef.current = false; return; }
-    if (!savedDocumentRef.current) {
-      try { savedDocumentRef.current = deepFreeze(buildCompletedV3WorkoutDocument(finishCandidate)); }
-      catch (error) { console.error('Failed to prepare workout:', error); setSaveError('Could not prepare this workout to save. Review the workout data and try again.'); saveInFlightRef.current = false; return; }
-    }
-    setIsSaving(true);
-    try { await saveWorkout(owner, savedDocumentRef.current); }
-    catch (error) { console.error('Failed to save workout:', error); setSaveError('Failed to save workout. Your summary is still here; try again.'); return; }
-    finally { saveInFlightRef.current = false; setIsSaving(false); }
-    saveCompletedRef.current = true; onFinish?.();
+    if (saveInFlightRef.current || sessionState?.status === 'saved' || !finishCandidate) return;
+    saveInFlightRef.current = true;
+    await session.save();
+    saveInFlightRef.current = false;
   };
 
+  useEffect(() => { if (sessionState?.status === 'saved') onFinish?.(); }, [sessionState?.status, onFinish]);
+
+  if (showingRecovery) {
+    const recovery = sessionState?.status;
+    const resumable = recovery === 'recovery-available';
+    const checking = recovery === 'checking';
+    const discardable = resumable || sessionState?.error === 'stale';
+    return <div className="workout-view">
+      <h1 ref={recoveryHeadingRef} tabIndex="-1">{checking ? 'Checking active workout' : resumable ? 'Resume workout?' : 'Workout recovery'}</h1>
+      <p role={checking ? 'status' : 'alert'}>{checking ? 'Checking for a saved workout draft.' : resumable ? RECOVERY_MESSAGES.resumable : publicStatusMessage(sessionState?.error)}</p>
+      {!checking && resumable && <button type="button" onClick={async () => { if (await session.resume()) { setRecoveryAcknowledgement('Workout resumed.'); onResume?.(); } }}>Resume</button>}
+      {!checking && ['timeout', 'conflict'].includes(sessionState?.error) && <><button type="button" onClick={async () => { if (await session.requestHandoff?.()) { setRecoveryAcknowledgement('Workout resumed.'); onResume?.(); } }}>Request handoff</button><button type="button" onClick={async () => { if (await session.resume?.()) { setRecoveryAcknowledgement('Workout resumed.'); onResume?.(); } }}>Retry acquisition</button></>}
+      {!checking && <button type="button" onClick={async () => { if (discardable) await session.discard(); else { await session.exit(); onFinish?.(); } }}>{discardable ? 'Discard' : 'Exit'}</button>}
+    </div>;
+  }
   return <div className="workout-view">
-    {finishCandidate ? <WorkoutSummary candidate={finishCandidate} isSaving={isSaving} saveError={saveError} onBack={handleBack} onSave={handleSave} summaryRef={summaryRef} /> : <>
-      <div className="workout-header"><h2>{started ? 'Active Workout' : 'Ready to sweat?'}</h2>{started && <div className="timer" aria-label={`Total elapsed ${formatTime(calculateElapsedSeconds(activeWorkout.workoutStartedAt, now))}`}>{formatTime(calculateElapsedSeconds(activeWorkout.workoutStartedAt, now))}</div>}</div>
-      <p id="workout-start-help" className="workout-help">{started ? 'Start a ready set. Only one work timer can run at a time.' : 'Start the workout to enable set timers.'}</p>
-      {!started && <button className="start-btn" onClick={() => { const timestamp = Date.now(); setNow(timestamp); dispatch({ type: 'startWorkout', timestamp }); }}>Start Workout</button>}
-      <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{restAnnouncement}</div>
+    <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{restAnnouncement || recoveryAcknowledgement}</div>
+    {finishCandidate ? <WorkoutSummary candidate={finishCandidate} phaseTargets={sessionState?.phaseTargets} isSaving={isSaving} saveError={saveError} saveStatus={saveStatus} blockedConflict={blockedSaveConflict} onBack={handleBack} onSave={handleSave} onKeepPending={() => setRecoveryAcknowledgement('Save conflict remains pending.')} onExit={async () => { await session.exit(); onFinish?.(); }} summaryRef={summaryRef} /> : <>
+      <div className="workout-header"><h1 ref={phaseHeadingRef} tabIndex="-1">{{ generated: 'Generated workout', warmup: 'Warmup', performance: 'Performance', cooldown: 'Cooldown', review: 'Review', cancelled: 'Workout cancelled' }[activeWorkout.phase] ?? 'Workout'}</h1><h2>{started ? 'Active Workout' : 'Ready to sweat?'}</h2>{started && <div className="timer" aria-label={`Total elapsed ${formatTime(calculateElapsedSeconds(activeWorkout.workoutStartedAt, now))}`}>{formatTime(calculateElapsedSeconds(activeWorkout.workoutStartedAt, now))}</div>}</div>
+      <p id="workout-start-help" className="workout-help">{['warmup', 'cooldown'].includes(activeWorkout.phase) && activeWorkout.phaseLedger ? phaseReadout(activeWorkout.phase === 'warmup' ? 'Warmup' : 'Cooldown', sessionState?.phaseTargets?.[`${activeWorkout.phase}Seconds`] ?? 0, getPhaseElapsedSeconds(activeWorkout, activeWorkout.phase, now), true) : started ? 'Start a ready set. Only one work timer can run at a time.' : 'Start the workout to enable set timers.'}</p>
+      {!started && activeWorkout.phase !== 'cancelled' && <button className="start-btn" onClick={() => { const timestamp = Date.now(); setNow(timestamp); dispatch({ type: 'startWorkout', timestamp }); }}>Start Workout</button>}
       <ul className="workout-checklist">{activeWorkout.exercises.map((exercise, exerciseIndex) => {
         const confirmed = exercise.setRecords.filter(record => record.completed).length;
         const timing = exerciseTimingStatus(exercise, exerciseIndex, activeWorkout.activeWorkTimer, now);
@@ -377,7 +457,8 @@ export default function WorkoutView({ workout, onFinish }) {
           {isExpanded && <div id={`exercise-${exerciseIndex}-sets`} className="set-list">{exercise.setRecords.map((record, setIndex) => <SetRow key={record.index} exercise={exercise} exerciseIndex={exerciseIndex} setIndex={setIndex} started={started} activeTimer={activeWorkout.activeWorkTimer} activeOwnerName={activeWorkout.activeWorkTimer ? activeWorkout.exercises[activeWorkout.activeWorkTimer.exerciseIndex].name : ''} now={now} dispatch={action => action.type === 'undoSet' ? handleUndo(action.exerciseIndex, action.setIndex) : dispatch(action)} error={exerciseErrors[exerciseIndex]?.setIndex === setIndex ? exerciseErrors[exerciseIndex].message : ''} onError={(message, blockedBy) => { setExerciseErrors(current => ({ ...current, [exerciseIndex]: { setIndex, message, blockedBy } })); setExpanded(current => ({ ...current, [exerciseIndex]: true })); }} onClearError={() => clearSetError(exerciseIndex, setIndex)} onStart={handleStartSet} onConfirm={handleConfirmSet} onCancel={(index, set) => { dispatch({ type: 'cancelSet', exerciseIndex: index, setIndex: set }); clearExerciseError(index); clearErrorsBlockedBy(index, set); setFinishError(''); }} startRef={element => { startRefs.current[`${exerciseIndex}-${setIndex}`] = element; }} />)}</div>}
         </li>;
       })}</ul>
-      {started && <><button ref={finishRef} className="finish-btn" aria-describedby={finishError ? 'finish-feedback' : undefined} onClick={handleFinish}>Finish Workout</button>{finishError && <p id="finish-feedback" className="error-message" role="alert">{finishError}</p>}</>}
+      {activeWorkout.phase === 'cooldown' && <div className="summary-actions"><button type="button" onClick={() => dispatch({ type: 'resumeWorkout', timestamp: Date.now() })}>Resume Workout</button><button ref={finishRef} className="finish-btn" aria-describedby={finishError ? 'finish-feedback' : undefined} onClick={handleFinish}>Finish Workout</button>{finishError && <p id="finish-feedback" className="error-message" role="alert">{finishError}</p>}</div>}
+      {(activeWorkout.phase === 'performance' || (!activeWorkout._phaseTimingEnabled && started)) && <div className="summary-actions"><button ref={finishRef} className="finish-btn" aria-describedby={finishError ? 'finish-feedback' : undefined} onClick={handleFinish}>Finish Workout</button>{finishError && <p id="finish-feedback" className="error-message" role="alert">{finishError}</p>}{earlyFinishPrompt === 'partial' && <section className="early-finish-confirmation" role="region" aria-label="Finish workout early"><h2 ref={promptHeadingRef} tabIndex="-1">Finish workout early?</h2><p>Some work remains unconfirmed. Continue to cooldown?</p><button type="button" onClick={confirmEarlyFinish}>Continue to Cooldown</button><button type="button" onClick={dismissEarlyFinish}>Keep working</button></section>}{earlyFinishPrompt === 'zero' && <section className="early-finish-confirmation" role="region" aria-label="Cancel workout"><h2 ref={promptHeadingRef} tabIndex="-1">Cancel workout?</h2><p>No work has been confirmed. Cancel this workout?</p><button type="button" onClick={() => void cancelWorkout()}>Cancel workout</button><button type="button" onClick={dismissEarlyFinish}>Keep working</button></section>}</div>}
     </>}
     <WorkoutHistory key={user?.uid ?? null} historyKey={user?.uid ?? null} loadPage={({ cursor, pageSize }) => getHistoryPage(user?.uid, { cursor, pageSize })} />
   </div>;

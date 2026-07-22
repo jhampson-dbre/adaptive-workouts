@@ -8,10 +8,13 @@ import AccessVerificationError from './components/AccessVerificationError'
 import { AuthContext } from './context/AuthContext'
 import { evaluateAccessToken, isApprovedTokenResult, signOutUser, subscribeToIdTokenChanges } from './utils/auth'
 import { createBaselineAttempt } from './utils/baselineBootstrap'
+import { app } from './utils/firebaseAuth'
+import { useActiveWorkoutSession } from './utils/useActiveWorkoutSession'
 import lazyEntryUrls from 'virtual:lazy-entry-urls'
 
 const isBaselineBuild = import.meta.env.DEV && import.meta.env.MODE === 'baseline'
 const ACCESS_TIMEOUT = 15_000
+const ACTIVE_WORKOUT_STALE_AFTER_MS = 86_400_000
 const retryModuleUrl = (url, generation) => `${url.split('#')[0]}#retry=${generation}`
 
 const classifyBaselineError = error => {
@@ -41,7 +44,6 @@ const markBaselineFailure = error => Object.assign(
 )
 
 function App() {
-  const [workout, setWorkout] = useState(null)
   const [timeBudget, setTimeBudget] = useState(45)
   const [unrecoveredGroups, setUnrecoveredGroups] = useState([])
   const [destination, setDestination] = useState('plan')
@@ -60,14 +62,16 @@ function App() {
   const mainRef = useRef(null)
   const baselineLoadingRef = useRef(null)
   const baselineErrorRef = useRef(null)
+  const [activeWorkoutSession, activeWorkout] = useActiveWorkoutSession({ projectId: app.options.projectId, user: access === 'authorized' ? user : null, staleAfterMs: ACTIVE_WORKOUT_STALE_AFTER_MS })
+  const workout = activeWorkoutSession.activeWorkout?.exercises ?? null
 
-  const clearAuthorizedState = useCallback(() => {
-    setWorkout(null)
+  const clearAuthorizedState = useCallback(({ retireIdentity = false } = {}) => {
+    if (retireIdentity) void activeWorkout.retireIdentity()
     setTimeBudget(45)
     setUnrecoveredGroups([])
     setDestination('plan')
     setDestinationGeneration(value => value + 1)
-  }, [])
+  }, [activeWorkout])
   const chooseDestination = useCallback(next => {
     setDestination(next)
     setDestinationGeneration(value => value + 1)
@@ -106,13 +110,13 @@ function App() {
     if (!currentUser) {
       session.current = null
       migration.current = null
-      clearAuthorizedState()
+      clearAuthorizedState({ retireIdentity: true })
       return settle('signed-out', null, id)
     }
     if (session.current !== currentUser.uid) {
       session.current = currentUser.uid
       migration.current = null
-      clearAuthorizedState()
+      clearAuthorizedState({ retireIdentity: true })
     }
     setUser(currentUser)
     setAccess('checking')
@@ -125,7 +129,7 @@ function App() {
       if (generation.current !== id) return
       if (!isApprovedTokenResult(result)) {
         retireDeadline(id)
-        clearAuthorizedState()
+        clearAuthorizedState({ retireIdentity: true })
         return settle('pending', currentUser, id)
       }
       if (afterApproved) await afterApproved(currentUser)
@@ -248,7 +252,7 @@ function App() {
     if (generation.current !== id) return
     session.current = null
     migration.current = null
-    clearAuthorizedState()
+    clearAuthorizedState({ retireIdentity: true })
     setUser(null)
     setAccess('signed-out')
   }
@@ -275,26 +279,29 @@ function App() {
   if (access === 'signed-out') return <Login />
   if (access === 'pending') return <PendingApproval user={user} onCheckAgain={retry} onSignOut={signOut} />
   if (access === 'verification-error') return <AccessVerificationError onRetry={retry} onSignOut={signOut} />
+  const activeDestination = ['checking', 'recovery-available', 'recovery-blocked', 'blocked'].includes(activeWorkoutSession.status)
+    ? 'workout' : destination
+  const sessionForcesWorkout = ['checking', 'recovery-available', 'recovery-blocked', 'blocked'].includes(activeWorkoutSession.status)
   return (
     <AuthContext.Provider value={user}>
       <header className="app-header">
         <h1>Adaptive Hypertrophy</h1>
-        <button className="settings-toggle" onClick={() => chooseDestination(destination === 'settings' ? (workout?.length ? 'workout' : 'plan') : 'settings')}>
+        {!sessionForcesWorkout && <button className="settings-toggle" onClick={() => chooseDestination(destination === 'settings' ? (workout?.length ? 'workout' : 'plan') : 'settings')}>
           {destination === 'settings' ? (workout?.length ? 'Back to Workout' : 'Back to Generator') : 'Manage Catalog'}
-        </button>
+        </button>}
       </header>
       <main ref={mainRef} tabIndex="-1">
         <LazyDestination
-          key={`${user?.uid}:${destination}:${destinationGeneration}`}
-          destination={destination}
-          loader={destination === 'plan'
+          key={`${user?.uid}:${activeDestination}:${destinationGeneration}`}
+          destination={activeDestination}
+          loader={activeDestination === 'plan'
             ? () => import('./components/AuthorizedApp')
-            : destination === 'settings' ? () => import('./components/Settings') : () => import('./components/WorkoutView')}
-          retryLoader={generation => import(/* @vite-ignore */ retryModuleUrl(lazyEntryUrls[destination], generation))}
-          componentProps={destination === 'plan'
-            ? { workout, timeBudget, setTimeBudget, unrecoveredGroups, setUnrecoveredGroups, onGenerate: generated => { setWorkout(generated); if (generated?.length) chooseDestination('workout') } }
-            : destination === 'settings' ? { onClose: () => chooseDestination(workout?.length ? 'workout' : 'plan') }
-              : { workout, onFinish: () => { setWorkout(null); chooseDestination('plan') } }}
+            : activeDestination === 'settings' ? () => import('./components/Settings') : () => import('./components/WorkoutView')}
+          retryLoader={generation => import(/* @vite-ignore */ retryModuleUrl(lazyEntryUrls[activeDestination], generation))}
+          componentProps={activeDestination === 'plan'
+            ? { workout, timeBudget, setTimeBudget, unrecoveredGroups, setUnrecoveredGroups, onGenerate: async (generated, options = {}) => { const staged = await activeWorkout.stageGenerated(generated, options.phaseTargets ?? { warmupSeconds: 0, performanceSeconds: timeBudget * 60, cooldownSeconds: 0 }); if (staged && generated?.length) chooseDestination('workout') } }
+            : activeDestination === 'settings' ? { onClose: () => chooseDestination(workout?.length ? 'workout' : 'plan') }
+              : { session: activeWorkout, sessionState: activeWorkoutSession, onFinish: () => { chooseDestination('plan') }, onResume: () => { setDestination('workout') } }}
           onReady={() => {}}
           isCurrent={() => access === 'authorized'}
         />

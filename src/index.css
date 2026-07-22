@@ -263,6 +263,11 @@ code {
   margin-bottom: 24px;
 }
 
+.workout-view button {
+  min-width: 44px;
+  min-height: 44px;
+}
+
 .workout-header {
   display: flex;
   justify-content: space-between;
@@ -322,6 +327,7 @@ code {
 .exercise-toggle {
   display: flex;
   width: 100%;
+  min-height: 44px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -431,6 +437,7 @@ code {
 
 .set-input input {
   width: 84px;
+  min-height: 44px;
   box-sizing: border-box;
   padding: 8px;
   border: 1px solid var(--border);
@@ -459,7 +466,8 @@ code {
 }
 
 .set-timing button {
-  min-height: 40px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 7px;
@@ -486,6 +494,19 @@ code {
 @media (max-width: 420px) {
   .workout-view {
     padding: 18px;
+  }
+
+  .workout-header {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  .workout-header h1 {
+    flex-basis: 100%;
+  }
+
+  .workout-header .timer {
+    margin-left: auto;
   }
 
   .exercise-toggle {
@@ -686,6 +707,11 @@ code {
   backdrop-filter: blur(10px);
 }
 
+.settings-view :is(button, input, select) {
+  min-width: 44px;
+  min-height: 44px;
+}
+
 .settings-header {
   display: flex;
   justify-content: space-between;
@@ -769,7 +795,6 @@ code {
 }
 
 .phase-duration-input {
-  min-height: 44px;
   box-sizing: border-box;
 }
 
@@ -916,6 +941,8 @@ code {
 }
 
 .settings-toggle {
+  min-width: 44px;
+  min-height: 44px;
   background: var(--social-bg);
   color: var(--text-h);
   border: 1px solid var(--border);

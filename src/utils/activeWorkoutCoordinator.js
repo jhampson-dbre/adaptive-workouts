@@ -3,8 +3,28 @@ import { createRecoveryDraft, migrateRecoveryDraftV1ToV2, readRecoveryDraftAsync
 const DEFAULT_TIMEOUT_MS = 8_000;
 const validExpected = expected => expected && typeof expected.draftId === 'string' && expected.draftId.length > 0 && Number.isSafeInteger(expected.ownershipGeneration) && expected.ownershipGeneration >= 1;
 const matches = (draft, expected) => validExpected(expected) && draft.draftId === expected.draftId && draft.ownershipGeneration === expected.ownershipGeneration;
+const matchesOperation = (operationToken, expected, pendingSave) => operationToken
+  && Reflect.ownKeys(operationToken).length === 5
+  && ['draftId', 'ownershipGeneration', 'workoutId', 'fingerprintHex', 'attemptCount'].every(key => Object.hasOwn(operationToken, key))
+  && typeof operationToken.draftId === 'string' && operationToken.draftId.length > 0
+  && Number.isSafeInteger(operationToken.ownershipGeneration) && operationToken.ownershipGeneration >= 1
+  && Number.isSafeInteger(operationToken.attemptCount) && operationToken.attemptCount >= 0
+  && operationToken.draftId === expected.draftId
+  && operationToken.ownershipGeneration === expected.ownershipGeneration
+  && operationToken.workoutId === pendingSave?.workoutId
+  && operationToken.fingerprintHex === pendingSave?.fingerprint?.hex
+  && operationToken.attemptCount === pendingSave?.attemptCount;
+const allowedPendingTransition = (before, after) => {
+  if (before === null) return after?.state === 'prepared';
+  if (before.state === 'prepared') return after?.state === 'write-pending';
+  if (before.state === 'write-pending') return ['retryable-absent', 'reconcile-indeterminate', 'blocked-conflict'].includes(after?.state);
+  return ['retryable-absent', 'reconcile-indeterminate'].includes(before.state) && after?.state === 'write-pending';
+};
 
-export function createActiveWorkoutCoordinator({ storage, locks, handoffTransport, onLeaseLost, now = () => Date.now(), createUuid = () => crypto.randomUUID(), setTimeoutFn = setTimeout, clearTimeoutFn = clearTimeout, staleAfterMs = 86_400_000, acquisitionTimeoutMs = DEFAULT_TIMEOUT_MS, subtle } = {}) {
+export function createActiveWorkoutCoordinator({ storage, locks, handoffTransport, onLeaseLost, now = () => Date.now(), createUuid = () => crypto.randomUUID(), setTimeoutFn = setTimeout, clearTimeoutFn = clearTimeout, staleAfterMs, acquisitionTimeoutMs = DEFAULT_TIMEOUT_MS, subtle } = {}) {
+  if (!Number.isSafeInteger(staleAfterMs) || staleAfterMs <= 0) {
+    throw new TypeError('staleAfterMs must be an injected positive safe integer');
+  }
   const leases = new Map();
   const lost = new Set();
   const read = identity => readRecoveryDraftAsync({ storage, ...identity, nowEpochMs: now(), staleAfterMs, subtle });
@@ -49,6 +69,9 @@ export function createActiveWorkoutCoordinator({ storage, locks, handoffTranspor
   }
   function release(identity) { const lease = leases.get(leaseKey(identity)); if (!lease?.active) return { status: 'released' }; lease.release(); return { status: 'released' }; }
   return {
+    inspect({ projectId, uid }) {
+      return read({ projectId, uid });
+    },
     async handoffResume({ projectId, uid, expected, nonce, signal }) {
       if (!validExpected(expected)) return { status: 'invalid-expected' };
       const identity = { projectId, uid }; const startedAt = now();
@@ -147,6 +170,33 @@ export function createActiveWorkoutCoordinator({ storage, locks, handoffTranspor
           leases.get(leaseKey(identity)).snapshot = draft;
         }
         return saved;
+      }, { signal });
+    },
+    /** Persist a save transition only for the exact owned draft and operation. */
+    persistPendingSave({ projectId, uid, expected, operationToken, pendingSave, signal }) {
+      return this.mutate({ projectId, uid, expected, signal, transform: draft => {
+        if (!matchesOperation(operationToken, expected, draft.pendingSave ?? pendingSave)
+          || !allowedPendingTransition(draft.pendingSave, pendingSave)) throw new Error('invalid save transition');
+        if (draft.activeWorkout.phase !== 'review') throw new Error('save requires review');
+        return { ...draft, pendingSave };
+      } });
+    },
+    /** Removes an immutable-save record only when the exact attempt still owns it. */
+    completeSave({ projectId, uid, expected, operationToken, signal }) {
+      if (!validExpected(expected)) return Promise.resolve({ status: 'invalid-expected' });
+      const identity = { projectId, uid };
+      return withLease(identity, async () => {
+        const current = await read(identity);
+        if (current.status !== 'resumable') return current;
+        if (!matches(current.draft, expected)) return { status: 'stale-generation' };
+        if (!matchesOperation(operationToken, expected, current.draft.pendingSave)) return { status: 'stale-operation' };
+        try {
+          storage.removeItem(key(identity));
+          release(identity);
+          return { status: 'removed' };
+        } catch (error) {
+          return { status: 'storage-error', operation: 'remove', error };
+        }
       }, { signal });
     },
     discard({ projectId, uid, expected, signal }) {

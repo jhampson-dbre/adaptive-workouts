@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createRecoveryDraft, migrateRecoveryDraftV1ToV2, readRecoveryDraft, readRecoveryDraftAsync, recoveryStorageKey } from '../utils/activeWorkoutRecovery';
+import { createRecoveryDraft, migrateRecoveryDraftV1ToV2, projectActiveWorkoutForRecovery, readRecoveryDraft, readRecoveryDraftAsync, recoveryStorageKey } from '../utils/activeWorkoutRecovery';
 import { buildCanonicalV4WorkoutDocument } from '../utils/workoutFingerprint';
 import { prepareImmutableSave } from '../utils/immutableWorkoutSave';
 import { PROGRESSION_REASON_CODES } from '../utils/progression';
+import { activeWorkoutReducer, initializeActiveWorkout } from '../utils/activeWorkout';
 
 const id = '123e4567-e89b-12d3-a456-426614174000';
 const identity = { projectId: 'project/a', uid: 'user:b' };
@@ -108,10 +109,30 @@ describe('active workout recovery', () => {
     expect(readRecoveryDraft({ storage: { getItem: () => JSON.stringify({ ...base, uid: 'other' }) }, ...identity, nowEpochMs: 1, staleAfterMs: 1 }).status).toBe('wrong-user');
   });
 
+  it('C-05 rejects a persisted pre-Start Generated draft', () => {
+    const generated = {
+      ...clone(workout), phase: 'generated', workoutStartedAt: null, phaseLedger: null,
+    };
+    expect(disposition(draftFor(generated))).toBe('malformed');
+  });
+
   it('never serializes unknown or sensitive reducer fields', () => {
     const draft = createRecoveryDraft({ ...identity, draftId: id, ownershipGeneration: 1, lastMutationAtEpochMs: 1000, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, activeWorkout: { ...workout, secret: 'nope', exercises: [{ ...workout.exercises[0], providerData: 'nope', setRecords: [{ ...workout.exercises[0].setRecords[0], _activeBogus: true }] }] } });
     expect(JSON.stringify(draft)).not.toContain('nope');
     expect(JSON.stringify(draft)).not.toContain('_activeBogus');
+  });
+
+  it('exports the same strict runtime-to-recovery projection used for draft creation', () => {
+    const runtime = { ...weightedWorkout(), runtimeOnly: 'nope', exercises: [{ ...weightedWorkout().exercises[0], dynamicTier: 99, setRecords: [{ ...weightedWorkout().exercises[0].setRecords[0], providerData: 'nope' }] }] };
+    expect(projectActiveWorkoutForRecovery(runtime)).toEqual(draftFor(runtime).activeWorkout);
+    expect(projectActiveWorkoutForRecovery(runtime).exercises[0]).not.toHaveProperty('dynamicTier');
+    expect(JSON.stringify(projectActiveWorkoutForRecovery(runtime))).not.toContain('nope');
+  });
+
+  it('projects a runtime performance work timer into a valid recovery draft', () => {
+    const started = activeWorkoutReducer(initializeActiveWorkout([{ ...workout.exercises[0], dynamicTier: 99 }], { phaseTimingEnabled: true }), { type: 'startWorkout', timestamp: 1000 });
+    const performance = activeWorkoutReducer(started, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 });
+    expect(disposition(draftFor(performance))).toBe('resumable');
   });
 
   it('C-04 rejects whole-envelope phase, candidate, and timer violations without hydrating', () => {
@@ -187,7 +208,7 @@ describe('active workout recovery', () => {
 
   it.each([
     ['awaiting prior set', state => { state.exercises[0].setRecords[2].recommendationReason = { recommendedWeight: 100, reasonCode: 'BACKOFF_AWAITING_PRIOR_SET' }; }],
-    ['computed floor met', state => {}],
+    ['computed floor met', () => {}],
     ['computed below floor', state => { const record = state.exercises[0].setRecords[1]; record.actualReps = 4; const reason = state.exercises[0].setRecords[2].recommendationReason; Object.assign(reason, { reasonCode: 'BACKOFF_BELOW_FLOOR', sourceActualReps: 4, dropSteps: 2, rawWeight: 90, recommendedWeight: 90 }); state.exercises[0].setRecords[2].targetWeight = 90; }],
   ])('C-01 resumes valid weighted later-set %s', (_name, mutate) => {
     const state = weightedWorkout(); mutate(state); expect(disposition(draftFor(state))).toBe('resumable');
@@ -249,7 +270,7 @@ describe('active workout recovery', () => {
   it.each([
     ['work timer wrong occurrence', state => { state.activeWorkTimer = { id: 'work-1', occurrenceId: 'other', exerciseIndex: 0, setIndex: 0, startedAtEpochMs: 1000 }; state._nextTimerId = 2; }],
     ['work timer string index', state => { state.activeWorkTimer = { id: 'work-1', occurrenceId: 'squat:0', exerciseIndex: '0', setIndex: 0, startedAtEpochMs: 1000 }; state._nextTimerId = 2; }],
-    ['work timer completed record', state => { state = state; state.phase = 'performance'; state.phaseLedger.openPhase = 'performance'; state.exercises[0].setRecords[0] = { ...state.exercises[0].setRecords[0], completed: true, workDurationSeconds: 1 }; state.activeWorkTimer = { id: 'work-1', occurrenceId: 'squat:0', exerciseIndex: 0, setIndex: 0, startedAtEpochMs: 1000 }; state._nextTimerId = 2; }],
+    ['work timer completed record', state => { state.phase = 'performance'; state.phaseLedger.openPhase = 'performance'; state.exercises[0].setRecords[0] = { ...state.exercises[0].setRecords[0], completed: true, workDurationSeconds: 1 }; state.activeWorkTimer = { id: 'work-1', occurrenceId: 'squat:0', exerciseIndex: 0, setIndex: 0, startedAtEpochMs: 1000 }; state._nextTimerId = 2; }],
     ['duplicate timer IDs', state => { state.phase = 'performance'; state.phaseLedger.openPhase = 'performance'; state.exercises[0].sets = 2; state.exercises[0].prescribedSetCount = 2; state.exercises[0].setRecords = [{ ...state.exercises[0].setRecords[0], plannedRestSeconds: 60, completed: true, workDurationSeconds: 1, actualRestSeconds: null, activeRest: { id: 'rest-1', startedAtEpochMs: 1000 } }, { index: 1, completed: false, plannedRestSeconds: null, workDurationSeconds: null, actualRestSeconds: null, activeRest: null }]; state.activeWorkTimer = { id: 'rest-1', occurrenceId: 'squat:0', exerciseIndex: 0, setIndex: 1, startedAtEpochMs: 1000 }; state.nextTimerId = 2; }],
     ['timer suffix at next timer', state => { state.phase = 'performance'; state.phaseLedger.openPhase = 'performance'; state.activeWorkTimer = { id: 'work-1', occurrenceId: 'squat:0', exerciseIndex: 0, setIndex: 0, startedAtEpochMs: 1000 }; state.nextTimerId = 1; }],
   ])('C-04 rejects referential timer violation: %s', (_name, mutate) => {

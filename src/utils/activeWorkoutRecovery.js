@@ -43,11 +43,17 @@ function persistedExercise(exercise) {
   result.setRecords = exercise.setRecords.map(persistedRecord);
   return result;
 }
-function persistedWorkout(state) {
+export function projectActiveWorkoutForRecovery(state) {
   return {
     phase: state.phase,
     workoutStartedAtEpochMs: state.workoutStartedAt,
-    activeWorkTimer: state.activeWorkTimer && { ...state.activeWorkTimer, startedAtEpochMs: state.activeWorkTimer.startedAt },
+    activeWorkTimer: state.activeWorkTimer && {
+      id: state.activeWorkTimer.id,
+      occurrenceId: state.activeWorkTimer.occurrenceId,
+      exerciseIndex: state.activeWorkTimer.exerciseIndex,
+      setIndex: state.activeWorkTimer.setIndex,
+      startedAtEpochMs: state.activeWorkTimer.startedAt,
+    },
     nextTimerId: state._nextTimerId,
     phaseLedger: clone(state.phaseLedger), phaseCandidate: state.phaseCandidate && clone(state.phaseCandidate),
     cooldownUndoTarget: state._cooldownUndoTarget && clone(state._cooldownUndoTarget),
@@ -56,7 +62,7 @@ function persistedWorkout(state) {
 }
 export function createRecoveryDraft({ projectId, uid, draftId, ownershipGeneration, lastMutationAtEpochMs, phaseTargets, activeWorkout }) {
   if (!isValidRecoveryIdentity({ projectId, uid })) throw new TypeError('Recovery identity must contain nonempty strings');
-  return { version: 1, projectId, uid, draftId, ownershipGeneration, lastMutationAtEpochMs, phaseTargets: clone(phaseTargets), activeWorkout: persistedWorkout(activeWorkout), pendingSave: null };
+  return { version: 1, projectId, uid, draftId, ownershipGeneration, lastMutationAtEpochMs, phaseTargets: clone(phaseTargets), activeWorkout: projectActiveWorkoutForRecovery(activeWorkout), pendingSave: null };
 }
 
 function validLedger(ledger, phase) {

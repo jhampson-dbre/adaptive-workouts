@@ -64,8 +64,7 @@ describe('Generator Component', () => {
         renderWithAuth(<Generator timeBudget={30} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
 
         fireEvent.click(screen.getByText('Generate Plan'));
-        await waitFor(() => expect(onGenerate).toHaveBeenCalledWith(generated));
-        expect(onGenerate.mock.calls[0][0].phaseTargets).toEqual({ warmupSeconds: 600, performanceSeconds: 1800, cooldownSeconds: 300 });
+        await waitFor(() => expect(onGenerate).toHaveBeenCalledWith(generated, { phaseTargets: { warmupSeconds: 600, performanceSeconds: 1800, cooldownSeconds: 300 } }));
     });
 
     it('prompts if leg day is overdue', async () => {
@@ -88,6 +87,7 @@ describe('Generator Component', () => {
         await waitFor(() => {
             expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('overdue'));
             expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], true, expect.any(Array), expect.any(Array), expect.any(Object)); // doLegDay=true
+            expect(onGenerate).toHaveBeenCalledWith([], { phaseTargets: { warmupSeconds: 0, performanceSeconds: 2700, cooldownSeconds: 0 } });
         });
     });
 
@@ -115,6 +115,7 @@ describe('Generator Component', () => {
         await waitFor(() => {
             expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('early'));
             expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], true, expect.any(Array), expect.any(Array), expect.any(Object)); // doEarly=true
+            expect(onGenerate).toHaveBeenCalledWith([], { phaseTargets: { warmupSeconds: 0, performanceSeconds: 2700, cooldownSeconds: 0 } });
         });
     });
 
