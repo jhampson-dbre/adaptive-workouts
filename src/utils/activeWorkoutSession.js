@@ -5,6 +5,8 @@ import { createImmutableWorkoutId, createSaveOperationToken, executeImmutableSav
 
 const empty = Object.freeze({ status: 'idle', activeWorkout: null, phaseTargets: null, snapshot: null, pendingSave: null, error: null, blocked: false });
 const okay = status => ['saved', 'acquired', 'removed', 'missing'].includes(status);
+const validExpected = snapshot => typeof snapshot?.draftId === 'string' && snapshot.draftId.length > 0
+  && Number.isSafeInteger(snapshot.ownershipGeneration) && snapshot.ownershipGeneration >= 1;
 
 /**
  * App-owned durable state machine.  React only observes this object; every mutation
@@ -83,7 +85,17 @@ export function createActiveWorkoutSession({ coordinator, projectId, saveImmutab
         if (action.type !== 'startWorkout') return false;
         const result = await coordinator.start({ projectId, uid: identity.uid, phaseTargets: state.phaseTargets, activeWorkout: next });
         if (!current(token)) return false;
-        if (result.status !== 'acquired') { fail(result.status); return false; }
+        if (result.status !== 'acquired') {
+          if (['conflict', 'timeout'].includes(result.status) && coordinator.inspect) {
+            const retained = await coordinator.inspect({ projectId, uid: identity.uid });
+            if (!current(token)) return false;
+            if (retained.status === 'resumable' && validExpected(retained.draft)) {
+              publish({ status: 'recovery-blocked', activeWorkout: retained.hydrated, phaseTargets: retained.draft.phaseTargets, snapshot: retained.draft, pendingSave: retained.draft.pendingSave, error: result.status, blocked: true });
+              return false;
+            }
+          }
+          fail(result.status); return false;
+        }
         publish({ status: 'owned', activeWorkout: next, phaseTargets: state.phaseTargets, snapshot: result.snapshot, pendingSave: null, error: null, blocked: false });
         return true;
       }

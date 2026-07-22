@@ -1,7 +1,7 @@
 import { expect, test, vi } from 'vitest';
 import { createActiveWorkoutSession } from '../utils/activeWorkoutSession';
 import { createActiveWorkoutCoordinator } from '../utils/activeWorkoutCoordinator';
-import { initializeActiveWorkout } from '../utils/activeWorkout';
+import { activeWorkoutReducer, initializeActiveWorkout } from '../utils/activeWorkout';
 import { recoveryStorageKey } from '../utils/activeWorkoutRecovery';
 
 const exercise = { id: 'x', occurrenceId: 'x:0', name: 'X', muscleGroup: 'Core', tier: 1, trackingMode: 'simple', sets: 1, prescribedSetCount: 1, completed: false };
@@ -72,6 +72,25 @@ test('keeps the local generated plan visible when Start cannot acquire ownership
   expect(session.getState()).toMatchObject({ status: 'blocked', activeWorkout: { phase: 'generated' }, error: 'unsupported', blocked: true });
 });
 
+test.each(['conflict', 'timeout'])('re-inspects and retains the exact recoverable draft after Exit then generated Start %s', async error => {
+  const recovered = { ...initializeActiveWorkout([exercise], { phaseTimingEnabled: true }), phase: 'performance', workoutStartedAt: 1234 };
+  const snapshot = { draftId: '123e4567-e89b-42d3-a456-426614174000', ownershipGeneration: 4, phaseTargets: targets, pendingSave: null };
+  const inspect = vi.fn()
+    .mockResolvedValueOnce({ status: 'resumable', hydrated: recovered, draft: snapshot })
+    .mockResolvedValueOnce({ status: 'resumable', hydrated: recovered, draft: snapshot });
+  const start = vi.fn(async () => ({ status: error }));
+  const handoffResume = vi.fn(async () => ({ status: 'acquired', hydrated: recovered, snapshot }));
+  const session = createActiveWorkoutSession({ coordinator: { inspect, start, handoffResume }, projectId: 'p', createUuid: () => 'nonce', saveImmutableWorkout: async () => {}, readImmutableWorkoutFromServer: async () => ({ exists: () => false }) });
+
+  await session.bootstrap({ uid: 'u' });
+  await session.exit();
+  await session.stageGenerated([exercise], targets);
+  await expect(session.action({ type: 'startWorkout', timestamp: 2000 })).resolves.toBe(false);
+  expect(session.getState()).toMatchObject({ status: 'recovery-blocked', activeWorkout: recovered, snapshot, error, blocked: true });
+  await expect(session.requestHandoff()).resolves.toBe(true);
+  expect(handoffResume).toHaveBeenCalledWith(expect.objectContaining({ expected: { draftId: snapshot.draftId, ownershipGeneration: 4 }, nonce: 'nonce' }));
+});
+
 test('cancelling a generated plan clears it without attempting a persisted discard', async () => {
   const discard = vi.fn();
   const session = createActiveWorkoutSession({ coordinator: { inspect: async () => ({ status: 'missing' }), discard }, projectId: 'p', saveImmutableWorkout: async () => {}, readImmutableWorkoutFromServer: async () => ({ exists: () => false }) });
@@ -112,6 +131,55 @@ test('requestHandoff publishes acquired ownership after a timeout recovery and r
   await session.bootstrap({ uid: 'u' }); await session.requestHandoff();
   expect(handoffResume).toHaveBeenCalledWith(expect.objectContaining({ expected: { draftId: snapshot.draftId, ownershipGeneration: 1 }, nonce: 'nonce' }));
   expect(session.getState()).toMatchObject({ status: 'owned', blocked: false, error: null });
+});
+
+async function retainDraftThenConflict({ handoff = false } = {}) {
+  const storage = memory();
+  let coordinator;
+  coordinator = createActiveWorkoutCoordinator({
+    storage,
+    locks: locks(),
+    staleAfterMs: 1_000_000,
+    now: () => 1_000,
+    createUuid: () => '123e4567-e89b-42d3-a456-426614174000',
+    handoffTransport: handoff ? { request: async (_identity, message) => {
+      expect(message).toEqual({ nonce: 'handoff-nonce', draftId: expected.draftId, ownershipGeneration: expected.ownershipGeneration });
+      return coordinator.acceptHandoff({ projectId: 'p', uid: 'u', ...message });
+    } } : undefined,
+  });
+  const owner = initializeActiveWorkout([exercise], { phaseTimingEnabled: true });
+  const started = await coordinator.start({ projectId: 'p', uid: 'u', phaseTargets: targets, activeWorkout: activeWorkoutReducer(owner, { type: 'startWorkout', timestamp: 1_000 }) });
+  const expected = { draftId: started.snapshot.draftId, ownershipGeneration: started.snapshot.ownershipGeneration };
+  const session = createActiveWorkoutSession({ coordinator, projectId: 'p', createUuid: () => 'handoff-nonce', saveImmutableWorkout: async () => {}, readImmutableWorkoutFromServer: async () => ({ exists: () => false }) });
+  await session.bootstrap({ uid: 'u' });
+  const retained = session.getState().snapshot;
+  await session.exit();
+  expect(session.getState()).toMatchObject({ status: 'idle', snapshot: null });
+  expect(JSON.parse(storage.getItem(recoveryStorageKey({ projectId: 'p', uid: 'u' })))).toMatchObject(expected);
+  await session.stageGenerated([exercise], targets);
+  await expect(session.action({ type: 'startWorkout', timestamp: 2_000 })).resolves.toBe(false);
+  expect(session.getState()).toMatchObject({
+    status: 'recovery-blocked', error: 'conflict', blocked: true, snapshot: retained,
+    activeWorkout: { phase: 'warmup', workoutStartedAt: 1_000 },
+  });
+  return { coordinator, expected, session };
+}
+
+test('a retained real draft is re-inspected exactly after Exit and a generated Start conflict', async () => {
+  await retainDraftThenConflict();
+});
+
+test('retained conflict recovery passes the exact ownership pair through handoff and publishes its owned draft', async () => {
+  const { expected, session } = await retainDraftThenConflict({ handoff: true });
+  await expect(session.requestHandoff()).resolves.toBe(true);
+  expect(session.getState()).toMatchObject({ status: 'owned', blocked: false, snapshot: { draftId: expected.draftId, ownershipGeneration: expected.ownershipGeneration + 1 }, activeWorkout: { phase: 'warmup' } });
+});
+
+test('retained conflict recovery resumes only after acquiring the exact ownership pair', async () => {
+  const { coordinator, expected, session } = await retainDraftThenConflict();
+  expect(coordinator.release({ projectId: 'p', uid: 'u' })).toEqual({ status: 'released' });
+  await expect(session.resume()).resolves.toBe(true);
+  expect(session.getState()).toMatchObject({ status: 'owned', blocked: false, snapshot: { draftId: expected.draftId, ownershipGeneration: expected.ownershipGeneration + 1 }, activeWorkout: { phase: 'warmup' } });
 });
 
 test.each([

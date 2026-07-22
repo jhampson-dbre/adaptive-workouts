@@ -57,14 +57,16 @@ export function createTimingPresentationController({ exercises = [], phaseTarget
   let acceptedDisplayEpochMs = null;
   const listeners = new Set();
   const publish = () => listeners.forEach(listener => listener());
-  const timestamped = action => ({ ...action, timestamp: action.timestamp ?? now() });
+  const timestamped = action => {
+    const rawTimestamp = action.timestamp ?? now();
+    if (!Number.isFinite(rawTimestamp)) return action;
+    acceptedDisplayEpochMs = Math.max(acceptedDisplayEpochMs ?? rawTimestamp, rawTimestamp);
+    return { ...action, timestamp: acceptedDisplayEpochMs };
+  };
 
   function dispatch(action) {
     const before = state.phase;
     const timedAction = timestamped(action);
-    if (Number.isFinite(timedAction.timestamp)) {
-      acceptedDisplayEpochMs = Math.max(acceptedDisplayEpochMs ?? timedAction.timestamp, timedAction.timestamp);
-    }
     state = activeWorkoutReducer(state, timedAction);
     if (state.phase !== before) announcement = `Entered ${PHASE_LABELS[state.phase] ?? state.phase}.`;
     else if (action.type === 'tick') announcement = '';

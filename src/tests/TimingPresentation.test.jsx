@@ -48,6 +48,51 @@ describe('Timing presentation controller', () => {
     expect(controller.getViewModel().globalElapsedSeconds).toBe(controller.getViewModel().phaseTiming.elapsedSeconds);
   });
 
+  it('uses the accepted visible epoch rather than a backward action timestamp', () => {
+    const { controller, clock } = createController();
+    controller.dispatch({ type: 'startWorkout' });
+    clock.advance(10_000); controller.dispatch({ type: 'startSet', exerciseIndex: 0, setIndex: 0 });
+    clock.advance(7_000); controller.dispatch({ type: 'tick' });
+    clock.advance(-6_000); controller.dispatch({ type: 'confirmSet', exerciseIndex: 0, setIndex: 0 });
+    controller.dispatch({ type: 'finishWorkout' });
+
+    expect(controller.getViewModel().review).toMatchObject({ actualDurationSeconds: 17, phaseActualSeconds: { warmup: 10, performance: 7, cooldown: 0 } });
+  });
+
+  it('routes every timing-bearing controller transition through the accepted display epoch', () => {
+    const dispatchAfterClockRegression = (actions, assertion) => {
+      const { controller, clock } = createController();
+      clock.advance(10_000); controller.dispatch({ type: 'tick' });
+      clock.advance(-9_000);
+      controller.dispatch({ type: 'startWorkout' });
+      actions.forEach(action => controller.dispatch(action));
+      assertion(controller.getState());
+    };
+
+    dispatchAfterClockRegression([
+      { type: 'startSet', exerciseIndex: 0, setIndex: 0 },
+      { type: 'confirmSet', exerciseIndex: 0, setIndex: 0 },
+      { type: 'resumeWorkout' },
+      { type: 'confirmEarlyFinish' },
+      { type: 'finishWorkout' },
+      { type: 'reviewBack' },
+      { type: 'finishWorkout' },
+    ], state => {
+      expect(state.phase).toBe('review');
+      expect(state.phaseCandidate.finishRequestedAtEpochMs).toBe(11_000);
+      expect(state.phaseLedger.lastAcceptedEpochMs).toBe(11_000);
+    });
+
+    dispatchAfterClockRegression([
+      { type: 'startSet', exerciseIndex: 0, setIndex: 0 },
+      { type: 'confirmSet', exerciseIndex: 0, setIndex: 0 },
+      { type: 'undoSet', exerciseIndex: 0, setIndex: 0 },
+    ], state => {
+      expect(state.phase).toBe('performance');
+      expect(state.phaseLedger.lastAcceptedEpochMs).toBe(11_000);
+    });
+  });
+
   it('stages T-08 at the accepted pre-backward display value', () => {
     render(<TimingHarness initialScenario="T-08" />);
     expect(screen.getByText('Global elapsed: 0:11')).toBeDefined();
