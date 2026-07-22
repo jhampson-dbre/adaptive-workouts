@@ -76,7 +76,7 @@ export async function analyzeBuild(distDir = 'dist') {
   const precache = await measure(precacheFiles)
   const rootFiles = await readdir(distDir)
   const sw = ['sw.js', ...rootFiles.filter(file => /^workbox-[^\\/]+\.js$/i.test(file))]
-  if (!sw.some(file => file === 'sw.js') || !existsSync(join(distDir, 'sw.js'))) throw new Error('Missing required sw.js')
+  if (!existsSync(join(distDir, 'sw.js'))) throw new Error('Missing required sw.js')
   if (sw.length < 2) throw new Error('Missing required Workbox runtime')
   const chunks = await measure(appFiles)
   const appCode = (await Promise.all(appFiles.map(file => readFile(join(distDir, file), 'utf8')))).join('\n')
