@@ -495,6 +495,7 @@ describe('phase ledger reducer (T-01 through T-08)', () => {
     state = reducePhase(state, { type: 'finishWorkout', timestamp: 5_500 });
     expect(state.phase).toBe('review');
     expect(state.phaseCandidate.actualDurationSeconds).toBe(5);
+    expect(state.phaseCandidate.finishRequestedAtEpochMs).toBe(5_500);
     expect(state.phaseCandidate.actualDurationSeconds).toBe(Object.values(state.phaseCandidate.phaseActualSeconds).reduce((sum, seconds) => sum + seconds, 0));
     expect(Object.isFrozen(state.phaseCandidate)).toBe(true);
   });

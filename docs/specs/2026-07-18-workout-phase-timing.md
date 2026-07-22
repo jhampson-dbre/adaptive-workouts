@@ -321,13 +321,13 @@ cross-device promise.
 One versioned local slot exists per Firebase project and authenticated user:
 
 ```text
-adaptive-workouts:active-workout:v1:<projectId>:<uid>
+adaptive-workouts:active-workout:v1:<encodeURIComponent(projectId)>:<encodeURIComponent(uid)>
 ```
 
 Every mutation requires exclusive ownership of:
 
 ```text
-active-workout:<projectId>:<uid>
+active-workout:<encodeURIComponent(projectId)>:<encodeURIComponent(uid)>
 ```
 
 Both keys use the resolved Firebase project ID and authenticated UID; neither accepts
@@ -347,9 +347,198 @@ by the active plan, DOM/UI references, arbitrary component state, errors/stacks,
 sound/vibration bookkeeping, and unrecognized properties. Deserialize validates the
 entire envelope before hydration; it never spreads unknown stored data into state.
 
-The exact recovery field table and versioning rules must be expanded during A5 before
-implementation. TREK-240 durably tracks this planning-workflow improvement so future
-specs require recovery metadata alongside saved duration contracts.
+The A5 recovery contract is the strict version-1 envelope below. A serializer builds
+this DTO field by field; it never spreads reducer or component state. Object shapes
+are exact unless a field is explicitly marked optional. Unknown, missing-required,
+non-finite, or structurally inconsistent data invalidates the entire envelope.
+
+#### Recovery version and identity
+
+The storage and lock names percent-encode each identity component independently so a
+delimiter inside a UID cannot alias another project/user pair:
+
+```text
+adaptive-workouts:active-workout:v1:<encodeURIComponent(projectId)>:<encodeURIComponent(uid)>
+active-workout:<encodeURIComponent(projectId)>:<encodeURIComponent(uid)>
+```
+
+`projectId` comes from the initialized Firebase app and `uid` from the authenticated
+Firebase user. Both must be nonempty exact strings. The embedded unencoded values are
+validated again after read; the key is never parsed to infer identity.
+
+| Path | Type / units | Presence and semantics |
+| --- | --- | --- |
+| `version` | literal integer `1` | Required. A missing version is malformed; any other version is unsupported and retained without rewrite. |
+| `projectId` | nonempty string | Required exact resolved Firebase project ID. |
+| `uid` | nonempty string | Required exact authenticated UID; display identity is never accepted. |
+| `draftId` | canonical UUID string | Required immutable identity generated once for a new draft. It never repeats across discard/recreate. |
+| `ownershipGeneration` | safe integer `>= 1` | Required. First ownership is `1`; each successful ownership transfer increments once. Every acquire, mutation, handoff, and discard compares the pair `{draftId, ownershipGeneration}` to prevent ABA. |
+| `lastMutationAtEpochMs` | safe integer epoch milliseconds | Required. Every successful ownership/content write stores `max(previous, injectedNow)`. Backward wall-clock movement never lowers it. |
+| `phaseTargets` | exact object | Required immutable generated targets defined below. |
+| `activeWorkout` | exact object | Required active projection defined below. |
+| `pendingSave` | literal `null` | Required in recovery v1. A5 rejects every non-null value. A6 introduces recovery envelope v2 for the complete save-operation identity/fingerprint/candidate shape. The `:v1:` key segment is the fixed recovery-family namespace, not the envelope schema version: v2 uses this same physical slot and lock, and v1 and v2 never coexist. Under the lock, migration constructs and validates a new exact v2 DTO and writes it once; it never spreads or adds fields onto the v1 object. The complete v2 `pendingSave` shape must be added here and architecture-reviewed before A6 implementation. V1 readers treat v2 as unsupported and never overwrite it. |
+
+Staleness is evaluated with required injected safe-integer `nowEpochMs` and positive
+safe-integer `staleAfterMs`. A draft is stale only when
+`nowEpochMs - lastMutationAtEpochMs > staleAfterMs`; a backward `nowEpochMs` is not
+stale. Acquire re-evaluates age after the lock is granted. Stale drafts are never
+resumed or refreshed; they are discard-only after locked identity/generation
+revalidation. A8 must obtain product approval for the concrete `staleAfterMs` before
+making this path reachable.
+
+#### Immutable targets and workflow state
+
+| Path | Type / units | Presence and semantics |
+| --- | --- | --- |
+| `phaseTargets.warmupSeconds` | integer seconds from 0 through 3600, divisible by 60 | Required canonical Warmup target; zero is valid. |
+| `phaseTargets.performanceSeconds` | nonnegative safe integer seconds | Required generated performance budget; zero is valid. |
+| `phaseTargets.cooldownSeconds` | integer seconds from 0 through 3600, divisible by 60 | Required canonical Cooldown target; zero is valid. |
+| `activeWorkout.phase` | `warmup`, `performance`, `cooldown`, or `review` | Required. Generated/pre-start and cancelled sessions are not persisted. |
+| `activeWorkout.workoutStartedAtEpochMs` | safe integer epoch milliseconds | Required for every persisted draft; never null. |
+| `activeWorkout.activeWorkTimer` | exact object or `null` | Required. Non-null only in Performance and defined below. |
+| `activeWorkout.nextTimerId` | positive safe integer | Required persisted form of `_nextTimerId`; greater than every numeric work/rest timer suffix present in the projection. |
+| `activeWorkout.phaseLedger` | exact object | Required strict A4 ledger defined below. |
+| `activeWorkout.phaseCandidate` | exact object or `null` | Required. Non-null exactly in Review. |
+| `activeWorkout.cooldownUndoTarget` | exact object or `null` | Required persisted form of `_cooldownUndoTarget`. A non-null value is permitted only in Cooldown or Review and must reference the completed final-outstanding set whose undo is valid. |
+| `activeWorkout.exercises` | nonempty array | Required ordered active occurrence projection. Occurrence IDs are unique; set and reference invariants below apply. |
+
+`activeWorkout.activeWorkTimer` has exactly `id`, `occurrenceId`, `exerciseIndex`,
+`setIndex`, and `startedAtEpochMs`. `id` is `work-<positive integer>`;
+`occurrenceId` and both zero-based indices resolve to the same uncompleted ready set;
+`startedAtEpochMs` is a safe integer. It cannot coexist with Review, Cooldown, or an
+active rest on the referenced set.
+
+`activeWorkout.cooldownUndoTarget`, when non-null, has exactly `exerciseIndex` and
+`setIndex`, both nonnegative integers resolving to the completed set recorded when
+Performance entered Cooldown. Missing is never substituted for null.
+
+The strict phase ledger retains A4 units and derivation:
+
+| Path | Type / units | Presence and semantics |
+| --- | --- | --- |
+| `phaseLedger.closedMilliseconds.<phase>` | nonnegative safe integer milliseconds | Exactly Warmup, Performance, and Cooldown; required. |
+| `phaseLedger.closedSeconds.<phase>` | nonnegative safe integer seconds | Exactly the three phases; required and equal to `Math.round(closedMilliseconds / 1000)`. |
+| `phaseLedger.openPhase` | phase name or `null` | Active workflow phases require the matching open phase. Review requires null. |
+| `phaseLedger.openedAtEpochMs` | safe integer epoch milliseconds or `null` | Required integer exactly when a phase is open; otherwise null. |
+| `phaseLedger.lastAcceptedEpochMs` | safe integer epoch milliseconds | Required monotonic accepted boundary and not earlier than an open boundary. |
+
+The Review-only `phaseCandidate` has exactly `phaseActualSeconds`,
+`actualDurationSeconds`, and `finishRequestedAtEpochMs`.
+`phaseActualSeconds` contains exactly the three nonnegative safe-integer phase values
+and equals the ledger's derived `closedSeconds`; `actualDurationSeconds` is their
+exact sum. `finishRequestedAtEpochMs` is the raw injected safe-integer Finish event
+timestamp, not the monotonic accepted boundary. It is persisted so reload cannot
+change the eventual v4 date; A6/A8 derive the canonical ISO date from this value once
+and A5 already requires it to produce a finite, ISO-representable JavaScript date.
+The candidate and ledger are closed, no
+work or rest timer remains, and the candidate is reconstructed frozen after hydrate.
+
+#### Exercise and set projection
+
+Every occurrence requires the exact common fields `id`, `occurrenceId`, `name`,
+`muscleGroup`, `tier`, `trackingMode`, `sets`, `prescribedSetCount`, and `setRecords`.
+`id`, `occurrenceId`, `name`, and `muscleGroup` are nonempty strings; `tier` is an
+integer; `trackingMode` is `simple`, `weighted`, or `bodyweight`; `sets` is an integer
+from 1 through 10 and equals `prescribedSetCount` and the set-record count. Optional
+`linkedTo` preserves exact presence and is null or a string; optional `isActive`
+preserves exact presence and is boolean. Selection-only `dynamicTier` is excluded.
+
+Mode-specific occurrence fields are:
+
+| Mode | Required additional fields | Forbidden occurrence fields |
+| --- | --- | --- |
+| Simple | `completed` boolean | Weighted/bodyweight configuration fields |
+| Weighted | finite nonnegative `startingWeight`; positive integer `targetReps`; nonnegative integer `floorReps < targetReps`; finite positive `weightStep` | Simple `completed` and bodyweight-only fields |
+| Bodyweight | positive integer `targetReps` | Simple `completed` and weighted-only configuration fields |
+
+Every set record requires exactly the common fields `index`, `completed`,
+`plannedRestSeconds`, `workDurationSeconds`, `actualRestSeconds`, and `activeRest`, plus
+the mode-specific fields below. Indices are contiguous from zero. `plannedRestSeconds`
+is an integer from 5 through 600 on non-final sets and null on the final set.
+Unconfirmed records require `workDurationSeconds: null` and
+`actualRestSeconds: null`. Confirmed records require a nonnegative integer
+`workDurationSeconds`; final records require `actualRestSeconds: null`. A confirmed
+non-final record has either a nonnegative integer `actualRestSeconds` with
+`activeRest: null`, or `actualRestSeconds: null` with a non-null active rest.
+Confirmed records form a contiguous prefix per occurrence.
+
+`activeRest` is required on every record and is either null or exactly
+`{ id, startedAtEpochMs }`. A non-null ID is `rest-<positive integer>`, its boundary is
+a safe integer, and it is allowed only on the latest confirmed non-final record of
+that occurrence. Concurrent rests across different occurrences are valid. Every work
+and rest timer ID is unique and its numeric suffix is less than `nextTimerId`.
+
+| Mode | Required set fields and value rules |
+| --- | --- |
+| Simple | No additional fields. Occurrence `completed` equals whether any set is completed. |
+| Weighted | `targetWeight` and numeric `actualWeight` are finite and nonnegative; `targetReps` is a positive integer; `actualReps` is a nonnegative integer. `actualWeight` or `actualReps` may instead be the exact empty string `""` on either an unconfirmed or completed record because EPIC-11 permits temporary completed-detail editing. Such a draft remains resumable but cannot be confirmed/saved until required actuals are numeric. `recommendationReason` and `inputDirty` are required exact objects. |
+| Bodyweight | `targetReps` is a positive integer. Each of `fullReps`, `assistedReps`, and `eccentricReps` is a nonnegative integer or the exact empty string `""`, including during temporary completed-detail editing. A blank draft remains resumable but cannot be confirmed/saved until required actuals are numeric. |
+
+Weighted `inputDirty` is exactly `{ actualWeight: boolean, actualReps: boolean }` and
+maps to/from `_activeDirty`. Weighted set zero uses the exact top-set recommendation
+shape: `decision`, `sourceWorkoutId`, `sourceWorkoutDate`, `sourceAnchorWeight`,
+`appliedWeightStep`, `recommendedWeight`, and `reasonCode`, with the existing
+progression value/null/date invariants: `decision` is `starting`, `increase`, `hold`,
+or `decrease`; starting requires all three source fields null, while every other
+decision requires a nonempty source workout ID, an ISO-parseable source date, and a
+finite nonnegative source anchor; applied step and recommended weight are finite and
+nonnegative. Later sets use either exactly
+`{ recommendedWeight, reasonCode: 'BACKOFF_AWAITING_PRIOR_SET' }` or the exact computed
+backoff fields `recommendedWeight`, `reasonCode`, `sourceActualWeight`,
+`sourceActualReps`, `floorReps`, `weightStep`, `dropSteps`, `rawWeight`,
+`sessionTopTarget`, and `priorTargetCeiling`, with the existing backoff numeric
+invariants. In a computed backoff, source actuals equal the preceding set's numeric
+actuals, floor/step equal the occurrence configuration, session top equals set zero's
+target, prior ceiling equals the minimum prior assigned target, drop steps equal zero
+when the floor is met or otherwise `min(floorReps - sourceActualReps, 3)`, raw weight
+equals `max(0, sourceActualWeight - weightStep * dropSteps)`, and recommended weight
+equals the minimum of raw weight, session top, and prior ceiling. For every weighted
+or bodyweight record, set `targetReps` equals the occurrence target. Every
+`recommendationReason.recommendedWeight` equals its record `targetWeight`.
+
+Hydration maps persisted `activeRest` to `_activeRest`, `inputDirty` to
+`_activeDirty`, `nextTimerId` to `_nextTimerId`, and `cooldownUndoTarget` to
+`_cooldownUndoTarget`. It reconstructs `_phaseTimingEnabled: true`; that flag is never
+persisted. No other underscore-prefixed or unknown field is admitted.
+
+Phase invariants are whole-envelope invariants:
+
+- Warmup has an open Warmup ledger, no completed set, no active work timer, null
+  candidate, and null cooldown undo target.
+- Performance has an open Performance ledger, null candidate, and may own one valid
+  work timer plus concurrent valid rests.
+- Cooldown has an open Cooldown ledger, null candidate, no work timer or active rest,
+  and its optional undo target passes the reference rule above.
+- Review has a closed ledger, the matching non-null frozen candidate, no work timer
+  or active rest, and no mutable timing interval.
+
+#### Read, write, and version precedence
+
+Read classification is deterministic and stops at the first matching outcome:
+
+1. storage access exception -> `storage-error`;
+2. absent key -> `missing`;
+3. unparsable JSON, non-object, or missing version -> `malformed`;
+4. version other than 1 -> `unsupported-version` (retain; never rewrite/remove);
+5. missing, empty, or non-string embedded project/UID -> `malformed`;
+6. embedded project mismatch -> `wrong-project`;
+7. embedded UID mismatch -> `wrong-user`;
+8. remaining exact-shape, referential, or phase-invariant failure -> `malformed`;
+9. age beyond the injected policy -> `stale`;
+10. otherwise -> `resumable` with a deep-frozen hydrated projection.
+
+The storage adapter returns distinct `saved`, `removed`, and `storage-error`
+outcomes. Under a held lock, a mutation re-reads and validates the stored
+`{draftId, ownershipGeneration}`, applies a pure transform to a clone, validates and
+serializes the complete candidate, performs one `setItem`, and only then publishes
+the new in-memory state. Serialization or storage failure leaves the prior published
+state unchanged and is never reported as protected. `removeItem` failure likewise
+leaves the slot intact. Web Storage operation completion is atomic with respect to
+reported failure, but the application makes no power-loss or eviction durability
+claim.
+
+These A5 details fulfill the planned recovery-contract expansion. TREK-240 durably
+tracks the corresponding planning-workflow improvement for future features.
 
 ### Dispositions
 
@@ -371,15 +560,67 @@ discard, and save-state mutation, runs only while the caller exclusively owns th
 project/user Web Lock.
 
 - Acquisition is cancellable and bounded to eight seconds.
-- The coordinator revalidates stored ownership generation after acquisition; a tab
-  cannot mutate a stale in-memory generation.
+- The coordinator revalidates stored `{draftId, ownershipGeneration}` after
+  acquisition; a tab cannot mutate stale in-memory ownership.
 - Cooperative handoff asks the current owner to release before acquisition. A
   takeover never creates two owners.
 - Lock loss freezes mutation and presents an actionable conflict/recovery state.
-- Unsupported Web Locks are a named unsupported state with an approved safe fallback
-  or blocked active-workout entry; they are never silently treated as exclusive.
+- Unsupported Web Locks block active-workout entry and all mutation in A5; they are
+  never silently treated as exclusive.
 - Read-only display may continue when safe, but no draft or save mutation bypasses
   ownership.
+
+The A5 coordinator factory injects Web Locks, storage, clock, UUID creation, timers,
+and cooperative-handoff transport. Its default acquisition budget is exactly eight
+seconds and bounds the full handoff-plus-lock attempt. Caller abort and internal
+timeout are distinct; every terminal path clears its timer.
+
+Web Lock acquisition uses an ordinary exclusive request and never uses `steal`.
+`AbortSignal` cancels only while queued. Once granted, ownership lasts until the
+request callback's lease promise settles. The coordinator therefore defines `lost`
+as its held callback settling unexpectedly or detected preemption—not as a
+browser-provided spontaneous loss event. Normal explicit release, cooperative
+handoff release, successful discard, and successful auth cleanup settle as
+`released` or the operation's success result, never `lost`. Unexpected loss marks the
+lease inactive immediately; later operations reject locally, and locked generation
+revalidation prevents a preempted callback from writing.
+
+First Start acquires the identity lock, verifies the slot is missing, creates a new
+UUID draft at generation 1, writes the post-Start projection, and only then publishes
+it. Generated/pre-start plans are not persisted. Resume acquires, re-reads the strict
+draft, compares the expected `{draftId, ownershipGeneration}`, advances generation
+once, persists, then returns the snapshot for hydration. Each owned mutation
+revalidates the same pair before the atomic transform/write sequence. Discard and
+prior-auth cleanup acquire the corresponding lock and revalidate the pair before
+removal.
+
+Cooperative handoff messages contain a request nonce, draft ID, and generation. The
+current owner may acknowledge only after releasing its lease. An acknowledgment
+never grants ownership; the requester must still win ordinary exclusive acquisition
+and revalidate storage. Unsupported Web Locks block active-workout entry and all
+mutation in A5; a mutation-capable fallback would weaken the approved exclusivity
+contract and requires renewed architecture and user approval.
+
+Coordinator outcomes remain distinct. `acquired` means the non-null exclusive lock
+callback revalidated storage, persisted the ownership generation, and returned an
+active lease. `conflict` means a matching live owner explicitly declines handoff or
+remains active through the handoff attempt; an optional exclusive `ifAvailable`
+probe returning null may detect that conflict but never grants mutation.
+`timeout` is the internal eight-second budget expiring before ordinary exclusive
+grant, and `aborted` is the caller's signal ending the queued attempt. `denied` is a
+non-abort Web Locks rejection such as platform/security denial. `unsupported` means
+the Web Locks capability is absent. `stale-generation` means stored draft ID or
+generation differs from the caller expectation after grant. `released` is a normal
+explicit lease settlement; `lost` is only unexpected settlement/preemption.
+`storage-error` is a storage/serialization failure. After grant, read dispositions
+`malformed`, `unsupported-version`, `wrong-project`, `wrong-user`, or `stale` are
+propagated unchanged, the lease settles normally without a write, and only the
+approved locked stale/identity-matched discard path may remove a stale draft. Storage
+errors include the failed operation (`read`, `serialize`, `write`, or `remove`) for
+diagnostics without exposing stored workout contents. Auth change freezes/releases
+the prior lease and attempts removal only under the prior identity lock. Cleanup
+failure leaves that slot intact, reports failure, and never permits the new UID to
+inspect or hydrate it.
 
 ## Immutable save and reconciliation
 

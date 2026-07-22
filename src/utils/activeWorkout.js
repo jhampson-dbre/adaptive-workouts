@@ -153,11 +153,12 @@ function canMutateInPhase(state, action) {
     && state._cooldownUndoTarget?.setIndex === action.setIndex;
 }
 
-function freezePhaseCandidate(ledger) {
+function freezePhaseCandidate(ledger, finishRequestedAtEpochMs) {
   const phaseActualSeconds = { ...ledger.closedSeconds };
   return deepFreeze({
     phaseActualSeconds,
     actualDurationSeconds: Object.values(phaseActualSeconds).reduce((total, seconds) => total + seconds, 0),
+    finishRequestedAtEpochMs,
   });
 }
 
@@ -295,7 +296,7 @@ export function activeWorkoutReducer(state, action) {
       ...state,
       phase: 'review',
       phaseLedger,
-      phaseCandidate: freezePhaseCandidate(phaseLedger),
+      phaseCandidate: freezePhaseCandidate(phaseLedger, action.timestamp),
     };
   }
 
