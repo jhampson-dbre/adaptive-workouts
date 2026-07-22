@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   activeWorkoutReducer,
   initializeActiveWorkout,
+  getPhaseElapsedSeconds,
   resolveFinishCandidate,
 } from '../utils/activeWorkout';
 import { buildCompletedV3WorkoutDocument } from '../utils/workoutSchema';
@@ -282,8 +283,9 @@ describe('active workout timing state machine', () => {
   });
 
   it('validates confirmation by mode, clamps duration, and supports cancel without rest', () => {
-    let state = startWorkout(initializeActiveWorkout([timedWeighted(), timedSimple()]));
+    let state = initializeActiveWorkout([timedWeighted(), timedSimple()]);
     state = reduce(state, editWeight(0, 0, 'actualReps', ''));
+    state = startWorkout(state);
     state = startSet(state, 0, 0, 2_000);
     expect(confirmSet(state, 0, 0, 3_000)).toBe(state);
 
@@ -316,10 +318,11 @@ describe('active workout timing state machine', () => {
       workDurationSeconds: null,
       actualRestSeconds: null,
     }));
-    let state = startWorkout(initializeActiveWorkout([timedBodyweight]));
+    let state = initializeActiveWorkout([timedBodyweight]);
     state = reduce(state, {
       type: 'editBodyweightActual', exerciseIndex: 0, setIndex: 0, field: 'fullReps', value: '',
     });
+    state = startWorkout(state);
     state = startSet(state, 0, 0, 2_000);
     expect(confirmSet(state, 0, 0, 3_000)).toBe(state);
     const ticking = reduce(state, { type: 'renderTick', timestamp: 30_000 });
@@ -425,5 +428,187 @@ describe('active workout timing state machine', () => {
     const later = resolveFinishCandidate(state, 10_000);
     expect(later.candidate.actualDurationSeconds).toBe(9);
     expect(later.candidate.exercises[0].setRecords[0].actualRestSeconds).toBe(7);
+  });
+});
+
+describe('phase ledger reducer (T-01 through T-08)', () => {
+  const phaseExercise = (sets = 1) => timedExercise('phase', sets);
+  const reducePhase = (state, action) => activeWorkoutReducer(state, action);
+  const initializePhaseWorkout = exercises => initializeActiveWorkout(exercises, { phaseTimingEnabled: true });
+
+  function timedExercise(id, sets) {
+    return {
+      ...weighted(id, sets), occurrenceId: `${id}:0`,
+      setRecords: weighted(id, sets).setRecords.map((record, index) => ({
+        ...record, plannedRestSeconds: index === sets - 1 ? null : 60,
+        workDurationSeconds: null, actualRestSeconds: null,
+      })),
+    };
+  }
+
+  it('T-01 opens Warmup at Start Workout and reports countdown, zero, and overtime without a tick mutation', () => {
+    let state = initializePhaseWorkout([phaseExercise()]);
+    state = reducePhase(state, { type: 'startWorkout', timestamp: 1_000 });
+    expect(state.phase).toBe('warmup');
+    expect(getPhaseElapsedSeconds(state, 'warmup', 2_499)).toBe(1);
+    expect(reducePhase(state, { type: 'renderTick', timestamp: 9_000 })).toBe(state);
+  });
+
+  it('T-02 closes Warmup at the first valid Start set and cancelling work stays in Performance', () => {
+    let state = reducePhase(initializePhaseWorkout([phaseExercise()]), { type: 'startWorkout', timestamp: 1_000 });
+    state = reducePhase(state, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 2_500 });
+    expect(state.phase).toBe('performance');
+    expect(state.phaseLedger.closedSeconds.warmup).toBe(2);
+    state = reducePhase(state, { type: 'cancelSet', exerciseIndex: 0, setIndex: 0 });
+    expect(state.phase).toBe('performance');
+  });
+
+  it('T-03 closes Performance and enters Cooldown when the final outstanding set is confirmed', () => {
+    let state = reducePhase(initializePhaseWorkout([phaseExercise()]), { type: 'startWorkout', timestamp: 1_000 });
+    state = reducePhase(state, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 2_000 });
+    state = reducePhase(state, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 4_000 });
+    expect(state.phase).toBe('cooldown');
+    expect(state.phaseLedger.closedSeconds).toMatchObject({ warmup: 1, performance: 2 });
+  });
+
+  it('T-04 resolves early work into Cooldown but cancels a confirmed no-work finish without a candidate', () => {
+    let state = reducePhase(initializePhaseWorkout([phaseExercise()]), { type: 'startWorkout', timestamp: 1_000 });
+    state = reducePhase(state, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1_500 });
+    state = reducePhase(state, { type: 'cancelSet', exerciseIndex: 0, setIndex: 0 });
+    state = reducePhase(state, { type: 'confirmEarlyFinish', timestamp: 2_000 });
+    expect(state.phase).toBe('cancelled');
+    expect(state.phaseCandidate).toBeNull();
+    expect(resolveFinishCandidate(state, 3_000).status).not.toBe('ready');
+
+    state = reducePhase(initializePhaseWorkout([phaseExercise(2)]), { type: 'startWorkout', timestamp: 1_000 });
+    state = reducePhase(state, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 2_000 });
+    state = reducePhase(state, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 3_000 });
+    state = reducePhase(state, { type: 'confirmEarlyFinish', timestamp: 5_000 });
+    expect(state.phase).toBe('cooldown');
+    expect(state.exercises[0].setRecords[0].actualRestSeconds).toBe(2);
+  });
+
+  it('T-05 finishes Cooldown with a frozen exact phase-sum candidate', () => {
+    let state = reducePhase(initializePhaseWorkout([phaseExercise()]), { type: 'startWorkout', timestamp: 1_000 });
+    state = reducePhase(state, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 2_000 });
+    state = reducePhase(state, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 3_000 });
+    state = reducePhase(state, { type: 'finishWorkout', timestamp: 5_500 });
+    expect(state.phase).toBe('review');
+    expect(state.phaseCandidate.actualDurationSeconds).toBe(5);
+    expect(state.phaseCandidate.actualDurationSeconds).toBe(Object.values(state.phaseCandidate.phaseActualSeconds).reduce((sum, seconds) => sum + seconds, 0));
+    expect(Object.isFrozen(state.phaseCandidate)).toBe(true);
+  });
+
+  it('T-06 accumulates Cooldown across Resume re-entry', () => {
+    let state = reducePhase(initializePhaseWorkout([phaseExercise()]), { type: 'startWorkout', timestamp: 1_000 });
+    state = reducePhase(state, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 2_000 });
+    state = reducePhase(state, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 3_000 });
+    state = reducePhase(state, { type: 'resumeWorkout', timestamp: 5_000 });
+    state = reducePhase(state, { type: 'confirmEarlyFinish', timestamp: 6_000 });
+    expect(state.phaseLedger.closedSeconds.cooldown).toBe(2);
+  });
+
+  it('T-07 excludes Review time on Back and reuses the same frozen candidate on retry', () => {
+    let state = reducePhase(initializePhaseWorkout([phaseExercise()]), { type: 'startWorkout', timestamp: 1_000 });
+    state = reducePhase(state, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 2_000 });
+    state = reducePhase(state, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 3_000 });
+    state = reducePhase(state, { type: 'finishWorkout', timestamp: 4_000 });
+    const candidate = state.phaseCandidate;
+    expect(reducePhase(state, { type: 'retrySave' }).phaseCandidate).toBe(candidate);
+    state = reducePhase(state, { type: 'reviewBack', timestamp: 104_000 });
+    state = reducePhase(state, { type: 'finishWorkout', timestamp: 105_000 });
+    expect(state.phaseCandidate.actualDurationSeconds).toBe(candidate.actualDurationSeconds + 1);
+  });
+
+  it('T-08 counts forward sleep, stalls backward clocks, keeps rounded boundaries nondecreasing, and blocks invalid transitions', () => {
+    let state = reducePhase(initializePhaseWorkout([phaseExercise()]), { type: 'startWorkout', timestamp: 1_000 });
+    expect(getPhaseElapsedSeconds(state, 'warmup', 10_600)).toBe(10);
+    state = reducePhase(state, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 10_600 });
+    expect(getPhaseElapsedSeconds(state, 'performance', 4_000)).toBe(0);
+    state = reducePhase(state, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 4_000 });
+    expect(state.phaseLedger.lastAcceptedEpochMs).toBe(10_600);
+    expect(reducePhase(state, { type: 'resumeWorkout', timestamp: Number.NaN })).toBe(state);
+  });
+
+  it('blocks active-work early finish but closes active rests after work is cancelled', () => {
+    let state = reducePhase(
+      initializePhaseWorkout([timedExercise('one', 2), timedExercise('two', 1)]),
+      { type: 'startWorkout', timestamp: 1_000 },
+    );
+    state = reducePhase(state, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 2_000 });
+    state = reducePhase(state, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 3_000 });
+    state = reducePhase(state, { type: 'startSet', exerciseIndex: 1, setIndex: 0, timestamp: 4_000 });
+
+    expect(reducePhase(state, { type: 'confirmEarlyFinish', timestamp: 5_000 })).toBe(state);
+
+    state = reducePhase(state, { type: 'cancelSet', exerciseIndex: 1, setIndex: 0 });
+    state = reducePhase(state, { type: 'confirmEarlyFinish', timestamp: 6_000 });
+    expect(state.phase).toBe('cooldown');
+    expect(state.exercises[0].setRecords[0].actualRestSeconds).toBe(3);
+  });
+
+  it('rejects set, timer, and input mutations outside their approved active phases', () => {
+    let warmup = reducePhase(initializePhaseWorkout([phaseExercise()]), { type: 'startWorkout', timestamp: 1_000 });
+    expect(reducePhase(warmup, editWeight(0, 0, 'actualReps', 3))).toBe(warmup);
+
+    let cooldown = reducePhase(warmup, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 2_000 });
+    cooldown = reducePhase(cooldown, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 3_000 });
+    expect(cooldown.phase).toBe('cooldown');
+    expect(reducePhase(cooldown, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 4_000 })).toBe(cooldown);
+    expect(reducePhase(cooldown, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 4_000 })).toBe(cooldown);
+    expect(reducePhase(cooldown, editWeight(0, 0, 'actualReps', 3))).toBe(cooldown);
+
+    const review = reducePhase(cooldown, { type: 'finishWorkout', timestamp: 4_000 });
+    expect(reducePhase(review, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 5_000 })).toBe(review);
+    expect(reducePhase(review, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 5_000 })).toBe(review);
+    expect(reducePhase(review, editWeight(0, 0, 'actualReps', 2))).toBe(review);
+    expect(reducePhase(review, { type: 'undoSet', exerciseIndex: 0, setIndex: 0, timestamp: 5_000 })).toBe(review);
+    expect(reducePhase(review, { type: 'cancelSet', exerciseIndex: 0, setIndex: 0 })).toBe(review);
+  });
+
+  it('starts only from Generated and requires a valid Cooldown Undo timestamp', () => {
+    const generated = initializePhaseWorkout([phaseExercise()]);
+    const notGenerated = { ...generated, phase: 'review' };
+    expect(reducePhase(notGenerated, { type: 'startWorkout', timestamp: 1_000 })).toBe(notGenerated);
+
+    let cooldown = reducePhase(generated, { type: 'startWorkout', timestamp: 1_000 });
+    cooldown = reducePhase(cooldown, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 2_000 });
+    cooldown = reducePhase(cooldown, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 3_000 });
+    expect(reducePhase(cooldown, { type: 'undoSet', exerciseIndex: 0, setIndex: 0 })).toBe(cooldown);
+    expect(reducePhase(cooldown, { type: 'undoSet', exerciseIndex: 0, setIndex: 0, timestamp: 3_500.5 })).toBe(cooldown);
+  });
+
+  it('allows generated tracked toggles but blocks weighted and bodyweight toggles after cancellation', () => {
+    const generated = initializePhaseWorkout([timedExercise('one', 1), bodyweight()]);
+    expect(reducePhase(generated, toggle(0, 0)).exercises[0].setRecords[0].completed).toBe(true);
+    expect(reducePhase(generated, toggle(1, 0)).exercises[1].setRecords[0].completed).toBe(true);
+
+    let cancelled = reducePhase(generated, { type: 'startWorkout', timestamp: 1_000 });
+    cancelled = reducePhase(cancelled, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 2_000 });
+    cancelled = reducePhase(cancelled, { type: 'cancelSet', exerciseIndex: 0, setIndex: 0 });
+    cancelled = reducePhase(cancelled, { type: 'confirmEarlyFinish', timestamp: 3_000 });
+    expect(cancelled.phase).toBe('cancelled');
+    expect(reducePhase(cancelled, toggle(0, 0))).toBe(cancelled);
+    expect(reducePhase(cancelled, toggle(1, 0))).toBe(cancelled);
+  });
+
+  it('waits for the final outstanding occurrence and accumulates Cooldown through Undo and reconfirmation', () => {
+    let state = reducePhase(
+      initializePhaseWorkout([timedExercise('one', 1), timedExercise('two', 1)]),
+      { type: 'startWorkout', timestamp: 1_000 },
+    );
+    state = reducePhase(state, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1_500 });
+    state = reducePhase(state, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 2_000 });
+    expect(state.phase).toBe('performance');
+    state = reducePhase(state, { type: 'startSet', exerciseIndex: 1, setIndex: 0, timestamp: 2_500 });
+    state = reducePhase(state, { type: 'confirmSet', exerciseIndex: 1, setIndex: 0, timestamp: 3_000 });
+    expect(state.phase).toBe('cooldown');
+
+    state = reducePhase(state, { type: 'undoSet', exerciseIndex: 1, setIndex: 0, timestamp: 3_500 });
+    expect(state.phase).toBe('performance');
+    state = reducePhase(state, { type: 'startSet', exerciseIndex: 1, setIndex: 0, timestamp: 4_000 });
+    state = reducePhase(state, { type: 'confirmSet', exerciseIndex: 1, setIndex: 0, timestamp: 4_500 });
+    state = reducePhase(state, { type: 'finishWorkout', timestamp: 5_000 });
+    expect(state.phaseCandidate.phaseActualSeconds.cooldown).toBe(1);
   });
 });
