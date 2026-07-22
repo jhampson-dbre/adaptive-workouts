@@ -1,5 +1,5 @@
 import { signInWithPopup, GoogleAuthProvider, signOut, onIdTokenChanged } from 'firebase/auth';
-import { auth } from './firebase';
+import { auth } from './firebaseAuth';
 
 const provider = new GoogleAuthProvider();
 

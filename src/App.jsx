@@ -1,20 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import './App.css'
-import Generator from './components/Generator'
-import WorkoutView from './components/WorkoutView'
-import Settings from './components/Settings'
+import LazyDestination from './components/LazyDestination'
 import Login from './components/Login'
 import AccessChecking from './components/AccessChecking'
 import PendingApproval from './components/PendingApproval'
 import AccessVerificationError from './components/AccessVerificationError'
 import { AuthContext } from './context/AuthContext'
 import { evaluateAccessToken, isApprovedTokenResult, signOutUser, subscribeToIdTokenChanges } from './utils/auth'
-import { migrateLocalData } from './utils/storage'
-import { auth, db } from './utils/firebase'
 import { createBaselineAttempt } from './utils/baselineBootstrap'
+import lazyEntryUrls from 'virtual:lazy-entry-urls'
 
 const isBaselineBuild = import.meta.env.DEV && import.meta.env.MODE === 'baseline'
 const ACCESS_TIMEOUT = 15_000
+const retryModuleUrl = (url, generation) => `${url.split('#')[0]}#retry=${generation}`
 
 const classifyBaselineError = error => {
   if (error?.code === 'baseline/identity-mismatch') return {
@@ -46,7 +44,8 @@ function App() {
   const [workout, setWorkout] = useState(null)
   const [timeBudget, setTimeBudget] = useState(45)
   const [unrecoveredGroups, setUnrecoveredGroups] = useState([])
-  const [showSettings, setShowSettings] = useState(false)
+  const [destination, setDestination] = useState('plan')
+  const [destinationGeneration, setDestinationGeneration] = useState(0)
   const [user, setUser] = useState(null)
   const [access, setAccess] = useState('checking')
   const [baselineRetry, setBaselineRetry] = useState(0)
@@ -61,6 +60,18 @@ function App() {
   const mainRef = useRef(null)
   const baselineLoadingRef = useRef(null)
   const baselineErrorRef = useRef(null)
+
+  const clearAuthorizedState = useCallback(() => {
+    setWorkout(null)
+    setTimeBudget(45)
+    setUnrecoveredGroups([])
+    setDestination('plan')
+    setDestinationGeneration(value => value + 1)
+  }, [])
+  const chooseDestination = useCallback(next => {
+    setDestination(next)
+    setDestinationGeneration(value => value + 1)
+  }, [])
 
   const invalidate = useCallback(() => {
     generation.current += 1
@@ -95,11 +106,13 @@ function App() {
     if (!currentUser) {
       session.current = null
       migration.current = null
+      clearAuthorizedState()
       return settle('signed-out', null, id)
     }
     if (session.current !== currentUser.uid) {
       session.current = currentUser.uid
       migration.current = null
+      clearAuthorizedState()
     }
     setUser(currentUser)
     setAccess('checking')
@@ -112,12 +125,14 @@ function App() {
       if (generation.current !== id) return
       if (!isApprovedTokenResult(result)) {
         retireDeadline(id)
+        clearAuthorizedState()
         return settle('pending', currentUser, id)
       }
       if (afterApproved) await afterApproved(currentUser)
       if (generation.current !== id) return
       if (!migration.current) migration.current = (async () => {
         try {
+          const { migrateLocalData } = await import('./utils/storage')
           await migrateLocalData(currentUser.uid)
         } catch (error) {
           console.error('Migration failed, continuing with Firestore:', error)
@@ -137,28 +152,31 @@ function App() {
       }
       settle('verification-error', currentUser, id)
     }
-  }, [invalidate, retireDeadline, settle, startDeadline])
+  }, [clearAuthorizedState, invalidate, retireDeadline, settle, startDeadline])
 
   useEffect(() => {
     if (isBaselineBuild) {
       let active = true
+      let baselineFirebase
       const attempt = createBaselineAttempt({
         load: async () => {
+          baselineFirebase = await import('./utils/firebase')
           const { signInToBaseline, validateBaselineIdentity } = await import('./utils/baselineAuth')
           return {
-            signIn: () => signInToBaseline(auth),
-            validate: value => validateBaselineIdentity(value ?? auth.currentUser),
+            signIn: () => signInToBaseline(baselineFirebase.auth),
+            validate: value => validateBaselineIdentity(value ?? baselineFirebase.auth.currentUser),
             verify: () => Promise.resolve(),
           }
         },
       })
       void attempt.promise.then(
-        () => {
+        async () => {
           if (active) {
+            baselineFirebase ??= await import('./utils/firebase')
             setBaselineStage('shared')
-            void evaluate(auth.currentUser, false, async currentUser => {
+            void evaluate(baselineFirebase.auth.currentUser, false, async currentUser => {
               const { verifyBaselineData } = await import('./utils/baselineAuth')
-              try { await verifyBaselineData(db, currentUser) } catch (error) { throw markBaselineFailure(error) }
+              try { await verifyBaselineData(baselineFirebase.db, currentUser) } catch (error) { throw markBaselineFailure(error) }
             })
           }
         },
@@ -195,17 +213,6 @@ function App() {
   }, [authRetry, baselineRetry, evaluate, invalidate, retireDeadline, startDeadline])
 
   useEffect(() => {
-    if (access === 'authorized') requestAnimationFrame(() => {
-      const target = mainRef.current?.querySelector('h1,h2')
-      if (target?.focus) {
-        target.tabIndex = -1
-        target.focus()
-      } else {
-        mainRef.current?.focus()
-      }
-    })
-  }, [access])
-  useEffect(() => {
     if (baselineStage === 'preparing') baselineLoadingRef.current?.focus()
     if (baselineStage === 'error') baselineErrorRef.current?.focus()
   }, [baselineStage])
@@ -241,6 +248,7 @@ function App() {
     if (generation.current !== id) return
     session.current = null
     migration.current = null
+    clearAuthorizedState()
     setUser(null)
     setAccess('signed-out')
   }
@@ -271,28 +279,25 @@ function App() {
     <AuthContext.Provider value={user}>
       <header className="app-header">
         <h1>Adaptive Hypertrophy</h1>
-        <button className="settings-toggle" onClick={() => setShowSettings(!showSettings)}>
-          {showSettings ? 'Back to Generator' : 'Manage Catalog'}
+        <button className="settings-toggle" onClick={() => chooseDestination(destination === 'settings' ? (workout?.length ? 'workout' : 'plan') : 'settings')}>
+          {destination === 'settings' ? (workout?.length ? 'Back to Workout' : 'Back to Generator') : 'Manage Catalog'}
         </button>
       </header>
       <main ref={mainRef} tabIndex="-1">
-        {showSettings && <Settings onClose={() => setShowSettings(false)} />}
-        {!showSettings && (!workout || workout.length === 0) && <Generator
-          timeBudget={timeBudget}
-          setTimeBudget={setTimeBudget}
-          unrecoveredGroups={unrecoveredGroups}
-          setUnrecoveredGroups={setUnrecoveredGroups}
-          onGenerate={setWorkout}
-        />}
-        {!showSettings && workout && workout.length === 0 && (
-          <section className="workout-result">
-            <h2>Your Workout</h2>
-            <p>No exercises fit the criteria or time budget.</p>
-          </section>
-        )}
-        {!showSettings && workout && workout.length > 0 && (
-          <WorkoutView workout={workout} onFinish={() => setWorkout(null)} />
-        )}
+        <LazyDestination
+          key={`${user?.uid}:${destination}:${destinationGeneration}`}
+          destination={destination}
+          loader={destination === 'plan'
+            ? () => import('./components/AuthorizedApp')
+            : destination === 'settings' ? () => import('./components/Settings') : () => import('./components/WorkoutView')}
+          retryLoader={generation => import(/* @vite-ignore */ retryModuleUrl(lazyEntryUrls[destination], generation))}
+          componentProps={destination === 'plan'
+            ? { workout, timeBudget, setTimeBudget, unrecoveredGroups, setUnrecoveredGroups, onGenerate: generated => { setWorkout(generated); if (generated?.length) chooseDestination('workout') } }
+            : destination === 'settings' ? { onClose: () => chooseDestination(workout?.length ? 'workout' : 'plan') }
+              : { workout, onFinish: () => { setWorkout(null); chooseDestination('plan') } }}
+          onReady={() => {}}
+          isCurrent={() => access === 'authorized'}
+        />
       </main>
     </AuthContext.Provider>
   )
