@@ -211,7 +211,8 @@ function exerciseTimingStatus(exercise, exerciseIndex, activeTimer, now) {
 export default function WorkoutView({ session, sessionState, onFinish, onResume }) {
   const user = useContext(AuthContext);
   const activeWorkout = sessionState?.activeWorkout ?? EMPTY_ACTIVE_WORKOUT;
-  const [now, setNow] = useState(Date.now());
+  const initialDisplayEpochMs = Date.now();
+  const [now, setNow] = useState(initialDisplayEpochMs);
   const [expanded, setExpanded] = useState(() => {
     const firstIncomplete = (activeWorkout.exercises ?? []).findIndex(exercise => !Array.isArray(exercise.setRecords)
       || exercise.setRecords.some(record => !record.completed));
@@ -238,15 +239,25 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
   const alertedRestsRef = useRef(new Set());
   const restAnnouncementsRef = useRef(new Map());
   const saveInFlightRef = useRef(false);
+  const acceptedDisplayEpochMsRef = useRef(initialDisplayEpochMs);
+  const backPendingRef = useRef(false);
   const started = activeWorkout.workoutStartedAt !== null;
   const showingRecovery = (sessionState?.blocked && !blockedSaveConflict) || !sessionState?.activeWorkout;
   const recoveryPresentation = showingRecovery
     ? `${sessionState?.status ?? ''}:${sessionState?.error ?? ''}:${sessionState?.snapshot?.draftId ?? ''}:${sessionState?.snapshot?.ownershipGeneration ?? ''}`
     : null;
   const phasePresentation = showingRecovery ? null : activeWorkout.phase;
+  const displayedElapsedSeconds = activeWorkout.phaseLedger
+    ? ['warmup', 'performance', 'cooldown'].reduce((total, phase) => total + getPhaseElapsedSeconds(activeWorkout, phase, now), 0)
+    : calculateElapsedSeconds(activeWorkout.workoutStartedAt, now);
+  const setDisplayTime = timestamp => {
+    const accepted = Math.max(acceptedDisplayEpochMsRef.current, timestamp);
+    acceptedDisplayEpochMsRef.current = accepted;
+    setNow(accepted);
+  };
 
   useEffect(() => {
-    if (activeWorkout.phase !== 'review' || !activeWorkout.phaseCandidate || finishCandidate) return;
+    if (activeWorkout.phase !== 'review' || !activeWorkout.phaseCandidate || finishCandidate || backPendingRef.current) return;
     const candidate = deepFreeze({
       actualDurationSeconds: activeWorkout.phaseCandidate.actualDurationSeconds,
       phaseActualSeconds: activeWorkout.phaseCandidate.phaseActualSeconds,
@@ -258,8 +269,12 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
   }, [activeWorkout.exercises, activeWorkout.phase, activeWorkout.phaseCandidate, finishCandidate]);
 
   useEffect(() => {
+    if (activeWorkout.phase !== 'review') backPendingRef.current = false;
+  }, [activeWorkout.phase]);
+
+  useEffect(() => {
     if (!started) return undefined;
-    const interval = setInterval(() => setNow(Date.now()), 1000);
+    const interval = setInterval(() => setDisplayTime(Date.now()), 1000);
     return () => clearInterval(interval);
   }, [started]);
 
@@ -270,7 +285,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
       activeWorkout.exercises.forEach(exercise => exercise.setRecords.forEach(record => {
         if (record._activeRest && calculateElapsedSeconds(record._activeRest.startedAt, timestamp) >= record.plannedRestSeconds) alertedRestsRef.current.add(record._activeRest.id);
       }));
-      setNow(timestamp);
+      setDisplayTime(timestamp);
     };
     document.addEventListener('visibilitychange', markHiddenOverdue);
     return () => document.removeEventListener('visibilitychange', markHiddenOverdue);
@@ -416,7 +431,19 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
     setTimeout(() => finishRef.current?.focus(), 0);
   };
 
-  const handleBack = () => { if (!saveInFlightRef.current) { const timestamp = Date.now(); setFinishCandidate(null); setNow(timestamp); dispatch({ type: 'reviewBack', timestamp }); } };
+  const handleBack = async () => {
+    if (saveInFlightRef.current || !finishCandidate) return;
+    const candidate = finishCandidate;
+    const timestamp = Date.now();
+    backPendingRef.current = true;
+    setFinishCandidate(null);
+    setDisplayTime(timestamp);
+    try {
+      if (await session.action({ type: 'reviewBack', timestamp })) return;
+    } catch { /* Restore the frozen review candidate after a rejected durable action. */ }
+    backPendingRef.current = false;
+    setFinishCandidate(candidate);
+  };
 
   const handleSave = async () => {
     if (saveInFlightRef.current || sessionState?.status === 'saved' || !finishCandidate) return;
@@ -443,9 +470,9 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
   return <div className="workout-view">
     <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{restAnnouncement || recoveryAcknowledgement}</div>
     {finishCandidate ? <WorkoutSummary candidate={finishCandidate} phaseTargets={sessionState?.phaseTargets} isSaving={isSaving} saveError={saveError} saveStatus={saveStatus} blockedConflict={blockedSaveConflict} onBack={handleBack} onSave={handleSave} onKeepPending={() => setRecoveryAcknowledgement('Save conflict remains pending.')} onExit={async () => { await session.exit(); onFinish?.(); }} summaryRef={summaryRef} /> : <>
-      <div className="workout-header"><h1 ref={phaseHeadingRef} tabIndex="-1">{{ generated: 'Generated workout', warmup: 'Warmup', performance: 'Performance', cooldown: 'Cooldown', review: 'Review', cancelled: 'Workout cancelled' }[activeWorkout.phase] ?? 'Workout'}</h1><h2>{started ? 'Active Workout' : 'Ready to sweat?'}</h2>{started && <div className="timer" aria-label={`Total elapsed ${formatTime(calculateElapsedSeconds(activeWorkout.workoutStartedAt, now))}`}>{formatTime(calculateElapsedSeconds(activeWorkout.workoutStartedAt, now))}</div>}</div>
+      <div className="workout-header"><h1 ref={phaseHeadingRef} tabIndex="-1">{{ generated: 'Generated workout', warmup: 'Warmup', performance: 'Performance', cooldown: 'Cooldown', review: 'Review', cancelled: 'Workout cancelled' }[activeWorkout.phase] ?? 'Workout'}</h1><h2>{started ? 'Active Workout' : 'Ready to sweat?'}</h2>{started && <div className="timer" aria-label={`Total elapsed ${formatTime(displayedElapsedSeconds)}`}>{formatTime(displayedElapsedSeconds)}</div>}</div>
       <p id="workout-start-help" className="workout-help">{['warmup', 'cooldown'].includes(activeWorkout.phase) && activeWorkout.phaseLedger ? phaseReadout(activeWorkout.phase === 'warmup' ? 'Warmup' : 'Cooldown', sessionState?.phaseTargets?.[`${activeWorkout.phase}Seconds`] ?? 0, getPhaseElapsedSeconds(activeWorkout, activeWorkout.phase, now), true) : started ? 'Start a ready set. Only one work timer can run at a time.' : 'Start the workout to enable set timers.'}</p>
-      {!started && activeWorkout.phase !== 'cancelled' && <button className="start-btn" onClick={() => { const timestamp = Date.now(); setNow(timestamp); dispatch({ type: 'startWorkout', timestamp }); }}>Start Workout</button>}
+      {!started && activeWorkout.phase !== 'cancelled' && <button className="start-btn" onClick={() => { const timestamp = Date.now(); setDisplayTime(timestamp); dispatch({ type: 'startWorkout', timestamp }); }}>Start Workout</button>}
       <ul className="workout-checklist">{activeWorkout.exercises.map((exercise, exerciseIndex) => {
         const confirmed = exercise.setRecords.filter(record => record.completed).length;
         const timing = exerciseTimingStatus(exercise, exerciseIndex, activeWorkout.activeWorkTimer, now);

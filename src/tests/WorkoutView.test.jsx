@@ -23,11 +23,14 @@ function SessionHarness({ workout, phaseTargets, onFinish, user, api }) {
   const session = {
     async action(action) {
       api.action(action);
+      let accepted = false;
       setActiveWorkout(current => {
         const next = activeWorkoutReducer(current, action);
+        accepted = next !== current;
         setState(previous => ({ ...previous, status: next.phase === 'review' ? 'review' : 'owned', activeWorkout: next, error: null }));
         return next;
       });
+      return accepted;
     },
     async save() {
       setState(previous => ({ ...previous, status: 'save-pending' }));
@@ -711,6 +714,79 @@ test('Review Back uses one timestamp for the visible clock and reducer action', 
   vi.spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValueOnce(0).mockReturnValueOnce(1999).mockReturnValueOnce(2000);
   fireEvent.click(screen.getByRole('button', { name: 'Back to workout' }));
   expect(action).toHaveBeenCalledWith({ type: 'reviewBack', timestamp: 1999 });
+});
+
+test('Review Back keeps the frozen summary hidden while durable publication is pending, then focuses Cooldown', async () => {
+  let review = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
+  for (const action of [{ type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 1002 }, { type: 'finishWorkout', timestamp: 1003 }]) review = activeWorkoutReducer(review, action);
+  let publishBack;
+  const action = vi.fn(() => new Promise(resolve => { publishBack = resolve; }));
+  const renderState = activeWorkout => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action }} sessionState={{ status: activeWorkout.phase === 'review' ? 'review' : 'owned', activeWorkout, phaseTargets: { warmupSeconds: 0, performanceSeconds: 60, cooldownSeconds: 0 }, blocked: false }} /></AuthContext.Provider>;
+  const view = render(renderState(review));
+  await screen.findByRole('region', { name: 'Workout summary' });
+  fireEvent.click(screen.getByRole('button', { name: 'Back to workout' }));
+  expect(screen.queryByRole('region', { name: 'Workout summary' })).toBeNull();
+  await act(async () => {});
+  expect(screen.queryByRole('region', { name: 'Workout summary' })).toBeNull();
+  publishBack(true);
+  await act(async () => {});
+  expect(screen.queryByRole('region', { name: 'Workout summary' })).toBeNull();
+  view.rerender(renderState(activeWorkoutReducer(review, { type: 'reviewBack', timestamp: 1004 })));
+  await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Cooldown' })).toBe(document.activeElement));
+});
+
+test('a rejected Review Back restores the identical frozen candidate and actions', async () => {
+  let review = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
+  for (const action of [{ type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 1002 }, { type: 'finishWorkout', timestamp: 1003 }]) review = activeWorkoutReducer(review, action);
+  const action = vi.fn().mockResolvedValue(false);
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action, save: vi.fn() }} sessionState={{ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 0, performanceSeconds: 60, cooldownSeconds: 0 }, blocked: false }} /></AuthContext.Provider>);
+  const original = await screen.findByRole('region', { name: 'Workout summary' });
+  const originalDuration = original.textContent;
+  fireEvent.click(screen.getByRole('button', { name: 'Back to workout' }));
+  await waitFor(() => expect(screen.getByRole('region', { name: 'Workout summary' }).textContent).toBe(originalDuration));
+  expect(screen.getByRole('button', { name: 'Back to workout' }).disabled).toBe(false);
+  expect(screen.getByRole('button', { name: 'Save workout' }).disabled).toBe(false);
+});
+
+test('the live total sums the phase ledger and never moves backward with a display clock regression', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(15_000));
+  let cooldown = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
+  for (const action of [{ type: 'startWorkout', timestamp: 10_000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 11_000 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 12_000 }]) cooldown = activeWorkoutReducer(cooldown, action);
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'owned', activeWorkout: cooldown, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 60 }, blocked: false }} /></AuthContext.Provider>);
+  expect(screen.getByLabelText('Total elapsed 0:05')).toBeDefined();
+  expect(screen.getByText('Cooldown: 1:00 planned / 0:57 remaining')).toBeDefined();
+  vi.setSystemTime(new Date(18_000));
+  act(() => vi.advanceTimersByTime(1_000));
+  const forwardTotal = screen.getByLabelText(/Total elapsed/).getAttribute('aria-label');
+  const forwardCooldown = screen.getByText(/Cooldown: 1:00 planned/).textContent;
+  vi.setSystemTime(new Date(12_000));
+  act(() => vi.advanceTimersByTime(1_000));
+  expect(screen.getByLabelText(forwardTotal)).toBeDefined();
+  expect(screen.getByText(forwardCooldown)).toBeDefined();
+});
+
+test('live work and rest readouts retain their forward display value after a backward clock tick', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(15_000));
+  let working = initializeActiveWorkout([{ ...timedWorkout[0], setRecords: timedWorkout[0].setRecords.map(record => ({ ...record })) }], { phaseTimingEnabled: true });
+  for (const action of [{ type: 'startWorkout', timestamp: 10_000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 11_000 }]) working = activeWorkoutReducer(working, action);
+  const renderState = activeWorkout => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'owned', activeWorkout, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, blocked: false }} /></AuthContext.Provider>;
+  const view = render(renderState(working));
+  expect(screen.getByText('Work: 0:04')).toBeDefined();
+  vi.setSystemTime(new Date(18_000));
+  act(() => vi.advanceTimersByTime(1_000));
+  const forwardWork = screen.getByText(/^Work:/).textContent;
+  vi.setSystemTime(new Date(12_000));
+  act(() => vi.advanceTimersByTime(1_000));
+  expect(screen.getByText(forwardWork)).toBeDefined();
+
+  const resting = activeWorkoutReducer(working, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 12_000 });
+  view.rerender(renderState(resting));
+  const forwardRest = screen.getByText(/^(Rest:|Rest overtime:)/).textContent;
+  vi.setSystemTime(new Date(11_000));
+  act(() => vi.advanceTimersByTime(1_000));
+  expect(screen.getByText(forwardRest)).toBeDefined();
 });
 
 test('failed save retries the identical frozen v4 payload', async () => {
