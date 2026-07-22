@@ -748,6 +748,19 @@ test('a rejected Review Back restores the identical frozen candidate and actions
   expect(screen.getByRole('button', { name: 'Save workout' }).disabled).toBe(false);
 });
 
+test('a thrown Review Back restores the identical frozen candidate and actions', async () => {
+  let review = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
+  for (const action of [{ type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 1002 }, { type: 'finishWorkout', timestamp: 1003 }]) review = activeWorkoutReducer(review, action);
+  const action = vi.fn().mockRejectedValue(new Error('durable publication failed'));
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action, save: vi.fn() }} sessionState={{ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 0, performanceSeconds: 60, cooldownSeconds: 0 }, blocked: false }} /></AuthContext.Provider>);
+  const original = await screen.findByRole('region', { name: 'Workout summary' });
+  const originalDuration = original.textContent;
+  fireEvent.click(screen.getByRole('button', { name: 'Back to workout' }));
+  await waitFor(() => expect(screen.getByRole('region', { name: 'Workout summary' }).textContent).toBe(originalDuration));
+  expect(screen.getByRole('button', { name: 'Back to workout' }).disabled).toBe(false);
+  expect(screen.getByRole('button', { name: 'Save workout' }).disabled).toBe(false);
+});
+
 test('the live total sums the phase ledger and never moves backward with a display clock regression', () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date(15_000));
