@@ -24,7 +24,7 @@ local Firebase emulator and synthetic catalog/workout data.
 | Field | Record |
 | --- | --- |
 | Run ID | `CAP-224-2026-07-22-IAB-04` (final blocker-resolution run; same-tree IAB-03 observations retained where identified below) |
-| Build / commit | Branch `codex/workout-phase-timing`; HEAD `77b135856e4fa83dbcdda061bc782eeb72f7d246`; tested A8 product/test working-tree fingerprint `079166b464f1ef6fe358d35fc0b860e43a8e4dd3d1f4409471d2132320f911dc` (report excluded). The final rendered delta includes the CMT-331 CSS correction and CMT-334 through CMT-337 navigation/focus/timestamp changes. The eventual task commit is recorded in Trekker Summary. |
+| Build / commit | Rendered on branch `codex/workout-phase-timing` with parent HEAD `77b135856e4fa83dbcdda061bc782eeb72f7d246` plus tested A8 product/test working-tree fingerprint `079166b464f1ef6fe358d35fc0b860e43a8e4dd3d1f4409471d2132320f911dc` (report excluded). Those exact product/test bytes, including the CMT-331 CSS correction and CMT-334 through CMT-337 navigation/focus/timestamp changes, were then committed unchanged as TREK-224 commit `4b8647cf760f7d0450a3c049473c384ca5973cd7`. |
 | Fixture / data revision | Canonical emulator seed plus a synthetic generated workout and synthetic v4 History record. No production credentials or personal data. |
 | Harness | Codex in-app browser; Vite 8.1.2 baseline routes at `127.0.0.1:5174` and `127.0.0.1:5176`; Firebase Auth/Firestore emulators. IAB-04 used the actual 1280x720 CSS-pixel viewport at device-pixel ratio 1.5. |
 | Verification | Final post-CMT-337 `npm run ci:check`: 646 tests passed, 18 skipped; strict lint, production/PWA build and budgets, 14 Firestore-rules tests, workflow and agent-model checks passed. Final `npm run test:emulator-baseline`: canonical seed, baseline, immutable save, rules, scratch export/mutation, and corrupt-scratch refusal passed. |
@@ -82,8 +82,9 @@ workout after its loading transition.
 
 ## Final rendered navigation and focus delta
 
-The following bounded evidence used the exact HEAD and product/test fingerprint
-recorded above. IAB-04 closes every state/transition gap named by the prior blocker;
+The following bounded evidence used the rendered parent HEAD plus exact product/test
+fingerprint recorded above; the same product/test bytes are final commit `4b8647c`.
+IAB-04 closes every state/transition gap named by the prior blocker;
 same-tree IAB-03 retains the stable-rerender and finish-prompt observations. Component
 tests remain corroborating evidence rather than the primary observation. IAB-04's
 capability probes and 1280x720 viewport are recorded in the run metadata above.
