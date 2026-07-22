@@ -2,6 +2,10 @@ import { normalizeCatalogExercise, normalizeWorkoutSettings } from './workoutSch
 
 const loadFirestore = () => import('./firestoreClient').then(({ loadFirestoreClient }) => loadFirestoreClient());
 
+function historyDocumentToEntry(historyDoc) {
+  return { ...historyDoc.data(), id: historyDoc.id };
+}
+
 const DEFAULT_CATALOG = [
     { id: '1', name: 'Barbell Curl', muscleGroup: 'Biceps', tier: 1, sets: 3 },
     { id: '2', name: 'Overhead Press', muscleGroup: 'Shoulders', tier: 1, sets: 3 },
@@ -69,7 +73,7 @@ export async function getGenerationHistory(userId) {
   const colRef = collection(db, 'users', userId, 'history');
   const historyQuery = query(colRef, orderBy('date', 'desc'), limit(100));
   const snapshot = await getDocs(historyQuery);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  return snapshot.docs.map(historyDocumentToEntry);
 }
 
 export async function getHistoryPage(userId, { cursor = null, pageSize = 20 } = {}) {
@@ -88,7 +92,7 @@ export async function getHistoryPage(userId, { cursor = null, pageSize = 20 } = 
   const docs = snapshot.docs;
   const displayedDocs = docs.slice(0, pageSize);
   return {
-    items: displayedDocs.map(historyDoc => ({ id: historyDoc.id, ...historyDoc.data() })),
+    items: displayedDocs.map(historyDocumentToEntry),
     nextCursor: displayedDocs.at(-1) ?? null,
     hasMore: docs.length > pageSize,
   };

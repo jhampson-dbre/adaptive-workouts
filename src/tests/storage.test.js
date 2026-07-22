@@ -58,6 +58,18 @@ describe('Storage Layer (Async)', () => {
         expect(firestore.getDocs).toHaveBeenCalledWith(orderedQuery);
     });
 
+    it('keeps Firestore document IDs authoritative over payload IDs in both history readers', async () => {
+        firestore.collection.mockReturnValue({ path: 'history' });
+        firestore.orderBy.mockReturnValue({ ordered: true });
+        firestore.documentId.mockReturnValue('DOCUMENT_ID');
+        firestore.limit.mockReturnValue({ count: 101 });
+        firestore.query.mockReturnValue({ ordered: true });
+        firestore.getDocs.mockResolvedValue({ docs: [{ id: 'path-id', data: () => ({ id: 'payload-id', date: '2026-07-20' }) }] });
+
+        await expect(getGenerationHistory('test-user')).resolves.toEqual([{ id: 'path-id', date: '2026-07-20' }]);
+        await expect(getHistoryPage('test-user')).resolves.toMatchObject({ items: [{ id: 'path-id', date: '2026-07-20' }] });
+    });
+
     it('pages newest-first by date then document ID without exposing the lookahead row', async () => {
         const historyCollection = { path: 'users/test-user/history' };
         const orderedQuery = { ordered: true };
