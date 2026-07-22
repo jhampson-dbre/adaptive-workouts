@@ -1,13 +1,13 @@
-import { createRecoveryDraft, readRecoveryDraft, recoveryLockName, recoveryStorageKey, validateRecoveryDraft, hydrateRecoveryDraft, isValidRecoveryIdentity } from './activeWorkoutRecovery';
+import { createRecoveryDraft, migrateRecoveryDraftV1ToV2, readRecoveryDraftAsync, recoveryLockName, recoveryStorageKey, validateRecoveryDraft, verifyRecoveryDraftV2, hydrateRecoveryDraft, isValidRecoveryIdentity } from './activeWorkoutRecovery';
 
 const DEFAULT_TIMEOUT_MS = 8_000;
 const validExpected = expected => expected && typeof expected.draftId === 'string' && expected.draftId.length > 0 && Number.isSafeInteger(expected.ownershipGeneration) && expected.ownershipGeneration >= 1;
 const matches = (draft, expected) => validExpected(expected) && draft.draftId === expected.draftId && draft.ownershipGeneration === expected.ownershipGeneration;
 
-export function createActiveWorkoutCoordinator({ storage, locks, handoffTransport, onLeaseLost, now = () => Date.now(), createUuid = () => crypto.randomUUID(), setTimeoutFn = setTimeout, clearTimeoutFn = clearTimeout, staleAfterMs = 86_400_000, acquisitionTimeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+export function createActiveWorkoutCoordinator({ storage, locks, handoffTransport, onLeaseLost, now = () => Date.now(), createUuid = () => crypto.randomUUID(), setTimeoutFn = setTimeout, clearTimeoutFn = clearTimeout, staleAfterMs = 86_400_000, acquisitionTimeoutMs = DEFAULT_TIMEOUT_MS, subtle } = {}) {
   const leases = new Map();
   const lost = new Set();
-  const read = identity => readRecoveryDraft({ storage, ...identity, nowEpochMs: now(), staleAfterMs });
+  const read = identity => readRecoveryDraftAsync({ storage, ...identity, nowEpochMs: now(), staleAfterMs, subtle });
   const key = identity => recoveryStorageKey(identity);
   const leaseKey = identity => recoveryLockName(identity);
   function write(identity, draft) {
@@ -61,8 +61,8 @@ export function createActiveWorkoutCoordinator({ storage, locks, handoffTranspor
     },
     start({ projectId, uid, phaseTargets, activeWorkout, signal }) {
       const identity = { projectId, uid };
-      return withLease(identity, () => {
-        const current = read(identity); if (current.status === 'storage-error') return current;
+      return withLease(identity, async () => {
+        const current = await read(identity); if (current.status === 'storage-error') return current;
         if (current.status !== 'missing') return { status: current.status === 'resumable' ? 'conflict' : current.status };
         const draft = createRecoveryDraft({ ...identity, draftId: createUuid(), ownershipGeneration: 1, lastMutationAtEpochMs: now(), phaseTargets, activeWorkout });
         const saved = write(identity, draft); if (saved.status === 'saved') leases.get(leaseKey(identity)).snapshot = draft; return saved.status === 'saved' ? { status: 'acquired', snapshot: draft } : saved;
@@ -72,17 +72,87 @@ export function createActiveWorkoutCoordinator({ storage, locks, handoffTranspor
       if (!validExpected(expected)) return Promise.resolve({ status: 'invalid-expected' });
       const identity = { projectId, uid };
       if (isValidRecoveryIdentity(identity) && leases.get(leaseKey(identity))?.active) return Promise.resolve({ status: 'conflict' });
-      return withLease(identity, () => { const current = read(identity); if (current.status !== 'resumable') return current; if (!matches(current.draft, expected)) return { status: 'stale-generation' }; if (current.draft.ownershipGeneration >= Number.MAX_SAFE_INTEGER) return { status: 'invalid-draft' }; const draft = { ...current.draft, ownershipGeneration: current.draft.ownershipGeneration + 1, lastMutationAtEpochMs: Math.max(current.draft.lastMutationAtEpochMs, now()) }; const saved = write(identity, draft); if (saved.status === 'saved') leases.get(leaseKey(identity)).snapshot = draft; return saved.status === 'saved' ? { status: 'acquired', snapshot: draft, hydrated: hydrateRecoveryDraft(draft) } : saved; }, { signal, acquisitionBudgetMs });
+      return withLease(identity, async () => { const current = await read(identity); if (current.status !== 'resumable') return current; if (!matches(current.draft, expected)) return { status: 'stale-generation' }; if (current.draft.ownershipGeneration >= Number.MAX_SAFE_INTEGER) return { status: 'invalid-draft' }; const timestamp = now(); const resumable = current.draft.version === 1 ? migrateRecoveryDraftV1ToV2(current.draft, timestamp) : current.draft; const draft = { ...resumable, ownershipGeneration: resumable.ownershipGeneration + 1, lastMutationAtEpochMs: Math.max(resumable.lastMutationAtEpochMs, timestamp) }; const saved = write(identity, draft); if (saved.status === 'saved') leases.get(leaseKey(identity)).snapshot = draft; return saved.status === 'saved' ? { status: 'acquired', snapshot: draft, hydrated: hydrateRecoveryDraft(draft) } : saved; }, { signal, acquisitionBudgetMs });
+    },
+    migrateToV2({ projectId, uid, expected, signal }) {
+      if (!validExpected(expected)) return Promise.resolve({ status: 'invalid-expected' });
+      const identity = { projectId, uid };
+      return withLease(identity, async () => {
+        const current = await read(identity);
+        if (current.status !== 'resumable') return current;
+        if (!matches(current.draft, expected)) return { status: 'stale-generation' };
+        const draft = migrateRecoveryDraftV1ToV2(current.draft, now());
+        const saved = write(identity, draft);
+        if (saved.status === 'saved' && leases.get(leaseKey(identity))) leases.get(leaseKey(identity)).snapshot = draft;
+        return saved;
+      }, { signal });
     },
     mutate({ projectId, uid, expected, transform, signal }) {
       if (!validExpected(expected)) return Promise.resolve({ status: 'invalid-expected' });
       const identity = { projectId, uid };
-      return withLease(identity, () => { const current = read(identity); if (current.status !== 'resumable') return current; if (!matches(current.draft, expected)) return { status: 'stale-generation' }; let changed; try { changed = transform(structuredClone(current.draft)); } catch (error) { return { status: 'invalid-draft', error }; } try { if (changed.projectId !== projectId || changed.uid !== uid || changed.draftId !== current.draft.draftId || changed.ownershipGeneration !== current.draft.ownershipGeneration) return { status: 'invalid-draft' }; } catch (error) { return { status: 'invalid-draft', error }; } const draft = { ...changed, projectId, uid, draftId: current.draft.draftId, ownershipGeneration: current.draft.ownershipGeneration, lastMutationAtEpochMs: Math.max(current.draft.lastMutationAtEpochMs, now()) }; const saved = write(identity, draft); if (saved.status === 'saved' && leases.get(leaseKey(identity))) leases.get(leaseKey(identity)).snapshot = draft; return saved; }, { signal });
+      return withLease(identity, async () => {
+        const current = await read(identity);
+        if (current.status !== 'resumable') return current;
+        if (!matches(current.draft, expected)) return { status: 'stale-generation' };
+
+        let changed;
+        try {
+          changed = transform(structuredClone(current.draft));
+        } catch (error) {
+          return { status: 'invalid-draft', error };
+        }
+        try {
+          if (changed.projectId !== projectId || changed.uid !== uid
+            || changed.draftId !== current.draft.draftId
+            || changed.ownershipGeneration !== current.draft.ownershipGeneration) return { status: 'invalid-draft' };
+        } catch (error) {
+          return { status: 'invalid-draft', error };
+        }
+
+        const draft = {
+          ...changed,
+          projectId,
+          uid,
+          draftId: current.draft.draftId,
+          ownershipGeneration: current.draft.ownershipGeneration,
+          lastMutationAtEpochMs: Math.max(current.draft.lastMutationAtEpochMs, now()),
+        };
+
+        if (current.draft.pendingSave !== null) {
+          const before = current.draft.pendingSave;
+          const after = draft.pendingSave;
+          const { canonicalizeWorkoutV4 } = await import('./workoutFingerprint');
+          let immutableMatch = after
+            && before.workoutId === after.workoutId
+            && before.fingerprint.canonicalization === after.fingerprint?.canonicalization
+            && before.fingerprint.algorithm === after.fingerprint?.algorithm
+            && before.fingerprint.hex === after.fingerprint?.hex;
+          try {
+            immutableMatch = immutableMatch
+              && canonicalizeWorkoutV4(before.candidate) === canonicalizeWorkoutV4(after.candidate);
+          } catch {
+            immutableMatch = false;
+          }
+          if (!immutableMatch) return { status: 'invalid-draft' };
+        }
+
+        if (draft.version === 2) {
+          const verification = await verifyRecoveryDraftV2(draft, { subtle });
+          if (verification.status === 'fingerprint-error') return verification;
+          if (verification.status !== 'verified') return { status: 'invalid-draft' };
+        }
+
+        const saved = write(identity, draft);
+        if (saved.status === 'saved' && leases.get(leaseKey(identity))) {
+          leases.get(leaseKey(identity)).snapshot = draft;
+        }
+        return saved;
+      }, { signal });
     },
     discard({ projectId, uid, expected, signal }) {
       if (!validExpected(expected)) return Promise.resolve({ status: 'invalid-expected' });
       const identity = { projectId, uid };
-      return withLease(identity, () => { const current = read(identity); if (current.status === 'missing') return current; if (!current.draft || !matches(current.draft, expected)) return current.draft ? { status: 'stale-generation' } : current; try { storage.removeItem(key(identity)); release(identity); return { status: 'removed' }; } catch (error) { return { status: 'storage-error', operation: 'remove', error }; } }, { signal });
+      return withLease(identity, async () => { const current = await read(identity); if (current.status === 'missing') return current; if (!current.draft || !matches(current.draft, expected)) return current.draft ? { status: 'stale-generation' } : current; try { storage.removeItem(key(identity)); release(identity); return { status: 'removed' }; } catch (error) { return { status: 'storage-error', operation: 'remove', error }; } }, { signal });
     },
     release: ({ projectId, uid }) => isValidRecoveryIdentity({ projectId, uid }) ? release({ projectId, uid }) : { status: 'invalid-identity' },
     resetLost({ projectId, uid }) { if (!isValidRecoveryIdentity({ projectId, uid })) return { status: 'invalid-identity' }; lost.delete(leaseKey({ projectId, uid })); return { status: 'released' }; },

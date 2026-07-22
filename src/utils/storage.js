@@ -104,6 +104,21 @@ export async function saveWorkout(userId, workout) {
   await addDoc(colRef, workout);
 }
 
+/**
+ * A6's intentionally separate immutable-write path. The production writer continues
+ * to use saveWorkout until A8 wires the feature behind the complete UI journey.
+ */
+export async function saveImmutableWorkout(userId, workoutId, candidate) {
+  const { db, doc, setDoc } = await loadFirestore();
+  const historyRef = doc(db, 'users', userId, 'history', workoutId);
+  await setDoc(historyRef, candidate);
+}
+
+export async function readImmutableWorkoutFromServer(userId, workoutId) {
+  const { db, doc, getDocFromServer } = await loadFirestore();
+  return getDocFromServer(doc(db, 'users', userId, 'history', workoutId));
+}
+
 export async function getCatalog(userId) {
   const { db, collection, getDocs } = await loadFirestore();
   const colRef = collection(db, 'users', userId, 'catalog');

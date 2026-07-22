@@ -376,7 +376,72 @@ validated again after read; the key is never parsed to infer identity.
 | `lastMutationAtEpochMs` | safe integer epoch milliseconds | Required. Every successful ownership/content write stores `max(previous, injectedNow)`. Backward wall-clock movement never lowers it. |
 | `phaseTargets` | exact object | Required immutable generated targets defined below. |
 | `activeWorkout` | exact object | Required active projection defined below. |
-| `pendingSave` | literal `null` | Required in recovery v1. A5 rejects every non-null value. A6 introduces recovery envelope v2 for the complete save-operation identity/fingerprint/candidate shape. The `:v1:` key segment is the fixed recovery-family namespace, not the envelope schema version: v2 uses this same physical slot and lock, and v1 and v2 never coexist. Under the lock, migration constructs and validates a new exact v2 DTO and writes it once; it never spreads or adds fields onto the v1 object. The complete v2 `pendingSave` shape must be added here and architecture-reviewed before A6 implementation. V1 readers treat v2 as unsupported and never overwrite it. |
+| `pendingSave` | literal `null` | Required in recovery v1. A5 rejects every non-null value. A6 introduces the exact recovery-v2 save-operation contract below. The `:v1:` key segment is the fixed recovery-family namespace, not the envelope schema version: v2 uses this same physical slot and lock, and v1 and v2 never coexist. V1 readers treat v2 as unsupported and never overwrite it. |
+
+#### Recovery version 2 and pending save
+
+Recovery v2 has the same exact top-level keys as v1 with `version: 2`. Its
+`pendingSave` is either null or an exact object with these fields:
+
+| Path | Type and semantics |
+| --- | --- |
+| `state` | One of `prepared`, `write-pending`, `retryable-absent`, `reconcile-indeterminate`, or `blocked-conflict`. |
+| `workoutId` | Immutable lowercase RFC 4122 UUIDv4. It is the save identity, Firestore document ID, and `candidate.id`. |
+| `fingerprint` | Exact `{ canonicalization: 'workout-v4-json-v1', algorithm: 'SHA-256', hex }`; `hex` is 64 lowercase hexadecimal characters. |
+| `candidate` | Deep-frozen exact canonical v4 write DTO. It is also the unmodified `setDoc` payload. |
+| `attemptCount` | Safe integer `>= 0`, incremented and durably persisted immediately before each `setDoc`. |
+| `lastAttemptAtEpochMs` | Null exactly before the first attempt; otherwise a safe integer updated with `max(previous, injectedNow)`. |
+| `lastReconciliationAtEpochMs` | Null until a server reconciliation completes; otherwise a safe integer updated monotonically. |
+
+A non-null pending save is valid only in Review. Its candidate exactly equals a fresh
+canonical v4 build from the frozen Review projection, immutable phase targets, and
+`workoutId`; `candidate.id` equals `workoutId`. Candidate, workout ID, and fingerprint
+never change. Only state, attempt count, and timestamps mutate.
+
+Before hydration or mutation, recovery recomputes canonical JSON and SHA-256 and
+compares both with the candidate and stored fingerprint. Structural, candidate, or
+hash mismatch is `malformed`. Unavailable or rejected digest capability is the
+distinct retained disposition `fingerprint-error`; it never partially hydrates.
+Recovery-v2 verification is therefore asynchronous and completes before returning a
+hydrated draft.
+
+State invariants are exact:
+
+- `prepared` has attempt count zero and both timestamps null.
+- Every other state has attempt count at least one and a non-null last-attempt time.
+- `retryable-absent`, `reconcile-indeterminate`, and `blocked-conflict` have a
+  non-null last-reconciliation time.
+- `write-pending` may have a null reconciliation time before its first ambiguous
+  write is reconciled.
+
+Allowed transitions are:
+
+```text
+null -> prepared
+prepared | retryable-absent -> write-pending
+write-pending + resolved setDoc -> clear recovery slot
+write-pending + rejected/ambiguous setDoc -> authoritative reconciliation
+write-pending | reconcile-indeterminate + matching -> clear recovery slot
+write-pending | reconcile-indeterminate + absent -> retryable-absent
+write-pending | reconcile-indeterminate + read failure -> reconcile-indeterminate
+write-pending | reconcile-indeterminate + divergent/invalid -> blocked-conflict
+```
+
+Reload reconciles `write-pending` and `reconcile-indeterminate` before any new write.
+`prepared` and `retryable-absent` may perform the next exact write.
+`blocked-conflict` cannot write again. Every asynchronous completion revalidates
+`{ draftId, ownershipGeneration, workoutId, fingerprint.hex, attemptCount }`; a late
+result from a retired auth identity, ownership generation, save identity, fingerprint,
+or attempt cannot mutate local state.
+
+An A6 reader accepts strict v1 and v2. Under the existing identity lock, v1 migration
+re-reads and validates v1, revalidates `{draftId, ownershipGeneration}`, constructs a
+new exact v2 DTO with `pendingSave: null`, and writes it once. Migration alone does
+not increment ownership generation, but the content write updates
+`lastMutationAtEpochMs` to `max(previous, injectedNow)`. Resume may combine its one
+transfer increment and migration in the same atomic write. There is no downgrade,
+object spreading, or coexistence of versions. Future versions remain unsupported and
+retained.
 
 Staleness is evaluated with required injected safe-integer `nowEpochMs` and positive
 safe-integer `staleAfterMs`. A draft is stale only when
@@ -519,13 +584,19 @@ Read classification is deterministic and stops at the first matching outcome:
 1. storage access exception -> `storage-error`;
 2. absent key -> `missing`;
 3. unparsable JSON, non-object, or missing version -> `malformed`;
-4. version other than 1 -> `unsupported-version` (retain; never rewrite/remove);
+4. unsupported version -> `unsupported-version` (retain; never rewrite/remove); A5
+   supports only v1, while A6 supports strict v1 and v2;
 5. missing, empty, or non-string embedded project/UID -> `malformed`;
 6. embedded project mismatch -> `wrong-project`;
 7. embedded UID mismatch -> `wrong-user`;
 8. remaining exact-shape, referential, or phase-invariant failure -> `malformed`;
-9. age beyond the injected policy -> `stale`;
-10. otherwise -> `resumable` with a deep-frozen hydrated projection.
+9. for non-null v2 `pendingSave`, structural/candidate/hash mismatch -> `malformed`,
+   while unavailable or rejected digest capability -> `fingerprint-error`;
+10. age beyond the injected policy -> `stale`;
+11. otherwise -> `resumable` with a deep-frozen hydrated projection.
+
+Async digest verification applies only to v2 with a non-null pending save. V1 and v2
+with `pendingSave: null` have no stored candidate fingerprint to verify.
 
 The storage adapter returns distinct `saved`, `removed`, and `storage-error`
 outcomes. Under a held lock, a mutation re-reads and validates the stored
@@ -550,6 +621,8 @@ tracks the corresponding planning-workflow improvement for future features.
   hydrate. Show the approved explanation and safe disposition where applicable.
 - **Storage unavailable, quota denied, serialization failure, or write failure:**
   surface a distinct local-recovery failure. Do not present the draft as protected.
+- **Fingerprint capability failure:** retain the v2 draft as `fingerprint-error`; do
+  not hydrate, mutate, rewrite, or remove it through the recovery path.
 - **No draft:** start normally with no warning.
 
 ## Exclusive Web Lock coordination
@@ -646,6 +719,56 @@ and unknown properties are rejected before hashing rather than normalized silent
 Test vectors pin the canonical bytes and digest. The same DTO feeds the exact
 `setDoc` payload so hash and write cannot diverge.
 
+The candidate includes `id`; the fingerprint therefore covers the exact immutable
+payload and its Firestore identity. A builder creates new plain objects field by
+field and uses this key order:
+
+- document: `id`, `schemaVersion`, `status`, `date`, `actualDurationSeconds`,
+  `phaseDurations`, `exercises`;
+- phase map: `warmup`, `performance`, `cooldown`, with each phase ordered
+  `plannedSeconds`, `actualSeconds`;
+- simple occurrence: `id`, `occurrenceId`, `name`, `muscleGroup`, `tier`, optional
+  `linkedTo`, optional `isActive`, `trackingMode`, `sets`, `prescribedSetCount`,
+  `setRecords`;
+- weighted occurrence: the same prefix through `prescribedSetCount`, then
+  `startingWeight`, `targetReps`, `floorReps`, `weightStep`, `setRecords`;
+- bodyweight occurrence: the same prefix through `prescribedSetCount`, then
+  `targetReps`, `setRecords`;
+- simple set: `index`, `completed`, `plannedRestSeconds`, `workDurationSeconds`,
+  `actualRestSeconds`;
+- weighted set: the simple-set prefix, then `targetWeight`, `targetReps`,
+  `actualWeight`, `actualReps`, `recommendationReason`;
+- bodyweight set: the simple-set prefix, then `targetReps`, `fullReps`,
+  `assistedReps`, `eccentricReps`;
+- recommendation: the exact top-set, awaiting-backoff, or computed-backoff order
+  defined by the recovery contract.
+
+The general v4 read classifier may continue accepting a raw Firestore document that
+lacks payload `id`, because the loaded Firestore path ID is authoritative for history
+reads. Every A6 canonical write candidate separately requires `id` and requires it to
+equal the lowercase UUIDv4 document path. During A6 reconciliation, an existing
+server document with a missing or different payload ID is divergent, never matching.
+
+The canonical algorithm is exact:
+
+1. derive `date` once as `new Date(finishRequestedAtEpochMs).toISOString()`;
+2. build the new ordered DTO without spreading reducer, recovery, or stored data;
+3. strictly validate v4, rejecting blanks, undefined, unknown fields, non-finite
+   numbers, and alternate date encodings;
+4. serialize with whitespace-free `JSON.stringify`;
+5. encode that exact string with `TextEncoder` UTF-8;
+6. hash those bytes with Web Crypto SHA-256;
+7. encode the digest as two-digit lowercase hexadecimal;
+8. pass that same DTO, without augmentation or merge, to `setDoc`.
+
+Reconciliation rebuilds and compares canonical bytes, not the digest alone. A hash
+collision or structurally different document is never a match. Literal checked-in
+vectors pin complete canonical JSON and digest values for: a minimal ASCII/simple
+workout; a weighted workout with optional fields, both recommendation shapes,
+Unicode, quotes, and backslashes; and a bodyweight workout. A fourth assertion pins
+that changing only `id` changes both canonical bytes and digest. Expected digests are
+not generated dynamically by the implementation under test.
+
 ### Write protocol
 
 - Use `setDoc(historyRef, exactPayload)` with no merge.
@@ -661,6 +784,24 @@ Test vectors pin the canonical bytes and digest. The same DTO feeds the exact
 - Matching completes locally; absent remains safely retryable; indeterminate remains
   pending; divergent conflict blocks and preserves evidence/recovery state.
 - Local cached state alone cannot declare a reconciliation match.
+
+The exact client sequence is:
+
+1. under the held recovery lease, prepare and persist the pending save;
+2. persist `write-pending` with the incremented attempt before network I/O;
+3. call `setDoc(doc(db, 'users', uid, 'history', workoutId), candidate)` with no
+   merge option, transaction, pre-read, transform, server timestamp, or augmentation;
+4. treat a resolved write as final for both create and exact replay;
+5. after any rejected or ambiguous write, call `getDocFromServer` only: absent is
+   `absent`; a strict v4 document with identical canonical bytes is `matching`; an
+   existing malformed or different document is `conflict`; read rejection,
+   unavailability, or auth failure is `indeterminate`.
+
+There is no preliminary read because it adds a TOCTOU race. Firestore Rules arbitrate
+direct create/replay. Concurrent exact writers may both complete as immutable replay;
+a divergent writer is denied and reconciles to conflict. Local cleanup failure after
+server success leaves the pending record intact so a later authoritative matching
+reconciliation can retry cleanup. Errors and stacks remain ephemeral.
 
 ## Firestore security contract
 
@@ -681,6 +822,40 @@ Rules are defense in depth, not the schema classifier. Exact immutable replay an
 client reconciliation receive emulator coverage with real storage calls. The owned
 emulator runner executes both baseline integration and rules suites in one controlled
 lifecycle and preserves migration/root/catalog tests.
+
+The rule tree uses mutually exclusive matches. The root user document retains the
+existing strict-approved owner behavior. `users/{uid}/history/{workoutId}` receives
+the immutable behavior below. A separate non-history subtree match retains existing
+owner behavior only when its first subcollection segment is not `history`; an
+unconditional recursive owner wildcard must not also authorize history.
+
+History create permits a strict-approved owner to write either:
+
+- a canonical v4 envelope with exact top-level keys `id`, `schemaVersion`, `status`,
+  `date`, `actualDurationSeconds`, `phaseDurations`, and `exercises`; lowercase UUIDv4 path;
+  `data.id == workoutId`; schema version 4; completed status; string date;
+  nonnegative integer total; exact Warmup/Performance/Cooldown maps whose planned and
+  actual values are nonnegative integers and whose actual sum equals the total; and a
+  nonempty exercises list; or
+- an owner-only compatibility document with no payload `id` and schema version
+  absent, 2, or 3, preserving legacy migration and the pre-A8 writer.
+
+Rules allow owner read, allow update only when `request.resource.data == resource.data`,
+and deny delete. Full arbitrary nested exercise/set validation remains the strict
+client classifier because Firestore Rules cannot iterate those dynamic arrays.
+Unauthenticated, unapproved, and cross-user access remains denied. Removing or
+restricting the compatibility branch is a migration/product change outside A6.
+
+The owned emulator baseline keeps one canonical Auth/Firestore stack alive while it
+seeds/verifies the baseline, runs baseline integration, runs immutable-save
+integration, and runs Firestore Rules tests sequentially. The owner stops the stack
+in `finally` after child failure or timeout. The existing scratch lifecycle then runs
+independently. Coverage includes canonical vectors, UUID stability, v1 migration and
+every v2 state, candidate/digest tampering and digest failure, exact `setDoc`, real
+matching/absent/conflict reconciliation, bounded injected indeterminate coverage,
+late-result suppression, immutable owner create/read/replay, invalid v4/path/phase
+denial, divergent update/delete denial, auth isolation, legacy/v2/v3 migration
+create/replay, and root/catalog/scratch regressions.
 
 ## Presentation and accessibility
 

@@ -1,6 +1,8 @@
 const PHASES = ['warmup', 'performance', 'cooldown'];
+import { isValidV4WorkoutDocument } from './workoutSchema';
 const ACTIVE_PHASES = [...PHASES, 'review'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_V4_LOWERCASE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 const exact = (value, keys) => value && typeof value === 'object' && !Array.isArray(value)
   && Reflect.ownKeys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
@@ -9,6 +11,7 @@ const integer = value => Number.isSafeInteger(value);
 const nonnegative = value => integer(value) && value >= 0;
 const clone = value => structuredClone(value);
 const finiteNonnegative = value => Number.isFinite(value) && value >= 0;
+const PENDING_STATES = new Set(['prepared', 'write-pending', 'retryable-absent', 'reconcile-indeterminate', 'blocked-conflict']);
 export const isValidRecoveryIdentity = ({ projectId, uid } = {}) => nonempty(projectId) && nonempty(uid);
 function freeze(value) { Object.freeze(value); Object.values(value).forEach(item => { if (item && typeof item === 'object' && !Object.isFrozen(item)) freeze(item); }); return value; }
 
@@ -117,6 +120,15 @@ function validExercise(exercise, nextTimerId) {
   const rests = exercise.setRecords.map((record, index) => ({ record, index })).filter(item => item.record.activeRest);
   return rests.length <= 1 && (!rests.length || rests[0].index === exercise.setRecords.filter(record => record.completed).length - 1);
 }
+function validCooldownUndoTarget(workout) {
+  const target = workout.cooldownUndoTarget;
+  if (target === null) return true;
+  if (!exact(target, ['exerciseIndex', 'setIndex']) || !nonnegative(target.exerciseIndex) || !nonnegative(target.setIndex)
+    || !workout.exercises.every(exercise => exercise.setRecords.every(record => record.completed))) return false;
+  const exercise = workout.exercises[target.exerciseIndex];
+  const record = exercise?.setRecords?.[target.setIndex];
+  return record?.completed === true && target.setIndex === exercise.setRecords.length - 1;
+}
 function validWorkout(workout) {
   if (!exact(workout, ['phase', 'workoutStartedAtEpochMs', 'activeWorkTimer', 'nextTimerId', 'phaseLedger', 'phaseCandidate', 'cooldownUndoTarget', 'exercises']) || !ACTIVE_PHASES.includes(workout.phase) || !integer(workout.workoutStartedAtEpochMs) || !integer(workout.nextTimerId) || workout.nextTimerId < 1 || !validLedger(workout.phaseLedger, workout.phase) || !Array.isArray(workout.exercises) || !workout.exercises.length || new Set(workout.exercises.map(x => x.occurrenceId)).size !== workout.exercises.length || !workout.exercises.every(exercise => validExercise(exercise, workout.nextTimerId))) return false;
   if (workout.activeWorkTimer !== null && (!exact(workout.activeWorkTimer, ['id', 'occurrenceId', 'exerciseIndex', 'setIndex', 'startedAtEpochMs']) || !/^work-[1-9]\d*$/.test(workout.activeWorkTimer.id) || Number(workout.activeWorkTimer.id.slice(5)) >= workout.nextTimerId || !integer(workout.activeWorkTimer.startedAtEpochMs) || !nonnegative(workout.activeWorkTimer.exerciseIndex) || !nonnegative(workout.activeWorkTimer.setIndex))) return false;
@@ -133,16 +145,12 @@ function validWorkout(workout) {
   const hasRest = records.some(record => record.activeRest !== null);
   const completed = records.filter(record => record.completed);
   if (workout.phase === 'warmup') return workout.activeWorkTimer === null && !completed.length && !hasRest && workout.phaseCandidate === null && workout.cooldownUndoTarget === null;
-  if (workout.phase === 'performance') return workout.phaseCandidate === null;
+  if (workout.phase === 'performance') return workout.phaseCandidate === null && workout.cooldownUndoTarget === null;
   if (workout.phase === 'cooldown') {
     if (workout.activeWorkTimer !== null || hasRest || workout.phaseCandidate !== null) return false;
-    if (workout.cooldownUndoTarget === null) return true;
-    if (!exact(workout.cooldownUndoTarget, ['exerciseIndex', 'setIndex']) || !nonnegative(workout.cooldownUndoTarget.exerciseIndex) || !nonnegative(workout.cooldownUndoTarget.setIndex) || !workout.exercises.every(exercise => exercise.setRecords.every(record => record.completed))) return false;
-    const exercise = workout.exercises[workout.cooldownUndoTarget.exerciseIndex];
-    const target = exercise?.setRecords?.[workout.cooldownUndoTarget.setIndex];
-    return target?.completed === true && workout.cooldownUndoTarget.setIndex === exercise.setRecords.length - 1;
+    return validCooldownUndoTarget(workout);
   }
-  if (workout.activeWorkTimer !== null || hasRest || workout.cooldownUndoTarget !== null || !exact(workout.phaseCandidate, ['phaseActualSeconds', 'actualDurationSeconds', 'finishRequestedAtEpochMs'])) return false;
+  if (workout.activeWorkTimer !== null || hasRest || !validCooldownUndoTarget(workout) || !exact(workout.phaseCandidate, ['phaseActualSeconds', 'actualDurationSeconds', 'finishRequestedAtEpochMs'])) return false;
   const candidate = workout.phaseCandidate;
   return exact(candidate.phaseActualSeconds, PHASES) && PHASES.every(phase => nonnegative(candidate.phaseActualSeconds[phase]) && candidate.phaseActualSeconds[phase] === workout.phaseLedger.closedSeconds[phase])
     && candidate.actualDurationSeconds === PHASES.reduce((sum, phase) => sum + candidate.phaseActualSeconds[phase], 0)
@@ -150,7 +158,24 @@ function validWorkout(workout) {
 }
 function validateRecoveryDraftUnsafe(draft) {
   if (!exact(draft, ['version', 'projectId', 'uid', 'draftId', 'ownershipGeneration', 'lastMutationAtEpochMs', 'phaseTargets', 'activeWorkout', 'pendingSave'])) return false;
-  return draft.version === 1 && nonempty(draft.projectId) && nonempty(draft.uid) && UUID.test(draft.draftId) && integer(draft.ownershipGeneration) && draft.ownershipGeneration >= 1 && integer(draft.lastMutationAtEpochMs) && exact(draft.phaseTargets, ['warmupSeconds', 'performanceSeconds', 'cooldownSeconds']) && integer(draft.phaseTargets.warmupSeconds) && draft.phaseTargets.warmupSeconds >= 0 && draft.phaseTargets.warmupSeconds <= 3600 && draft.phaseTargets.warmupSeconds % 60 === 0 && nonnegative(draft.phaseTargets.performanceSeconds) && integer(draft.phaseTargets.cooldownSeconds) && draft.phaseTargets.cooldownSeconds >= 0 && draft.phaseTargets.cooldownSeconds <= 3600 && draft.phaseTargets.cooldownSeconds % 60 === 0 && draft.pendingSave === null && validWorkout(draft.activeWorkout);
+  const common = (draft.version === 1 || draft.version === 2) && nonempty(draft.projectId) && nonempty(draft.uid) && UUID.test(draft.draftId) && integer(draft.ownershipGeneration) && draft.ownershipGeneration >= 1 && integer(draft.lastMutationAtEpochMs) && exact(draft.phaseTargets, ['warmupSeconds', 'performanceSeconds', 'cooldownSeconds']) && integer(draft.phaseTargets.warmupSeconds) && draft.phaseTargets.warmupSeconds >= 0 && draft.phaseTargets.warmupSeconds <= 3600 && draft.phaseTargets.warmupSeconds % 60 === 0 && nonnegative(draft.phaseTargets.performanceSeconds) && integer(draft.phaseTargets.cooldownSeconds) && draft.phaseTargets.cooldownSeconds >= 0 && draft.phaseTargets.cooldownSeconds <= 3600 && draft.phaseTargets.cooldownSeconds % 60 === 0 && validWorkout(draft.activeWorkout);
+  if (!common) return false;
+  if (draft.version === 1) return draft.pendingSave === null;
+  return draft.pendingSave === null || validPendingSave(draft.pendingSave, draft.activeWorkout);
+}
+
+function validPendingSave(pendingSave, activeWorkout) {
+  if (!exact(pendingSave, ['state', 'workoutId', 'fingerprint', 'candidate', 'attemptCount', 'lastAttemptAtEpochMs', 'lastReconciliationAtEpochMs'])
+    || !PENDING_STATES.has(pendingSave.state) || !UUID_V4_LOWERCASE.test(pendingSave.workoutId)
+    || !exact(pendingSave.fingerprint, ['canonicalization', 'algorithm', 'hex'])
+    || pendingSave.fingerprint.canonicalization !== 'workout-v4-json-v1' || pendingSave.fingerprint.algorithm !== 'SHA-256'
+    || !/^[0-9a-f]{64}$/.test(pendingSave.fingerprint.hex) || !isValidV4WorkoutDocument(pendingSave.candidate) || pendingSave.candidate?.id !== pendingSave.workoutId
+    || !integer(pendingSave.attemptCount) || pendingSave.attemptCount < 0 || activeWorkout.phase !== 'review') return false;
+  if (pendingSave.state === 'prepared') return pendingSave.attemptCount === 0 && pendingSave.lastAttemptAtEpochMs === null && pendingSave.lastReconciliationAtEpochMs === null;
+  return pendingSave.attemptCount >= 1 && nonnegative(pendingSave.lastAttemptAtEpochMs)
+    && (pendingSave.state === 'write-pending'
+      ? (pendingSave.lastReconciliationAtEpochMs === null || nonnegative(pendingSave.lastReconciliationAtEpochMs))
+      : nonnegative(pendingSave.lastReconciliationAtEpochMs));
 }
 export function validateRecoveryDraft(draft) { try { return validateRecoveryDraftUnsafe(draft); } catch { return false; } }
 export function hydrateRecoveryDraft(draft) {
@@ -177,4 +202,54 @@ export function readRecoveryDraft({ storage, projectId, uid, nowEpochMs, staleAf
   if (!integer(nowEpochMs) || !integer(staleAfterMs) || staleAfterMs <= 0) throw new TypeError('Recovery clock policy must use safe integers');
   if (nowEpochMs - draft.lastMutationAtEpochMs > staleAfterMs) return { status: 'stale', draft: freeze(clone(draft)) };
   const clean = freeze(clone(draft)); return { status: 'resumable', draft: clean, hydrated: hydrateRecoveryDraft(clean) };
+}
+
+export async function verifyRecoveryDraftV2(draft, options = {}) {
+  if (!validateRecoveryDraft(draft) || draft.version !== 2) return { status: 'malformed' };
+  if (draft.pendingSave === null) return { status: 'verified' };
+  let fingerprintWorkoutV4;
+  try {
+    const { buildCanonicalV4WorkoutDocument, canonicalizeWorkoutV4, fingerprintWorkoutV4: digest } = await import('./workoutFingerprint');
+    const candidate = buildCanonicalV4WorkoutDocument({
+      workoutId: draft.pendingSave.workoutId,
+      finishRequestedAtEpochMs: draft.activeWorkout.phaseCandidate.finishRequestedAtEpochMs,
+      phaseTargets: draft.phaseTargets,
+      phaseActualSeconds: draft.activeWorkout.phaseCandidate.phaseActualSeconds,
+      exercises: draft.activeWorkout.exercises,
+    });
+    if (canonicalizeWorkoutV4(candidate) !== canonicalizeWorkoutV4(draft.pendingSave.candidate)) return { status: 'malformed' };
+    fingerprintWorkoutV4 = digest;
+  } catch { return { status: 'malformed' }; }
+  try {
+    const fingerprint = await fingerprintWorkoutV4(draft.pendingSave.candidate, options);
+    return fingerprint.hex === draft.pendingSave.fingerprint.hex ? { status: 'verified' } : { status: 'malformed' };
+  } catch (error) { return { status: 'fingerprint-error', error }; }
+}
+
+/** A6's async reader verifies the persisted v2 digest before exposing hydration. */
+export async function readRecoveryDraftAsync(options) {
+  const { storage, projectId, uid, nowEpochMs, staleAfterMs } = options;
+  if (!isValidRecoveryIdentity({ projectId, uid })) return { status: 'invalid-identity' };
+  let raw; try { raw = storage.getItem(recoveryStorageKey({ projectId, uid })); } catch (error) { return { status: 'storage-error', operation: 'read', error }; }
+  if (raw === null) return { status: 'missing' };
+  let draft; try { draft = JSON.parse(raw); } catch { return { status: 'malformed' }; }
+  if (!draft || typeof draft !== 'object' || Array.isArray(draft) || !Object.hasOwn(draft, 'version')) return { status: 'malformed' };
+  if (draft.version === 1) return readRecoveryDraft(options);
+  if (draft.version !== 2) return { status: 'unsupported-version' };
+  if (!nonempty(draft.projectId) || !nonempty(draft.uid)) return { status: 'malformed' };
+  if (draft.projectId !== projectId) return { status: 'wrong-project' };
+  if (draft.uid !== uid) return { status: 'wrong-user' };
+  if (!validateRecoveryDraft(draft)) return { status: 'malformed' };
+  if (!integer(nowEpochMs) || !integer(staleAfterMs) || staleAfterMs <= 0) throw new TypeError('Recovery clock policy must use safe integers');
+  const verification = await verifyRecoveryDraftV2(draft, options);
+  if (verification.status !== 'verified') return { status: verification.status };
+  if (nowEpochMs - draft.lastMutationAtEpochMs > staleAfterMs) return { status: 'stale', draft: freeze(clone(draft)) };
+  const clean = freeze(clone(draft)); return { status: 'resumable', draft: clean, hydrated: hydrateRecoveryDraft(clean) };
+}
+
+export function migrateRecoveryDraftV1ToV2(draft, nowEpochMs) {
+  if (!validateRecoveryDraft(draft) || draft.version !== 1 || !integer(nowEpochMs)) throw new TypeError('Invalid v1 recovery draft');
+  return { version: 2, projectId: draft.projectId, uid: draft.uid, draftId: draft.draftId,
+    ownershipGeneration: draft.ownershipGeneration, lastMutationAtEpochMs: Math.max(draft.lastMutationAtEpochMs, nowEpochMs),
+    phaseTargets: clone(draft.phaseTargets), activeWorkout: clone(draft.activeWorkout), pendingSave: null };
 }

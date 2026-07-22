@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createActiveWorkoutCoordinator } from '../utils/activeWorkoutCoordinator';
-import { createRecoveryDraft, recoveryStorageKey } from '../utils/activeWorkoutRecovery';
+import { createRecoveryDraft, migrateRecoveryDraftV1ToV2, recoveryStorageKey } from '../utils/activeWorkoutRecovery';
+import { buildCanonicalV4WorkoutDocument } from '../utils/workoutFingerprint';
+import { prepareImmutableSave } from '../utils/immutableWorkoutSave';
 
 const identity = { projectId: 'p', uid: 'u' };
 const workout = { phase: 'warmup', workoutStartedAt: 1, activeWorkTimer: null, _nextTimerId: 1, phaseLedger: { closedMilliseconds: { warmup: 0, performance: 0, cooldown: 0 }, closedSeconds: { warmup: 0, performance: 0, cooldown: 0 }, openPhase: 'warmup', openedAtEpochMs: 1, lastAcceptedEpochMs: 1 }, phaseCandidate: null, _cooldownUndoTarget: null, exercises: [{ id: 'x', occurrenceId: 'x:0', name: 'X', muscleGroup: 'Core', tier: 1, trackingMode: 'simple', sets: 1, prescribedSetCount: 1, completed: false, setRecords: [{ index: 0, completed: false, plannedRestSeconds: null, workDurationSeconds: null, actualRestSeconds: null }] }] };
@@ -204,7 +206,7 @@ describe('active workout coordinator', () => {
     const storage = memory(); const key = recoveryStorageKey(identity);
     storage.setItem(key, JSON.stringify({ version: 2 }));
     const coordinator = createActiveWorkoutCoordinator({ storage, locks: locks(), now: () => 10, staleAfterMs: 1 });
-    expect(await coordinator.discard({ ...identity, expected: { draftId: 'x', ownershipGeneration: 1 } })).toMatchObject({ status: 'unsupported-version' });
+    expect(await coordinator.discard({ ...identity, expected: { draftId: 'x', ownershipGeneration: 1 } })).toMatchObject({ status: 'malformed' });
     expect(storage.getItem(key)).not.toBeNull();
     const draft = createRecoveryDraft({ ...identity, draftId: '123e4567-e89b-12d3-a456-426614174000', ownershipGeneration: 1, lastMutationAtEpochMs: 1, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, activeWorkout: workout });
     storage.setItem(key, JSON.stringify(draft));
@@ -238,6 +240,53 @@ describe('active workout coordinator', () => {
     let lockName; const lockApi = { request: async (name, _options, callback) => { lockName = name; return callback({}); } };
     const coordinator = createActiveWorkoutCoordinator({ storage, locks: lockApi, now: () => 1 });
     expect(await coordinator.authCleanup({ priorProjectId: prior.projectId, priorUid: prior.uid, expected: draft })).toMatchObject({ status: 'storage-error', operation: 'remove' });
-    expect(lockName).toBe('active-workout:prior%2Fp:prior%3Au'); expect(seen).toEqual([key, key]);
+    expect(lockName).toBe('active-workout:prior%2Fp:prior%3Au'); expect(seen).toEqual([key, key, key]);
+  });
+
+  it('A6 migrates a locked v1 draft to v2 without changing its ownership generation', async () => {
+    const storage = memory(); const key = recoveryStorageKey(identity);
+    const draft = createRecoveryDraft({ ...identity, draftId: '123e4567-e89b-12d3-a456-426614174000', ownershipGeneration: 1, lastMutationAtEpochMs: 1, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, activeWorkout: workout });
+    storage.setItem(key, JSON.stringify(draft));
+    const coordinator = createActiveWorkoutCoordinator({ storage, locks: locks(), now: () => 2 });
+    await expect(coordinator.migrateToV2({ ...identity, expected: draft })).resolves.toMatchObject({ status: 'saved' });
+    expect(JSON.parse(storage.getItem(key))).toMatchObject({ version: 2, ownershipGeneration: 1, lastMutationAtEpochMs: 2, pendingSave: null });
+  });
+
+  it('atomically combines v1 resume ownership transfer with v2 migration in one write', async () => {
+    const storage = memory(); const key = recoveryStorageKey(identity);
+    const v1 = createRecoveryDraft({ ...identity, draftId: '123e4567-e89b-12d3-a456-426614174000', ownershipGeneration: 1, lastMutationAtEpochMs: 1, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, activeWorkout: workout });
+    storage.setItem(key, JSON.stringify(v1));
+    const writes = []; const setItem = storage.setItem; storage.setItem = (storageKey, value) => { writes.push(JSON.parse(value)); setItem(storageKey, value); };
+    const coordinator = createActiveWorkoutCoordinator({ storage, locks: locks(), now: () => 2 });
+
+    const result = await coordinator.resume({ ...identity, expected: v1 });
+
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({ version: 2, ownershipGeneration: 2, lastMutationAtEpochMs: 2, pendingSave: null });
+    expect(result).toMatchObject({ status: 'acquired', snapshot: { version: 2, ownershipGeneration: 2 }, hydrated: { phase: 'warmup', _phaseTimingEnabled: true } });
+    expect(JSON.parse(storage.getItem(key))).toEqual(writes[0]);
+  });
+
+  it('rejects v2 pending candidate and coordinated workout tampering with zero storage writes', async () => {
+    const review = structuredClone(workout);
+    review.phase = 'review'; review.phaseLedger.openPhase = null; review.phaseLedger.openedAtEpochMs = null;
+    review.exercises[0].completed = true;
+    review.exercises[0].setRecords[0] = { ...review.exercises[0].setRecords[0], completed: true, workDurationSeconds: 0 };
+    review.phaseCandidate = { phaseActualSeconds: { warmup: 0, performance: 0, cooldown: 0 }, actualDurationSeconds: 0, finishRequestedAtEpochMs: 1000 };
+    const v1 = createRecoveryDraft({ ...identity, draftId: '123e4567-e89b-12d3-a456-426614174000', ownershipGeneration: 1, lastMutationAtEpochMs: 1000, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, activeWorkout: review });
+    const v2 = migrateRecoveryDraftV1ToV2(v1, 1000); const workoutId = '123e4567-e89b-42d3-a456-426614174000';
+    const candidate = buildCanonicalV4WorkoutDocument({ workoutId, finishRequestedAtEpochMs: 1000, phaseTargets: v2.phaseTargets, phaseActualSeconds: review.phaseCandidate.phaseActualSeconds, exercises: review.exercises });
+    v2.pendingSave = await prepareImmutableSave({ workoutId, candidate });
+    const storage = memory(); const key = recoveryStorageKey(identity); storage.setItem(key, JSON.stringify(v2));
+    let writes = 0; const setItem = storage.setItem; storage.setItem = (...args) => { writes += 1; setItem(...args); };
+    const coordinator = createActiveWorkoutCoordinator({ storage, locks: locks(), now: () => 1001 });
+    await expect(coordinator.mutate({ ...identity, expected: v2, transform: draft => { draft.pendingSave.candidate.exercises[0].name = 'tampered'; return draft; } })).resolves.toMatchObject({ status: 'invalid-draft' });
+    expect(writes).toBe(0);
+    await expect(createActiveWorkoutCoordinator({ storage, locks: locks(), now: () => 1001 }).mutate({ ...identity, expected: v2, transform: draft => { draft.pendingSave.fingerprint.hex = '0'.repeat(64); return draft; } })).resolves.toMatchObject({ status: 'invalid-draft' });
+    await expect(createActiveWorkoutCoordinator({ storage, locks: locks(), now: () => 1001 }).mutate({ ...identity, expected: v2, transform: draft => { draft.activeWorkout.exercises[0].name = 'tampered'; draft.pendingSave.candidate.exercises[0].name = 'tampered'; return draft; } })).resolves.toMatchObject({ status: 'invalid-draft' });
+    expect(writes).toBe(0);
+    const digestDenied = createActiveWorkoutCoordinator({ storage, locks: locks(), now: () => 1001, subtle: { digest: async () => { throw new Error('denied'); } } });
+    await expect(digestDenied.mutate({ ...identity, expected: v2, transform: draft => draft })).resolves.toMatchObject({ status: 'fingerprint-error' });
+    expect(writes).toBe(0);
   });
 });

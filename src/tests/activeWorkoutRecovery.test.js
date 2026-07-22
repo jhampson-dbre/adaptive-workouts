@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createRecoveryDraft, readRecoveryDraft, recoveryStorageKey } from '../utils/activeWorkoutRecovery';
+import { createRecoveryDraft, migrateRecoveryDraftV1ToV2, readRecoveryDraft, readRecoveryDraftAsync, recoveryStorageKey } from '../utils/activeWorkoutRecovery';
+import { buildCanonicalV4WorkoutDocument } from '../utils/workoutFingerprint';
+import { prepareImmutableSave } from '../utils/immutableWorkoutSave';
 import { PROGRESSION_REASON_CODES } from '../utils/progression';
 
 const id = '123e4567-e89b-12d3-a456-426614174000';
@@ -45,6 +47,41 @@ function reviewWorkout() {
 }
 
 describe('active workout recovery', () => {
+  it('A6 reads strict v2/null state asynchronously and migrates v1 in the same slot', async () => {
+    const v1 = createRecoveryDraft({ ...identity, draftId: id, ownershipGeneration: 1, lastMutationAtEpochMs: 1000, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, activeWorkout: workout });
+    const v2 = migrateRecoveryDraftV1ToV2(v1, 1200);
+    expect(v2).toMatchObject({ version: 2, pendingSave: null, lastMutationAtEpochMs: 1200 });
+    await expect(readRecoveryDraftAsync({ storage: { getItem: () => JSON.stringify(v2) }, ...identity, nowEpochMs: 1200, staleAfterMs: 1 })).resolves.toMatchObject({ status: 'resumable', draft: { version: 2 } });
+  });
+
+  it('A6 rejects a v2 candidate or digest tamper before hydration', async () => {
+    const state = reviewWorkout();
+    state.exercises[0].completed = true;
+    state.exercises[0].setRecords[0] = { ...state.exercises[0].setRecords[0], completed: true, workDurationSeconds: 0 };
+    state._cooldownUndoTarget = { exerciseIndex: 0, setIndex: 0 };
+    const v1 = createRecoveryDraft({ ...identity, draftId: id, ownershipGeneration: 1, lastMutationAtEpochMs: 1000, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, activeWorkout: state });
+    const v2 = migrateRecoveryDraftV1ToV2(v1, 1000);
+    const workoutId = '123e4567-e89b-42d3-a456-426614174000';
+    const candidate = buildCanonicalV4WorkoutDocument({ workoutId, finishRequestedAtEpochMs: 1000, phaseTargets: v2.phaseTargets, phaseActualSeconds: state.phaseCandidate.phaseActualSeconds, exercises: state.exercises });
+    v2.pendingSave = await prepareImmutableSave({ workoutId, candidate });
+    await expect(readRecoveryDraftAsync({ storage: { getItem: () => JSON.stringify(v2) }, ...identity, nowEpochMs: 1000, staleAfterMs: 1 })).resolves.toMatchObject({ status: 'resumable', draft: { version: 2 } });
+    const candidateTamper = structuredClone(v2); candidateTamper.pendingSave.candidate.exercises[0].name = 'Tampered';
+    await expect(readRecoveryDraftAsync({ storage: { getItem: () => JSON.stringify(candidateTamper) }, ...identity, nowEpochMs: 1000, staleAfterMs: 1 })).resolves.toEqual({ status: 'malformed' });
+    const digestTamper = structuredClone(v2); digestTamper.pendingSave.fingerprint.hex = '0'.repeat(64);
+    await expect(readRecoveryDraftAsync({ storage: { getItem: () => JSON.stringify(digestTamper) }, ...identity, nowEpochMs: 1000, staleAfterMs: 1 })).resolves.toEqual({ status: 'malformed' });
+    await expect(readRecoveryDraftAsync({ storage: { getItem: () => JSON.stringify(v2) }, ...identity, nowEpochMs: 1000, staleAfterMs: 1, subtle: null })).resolves.toEqual({ status: 'fingerprint-error' });
+    for (const value of [-1, 1.5, '1', undefined]) {
+      const badAttempt = structuredClone(v2); Object.assign(badAttempt.pendingSave, { state: 'write-pending', attemptCount: 1, lastAttemptAtEpochMs: value, lastReconciliationAtEpochMs: null });
+      await expect(readRecoveryDraftAsync({ storage: { getItem: () => JSON.stringify(badAttempt) }, ...identity, nowEpochMs: 1000, staleAfterMs: 1 })).resolves.toEqual({ status: 'malformed' });
+      const badWriteReconciliation = structuredClone(v2); Object.assign(badWriteReconciliation.pendingSave, { state: 'write-pending', attemptCount: 1, lastAttemptAtEpochMs: 1, lastReconciliationAtEpochMs: value });
+      await expect(readRecoveryDraftAsync({ storage: { getItem: () => JSON.stringify(badWriteReconciliation) }, ...identity, nowEpochMs: 1000, staleAfterMs: 1 })).resolves.toEqual({ status: 'malformed' });
+      for (const stateName of ['retryable-absent', 'reconcile-indeterminate', 'blocked-conflict']) {
+        const badRequiredReconciliation = structuredClone(v2); Object.assign(badRequiredReconciliation.pendingSave, { state: stateName, attemptCount: 1, lastAttemptAtEpochMs: 1, lastReconciliationAtEpochMs: value });
+        await expect(readRecoveryDraftAsync({ storage: { getItem: () => JSON.stringify(badRequiredReconciliation) }, ...identity, nowEpochMs: 1000, staleAfterMs: 1 })).resolves.toEqual({ status: 'malformed' });
+      }
+    }
+  });
+
   it('rejects invalid caller identity before storage access', () => {
     let accessed = false;
     expect(readRecoveryDraft({ storage: { getItem: () => { accessed = true; } }, projectId: '', uid: 'u', nowEpochMs: 1, staleAfterMs: 1 })).toEqual({ status: 'invalid-identity' });
@@ -82,6 +119,38 @@ describe('active workout recovery', () => {
     const check = activeWorkout => readRecoveryDraft({ storage: { getItem: () => JSON.stringify({ ...draft, activeWorkout }) }, ...identity, nowEpochMs: 1000, staleAfterMs: 1 }).status;
     expect(check({ ...draft.activeWorkout, phase: 'warmup', activeWorkTimer: { id: 'work-1', occurrenceId: 'squat:0', exerciseIndex: 0, setIndex: 0, startedAtEpochMs: 1000 } })).toBe('malformed');
     expect(check({ ...draft.activeWorkout, phase: 'review', phaseLedger: { ...draft.activeWorkout.phaseLedger, openPhase: null, openedAtEpochMs: null }, phaseCandidate: { phaseActualSeconds: { warmup: 0, performance: 0, cooldown: 0 }, actualDurationSeconds: 1, finishRequestedAtEpochMs: 1000 } })).toBe('malformed');
+  });
+
+  it('rejects a Performance projection carrying a Cooldown/Review-only undo target', () => {
+    const performance = clone(workout); performance.phase = 'performance'; performance.phaseLedger.openPhase = 'performance'; performance._cooldownUndoTarget = { exerciseIndex: 0, setIndex: 0 };
+    expect(disposition(draftFor(performance))).toBe('malformed');
+  });
+
+  it('resumes v1 Review with a valid retained final-set undo target and rejects invalid Review targets', () => {
+    const review = reviewWorkout(); review.exercises[0].completed = true;
+    review.exercises[0].setRecords[0] = { ...review.exercises[0].setRecords[0], completed: true, workDurationSeconds: 0 };
+    review._cooldownUndoTarget = { exerciseIndex: 0, setIndex: 0 };
+    expect(disposition(draftFor(review))).toBe('resumable');
+    for (const target of [{ exerciseIndex: 1, setIndex: 0 }, { exerciseIndex: 0, setIndex: 1 }, { exerciseIndex: 0, setIndex: 0, extra: true }]) {
+      expect(disposition(draftFor({ ...review, _cooldownUndoTarget: target }))).toBe('malformed');
+    }
+    const incomplete = clone(review); incomplete.exercises[0].completed = false; incomplete.exercises[0].setRecords[0] = { ...incomplete.exercises[0].setRecords[0], completed: false, workDurationSeconds: null };
+    expect(disposition(draftFor(incomplete))).toBe('malformed');
+  });
+
+  it('resumes v1 Cooldown with a valid final-set undo target and rejects a completed non-final target', () => {
+    const cooldown = clone(workout); cooldown.phase = 'cooldown'; cooldown.phaseLedger.openPhase = 'cooldown'; cooldown.exercises[0].completed = true;
+    cooldown.exercises[0].setRecords[0] = { ...cooldown.exercises[0].setRecords[0], completed: true, workDurationSeconds: 0 };
+    cooldown._cooldownUndoTarget = { exerciseIndex: 0, setIndex: 0 };
+    expect(disposition(draftFor(cooldown))).toBe('resumable');
+
+    const nonFinal = clone(cooldown); nonFinal.exercises[0].sets = 2; nonFinal.exercises[0].prescribedSetCount = 2;
+    nonFinal.exercises[0].setRecords = [
+      { index: 0, completed: true, plannedRestSeconds: 60, workDurationSeconds: 0, actualRestSeconds: 0 },
+      { index: 1, completed: true, plannedRestSeconds: null, workDurationSeconds: 0, actualRestSeconds: null },
+    ];
+    nonFinal._cooldownUndoTarget = { exerciseIndex: 0, setIndex: 0 };
+    expect(disposition(draftFor(nonFinal))).toBe('malformed');
   });
 
   it('validates weighted top recommendation source rules and target equality', () => {

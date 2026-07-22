@@ -10,6 +10,7 @@ const firestore = vi.hoisted(() => ({
     documentId: vi.fn(),
     doc: vi.fn(),
     getDoc: vi.fn(),
+    getDocFromServer: vi.fn(),
     setDoc: vi.fn(),
     addDoc: vi.fn(),
 }));
@@ -17,7 +18,7 @@ const firestore = vi.hoisted(() => ({
 vi.mock('../utils/firestoreClient', () => ({
     loadFirestoreClient: async () => ({ ...firestore, db: { name: 'test-db' } }),
 }));
-import { getGenerationHistory, getHistoryPage, saveWorkout, getSettings, getCatalog, migrateLocalData } from '../utils/storage';
+import { getGenerationHistory, getHistoryPage, saveWorkout, saveImmutableWorkout, readImmutableWorkoutFromServer, getSettings, getCatalog, migrateLocalData } from '../utils/storage';
 
 describe('Storage Layer (Async)', () => {
     beforeEach(() => {
@@ -29,6 +30,7 @@ describe('Storage Layer (Async)', () => {
         expect(typeof getGenerationHistory).toBe('function');
         expect(typeof getHistoryPage).toBe('function');
         expect(typeof saveWorkout).toBe('function');
+        expect(typeof saveImmutableWorkout).toBe('function');
         expect(typeof getSettings).toBe('function');
         expect(typeof getCatalog).toBe('function');
         expect(typeof migrateLocalData).toBe('function');
@@ -180,6 +182,21 @@ describe('Storage Layer (Async)', () => {
         expect(firestore.addDoc).toHaveBeenNthCalledWith(2, historyCollection, v2);
         expect(firestore.addDoc.mock.calls[0][1]).toBe(legacy);
         expect(firestore.addDoc.mock.calls[1][1]).toBe(v2);
+    });
+
+    it('keeps A6 stable-ID operations separate from the legacy writer', async () => {
+        const candidate = { id: '123e4567-e89b-42d3-a456-426614174000', schemaVersion: 4 };
+        const ref = { path: 'users/test-user/history/123e4567-e89b-42d3-a456-426614174000' };
+        firestore.doc.mockReturnValue(ref);
+        firestore.getDocFromServer.mockResolvedValue({ exists: () => false });
+
+        await saveImmutableWorkout('test-user', candidate.id, candidate);
+        await expect(readImmutableWorkoutFromServer('test-user', candidate.id)).resolves.toEqual({ exists: expect.any(Function) });
+
+        expect(firestore.doc).toHaveBeenNthCalledWith(1, { name: 'test-db' }, 'users', 'test-user', 'history', candidate.id);
+        expect(firestore.setDoc).toHaveBeenCalledWith(ref, candidate);
+        expect(firestore.getDocFromServer).toHaveBeenCalledWith(ref);
+        expect(firestore.addDoc).not.toHaveBeenCalled();
     });
 
     it('preserves legacy shapes during localStorage migration', async () => {
