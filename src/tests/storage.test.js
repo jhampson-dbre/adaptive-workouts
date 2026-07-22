@@ -136,10 +136,22 @@ describe('Storage Layer (Async)', () => {
 
     it('normalizes missing and invalid default rest settings in memory without writing', async () => {
         firestore.getDoc.mockResolvedValueOnce({ exists: () => true, data: () => ({ staleThreshold: 7 }) });
-        await expect(getSettings('test-user')).resolves.toEqual({ staleThreshold: 7, defaultRestSeconds: 60 });
+        await expect(getSettings('test-user')).resolves.toMatchObject({ staleThreshold: 7, defaultRestSeconds: 60 });
 
         firestore.getDoc.mockResolvedValueOnce({ exists: () => true, data: () => ({ defaultRestSeconds: '90' }) });
-        await expect(getSettings('test-user')).resolves.toEqual({ defaultRestSeconds: 60 });
+        await expect(getSettings('test-user')).resolves.toMatchObject({ defaultRestSeconds: 60 });
+        expect(firestore.setDoc).not.toHaveBeenCalled();
+    });
+
+    it('normalizes canonical phase settings in memory without writing', async () => {
+        firestore.getDoc.mockResolvedValueOnce({ exists: () => true, data: () => ({ warmupSeconds: 0, cooldownSeconds: 3600 }) });
+        await expect(getSettings('test-user')).resolves.toMatchObject({ warmupSeconds: 0, cooldownSeconds: 3600 });
+
+        firestore.getDoc.mockResolvedValueOnce({ exists: () => true, data: () => ({ warmupSeconds: 600, warmupTime: 45, cooldownSeconds: 300 }) });
+        await expect(getSettings('test-user')).resolves.toMatchObject({ warmupSeconds: 600, cooldownSeconds: 300 });
+
+        firestore.getDoc.mockResolvedValueOnce({ exists: () => true, data: () => ({ warmupTime: 10 }) });
+        await expect(getSettings('test-user')).resolves.toMatchObject({ warmupSeconds: 600, cooldownSeconds: 300 });
         expect(firestore.setDoc).not.toHaveBeenCalled();
     });
 

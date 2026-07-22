@@ -672,6 +672,29 @@ describe('Generator Engine', () => {
             expect(generated[0].completed).toBe(false);
         });
 
+        it('adds immutable phase targets without changing selected exercise output', () => {
+            const baseline = generateWorkout(60, [], false, trackingCatalog, [], { defaultRestSeconds: 75 });
+            const settings = {
+                defaultRestSeconds: 75, warmupSeconds: 600, cooldownSeconds: 300,
+            };
+            const generated = generateWorkout(60, [], false, trackingCatalog, [], settings);
+
+            expect(generated.map(exercise => exercise.id)).toEqual(baseline.map(exercise => exercise.id));
+            expect(generated.phaseTargets).toEqual({ warmupSeconds: 600, performanceSeconds: 3600, cooldownSeconds: 300 });
+            expect(Object.isFrozen(generated.phaseTargets)).toBe(true);
+            expect(Object.keys(generated)).not.toContain('phaseTargets');
+            settings.warmupSeconds = 0;
+            settings.cooldownSeconds = 3600;
+            expect(generated.phaseTargets).toEqual({ warmupSeconds: 600, performanceSeconds: 3600, cooldownSeconds: 300 });
+        });
+
+        it('rejects negative and fractional-second phase target budgets', () => {
+            expect(() => generateWorkout(-1, [], false, trackingCatalog, [], {}))
+                .toThrow('Time budget must be a nonnegative number of whole seconds.');
+            expect(() => generateWorkout(1.234, [], false, trackingCatalog, [], {}))
+                .toThrow('Time budget must be a nonnegative number of whole seconds.');
+        });
+
         it('snapshots catalog rest overrides, inherits after clearing, and normalizes invalid defaults', () => {
             const overridden = trackingCatalog.map(exercise => (
                 exercise.id === 'weighted' ? { ...exercise, restSeconds: 120 } : exercise

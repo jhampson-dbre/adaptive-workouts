@@ -768,6 +768,11 @@ code {
   color: #ff7777;
 }
 
+.phase-duration-input {
+  min-height: 44px;
+  box-sizing: border-box;
+}
+
 .add-form input,
 .add-form select,
 .edit-form input,

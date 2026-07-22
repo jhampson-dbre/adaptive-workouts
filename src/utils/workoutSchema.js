@@ -18,14 +18,25 @@ const isFiniteNonnegative = value => Number.isFinite(value) && value >= 0;
 const isNonnegativeInteger = value => Number.isInteger(value) && value >= 0;
 const isPositiveInteger = value => Number.isInteger(value) && value > 0;
 const isValidPlannedRestSeconds = value => Number.isInteger(value) && value >= 5 && value <= 600;
+const isValidPhaseTargetSeconds = value => Number.isInteger(value)
+  && value >= 0 && value <= 3600 && value % 60 === 0;
 
 export function normalizeWorkoutSettings(settings) {
   const source = isObject(settings) ? settings : {};
+  const warmupSeconds = isValidPhaseTargetSeconds(source.warmupSeconds)
+    ? source.warmupSeconds
+    : (!hasOwn(source, 'warmupSeconds') && isValidPhaseTargetSeconds(source.warmupTime * 60)
+      ? source.warmupTime * 60
+      : 600);
   return {
     ...source,
     defaultRestSeconds: isValidPlannedRestSeconds(source.defaultRestSeconds)
       ? source.defaultRestSeconds
       : 60,
+    warmupSeconds,
+    cooldownSeconds: isValidPhaseTargetSeconds(source.cooldownSeconds)
+      ? source.cooldownSeconds
+      : 300,
   };
 }
 

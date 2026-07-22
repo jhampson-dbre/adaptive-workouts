@@ -23,7 +23,7 @@ export async function migrateLocalData(userId) {
   if (!userDoc.exists()) {
     let settings;
     try { settings = localSettingsStr ? JSON.parse(localSettingsStr) : null; } catch { settings = null; }
-    settings = settings ?? { warmupTime: 10, staleThreshold: 5, legDayOfWeek: 'None' };
+    settings = normalizeWorkoutSettings(settings ?? { staleThreshold: 5, legDayOfWeek: 'None' });
     await setDoc(userDocRef, settings);
     
     let catalog;

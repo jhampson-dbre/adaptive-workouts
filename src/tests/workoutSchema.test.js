@@ -135,12 +135,35 @@ const validV3Workout = {
 
 describe('workout schema', () => {
   it('normalizes missing and invalid default rest values without changing valid settings', () => {
-    expect(normalizeWorkoutSettings({ staleThreshold: 4 })).toEqual({ staleThreshold: 4, defaultRestSeconds: 60 });
-    expect(normalizeWorkoutSettings({ defaultRestSeconds: 4 })).toEqual({ defaultRestSeconds: 60 });
-    expect(normalizeWorkoutSettings({ defaultRestSeconds: 601 })).toEqual({ defaultRestSeconds: 60 });
-    expect(normalizeWorkoutSettings({ defaultRestSeconds: 60.5 })).toEqual({ defaultRestSeconds: 60 });
-    expect(normalizeWorkoutSettings({ defaultRestSeconds: 90 })).toEqual({ defaultRestSeconds: 90 });
+    expect(normalizeWorkoutSettings({ staleThreshold: 4 })).toMatchObject({ staleThreshold: 4, defaultRestSeconds: 60 });
+    expect(normalizeWorkoutSettings({ defaultRestSeconds: 4 })).toMatchObject({ defaultRestSeconds: 60 });
+    expect(normalizeWorkoutSettings({ defaultRestSeconds: 601 })).toMatchObject({ defaultRestSeconds: 60 });
+    expect(normalizeWorkoutSettings({ defaultRestSeconds: 60.5 })).toMatchObject({ defaultRestSeconds: 60 });
+    expect(normalizeWorkoutSettings({ defaultRestSeconds: 90 })).toMatchObject({ defaultRestSeconds: 90 });
   });
+
+  it('normalizes canonical phase settings with legacy Warmup fallback and defaults', () => {
+    expect(normalizeWorkoutSettings({ warmupSeconds: 0, cooldownSeconds: 3600 }))
+      .toMatchObject({ warmupSeconds: 0, cooldownSeconds: 3600, defaultRestSeconds: 60 });
+    expect(normalizeWorkoutSettings({ warmupSeconds: 600, warmupTime: 45, cooldownSeconds: 300 }))
+      .toMatchObject({ warmupSeconds: 600, cooldownSeconds: 300 });
+    expect(normalizeWorkoutSettings({ warmupTime: 10 }))
+      .toMatchObject({ warmupSeconds: 600, cooldownSeconds: 300 });
+    expect(normalizeWorkoutSettings({ warmupSeconds: 61, warmupTime: 20 }))
+      .toMatchObject({ warmupSeconds: 600 });
+    expect(normalizeWorkoutSettings({ warmupTime: 10.5 }))
+      .toMatchObject({ warmupSeconds: 600 });
+    expect(normalizeWorkoutSettings({ staleThreshold: 4 }))
+      .toMatchObject({ warmupSeconds: 600, cooldownSeconds: 300, staleThreshold: 4 });
+  });
+
+  it.each([60.5, Number.POSITIVE_INFINITY, 61, -60, 3660])(
+    'rejects invalid canonical phase durations without rounding: %p',
+    value => {
+      expect(normalizeWorkoutSettings({ warmupSeconds: value, cooldownSeconds: value }))
+        .toMatchObject({ warmupSeconds: 600, cooldownSeconds: 300 });
+    },
+  );
 
   it('accepts optional valid catalog rest and rejects invalid explicit overrides', () => {
     expect(isValidCatalogExercise({ ...weightedExercise, restSeconds: 5 })).toBe(true);
