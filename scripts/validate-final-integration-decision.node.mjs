@@ -311,3 +311,36 @@ test('epic completion dispatches full cumulative gates only for ineligible decis
   assert.match(skill, /When the decision is \*\*eligible\*\*, dispatch the same two independent authorities as\s+scoped acknowledgements/)
   assert.match(skill, /Do not ask them to repeat cumulative branch analysis/)
 })
+
+test('rejects a foreign-task pre-candidate commit across the full task range', () => {
+  const evidence = eligibleEvidence()
+  evidence.branch.preCandidateCommits = [sha('e')]
+  evidence.branch.commitTaskIds = {
+    [sha('e')]: 'TREK-999',
+    [sha('b')]: 'TREK-246',
+    [sha('c')]: 'TREK-246',
+  }
+  evidence.task.lifecycle.accountedCommits = [sha('e'), sha('b'), sha('c')]
+
+  const decision = evaluateFinalIntegration(evidence, trustedTopology)
+  assert.equal(decision.eligible, false)
+  assert.ok(decision.reasonCodes.includes('CROSS_TASK_INTEGRATION'))
+})
+
+test('uses the last machine-readable Summary block in an append-only export', () => {
+  const evidence = structuredClone(eligibleEvidence())
+  const stale = {
+    taskId: 'TREK-246',
+    terminalSha: sha('b'),
+    commitBoundaries: [sha('b')],
+    authorityPasses: [],
+  }
+  evidence.task.canonicalEvidence = `Summary:\n\`\`\`review-lifecycle\n${JSON.stringify({ summary: stale })}\n\`\`\`\n${evidence.task.canonicalEvidence}`
+  assert.equal(evaluateFinalIntegration(evidence, trustedTopology).eligible, true)
+
+  const divergent = structuredClone(eligibleEvidence())
+  divergent.task.canonicalEvidence += `\nSummary:\n\`\`\`review-lifecycle\n${JSON.stringify({ summary: stale })}\n\`\`\``
+  const decision = evaluateFinalIntegration(divergent, trustedTopology)
+  assert.equal(decision.eligible, false)
+  assert.ok(decision.reasonCodes.some((code) => ['MISSING_AUTHORITY_CLOSURE', 'SUMMARY_TOPOLOGY_MISMATCH'].includes(code)))
+})

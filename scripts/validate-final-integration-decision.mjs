@@ -20,9 +20,9 @@ function consumeCanonicalEvidence(markdown) {
     writeFileSync(path, markdown)
     const cycles = validateReviewLifecycleFile(path)
     const lifecycle = cycles.at(-1)
-    const summaryMatch = markdown.match(/Summary:\s*```review-lifecycle\s*([\s\S]*?)```/)
-    if (!summaryMatch) throw new Error('machine-readable terminal Summary is required')
-    const summary = JSON.parse(summaryMatch[1]).summary
+    const summaryMatches = [...markdown.matchAll(/Summary:\s*```review-lifecycle\s*([\s\S]*?)```/g)]
+    if (!summaryMatches.length) throw new Error('machine-readable terminal Summary is required')
+    const summary = JSON.parse(summaryMatches.at(-1)[1]).summary
     const blocks = parseReviewLifecycleBlocks(markdown)
     const batchIds = new Set(lifecycle.batches.map((batch) => batch.id))
     const closures = blocks.filter((block) => block.type === 'Closure' && batchIds.has(block.closure.batchId)).map((block) => block.closure)
@@ -138,8 +138,8 @@ export function evaluateFinalIntegration(evidence, { topologyVerifier } = {}) {
     || commits.at(-1) !== lifecycle.terminalSha || !accountedCommitsMatch
   add(topologyMismatch, 'ORDERED_TOPOLOGY_MISMATCH')
   add(!commits.includes(lifecycle.candidateSha) || !commits.includes(lifecycle.terminalSha) || !accountedCommitsMatch, 'UNACCOUNTED_COMMIT')
-  add(!sameOrder(Object.keys(branch.commitTaskIds).sort(), [...commits].sort()), 'COMMIT_TASK_MAPPING_MISMATCH')
-  add(commits.some((commit) => branch.commitTaskIds[commit] !== task.id), 'CROSS_TASK_INTEGRATION')
+  add(!sameOrder(Object.keys(branch.commitTaskIds).sort(), [...taskRangeCommits].sort()), 'COMMIT_TASK_MAPPING_MISMATCH')
+  add(taskRangeCommits.some((commit) => branch.commitTaskIds[commit] !== task.id), 'CROSS_TASK_INTEGRATION')
   const summaryBoundaries = lifecycle.candidateSha === lifecycle.terminalSha ? [lifecycle.candidateSha] : [lifecycle.candidateSha, lifecycle.terminalSha]
   add(summary?.taskId !== task.id || summary.terminalSha !== lifecycle.terminalSha || branch.headSha !== lifecycle.terminalSha || !sameOrder(summary.commitBoundaries, summaryBoundaries), 'SUMMARY_TOPOLOGY_MISMATCH')
   add(typeof topologyVerifier !== 'function' || topologyVerifier({ branch, task }) !== true, 'TOPOLOGY_UNVERIFIED')
