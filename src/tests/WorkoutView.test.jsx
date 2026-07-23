@@ -837,6 +837,85 @@ test('a mounted active workout keeps its initial rendered epoch for a backward f
   expect(action).toHaveBeenCalledWith({ type: 'resumeWorkout', timestamp: 18_000 });
 });
 
+test('a recovered Warmup seeds Start set from its durable accepted epoch', () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date(1_000));
+  let warmup = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
+  warmup = activeWorkoutReducer(warmup, { type: 'startWorkout', timestamp: 100 });
+  warmup = { ...warmup, phaseLedger: { ...warmup.phaseLedger, openedAtEpochMs: 5_000, lastAcceptedEpochMs: 5_000 } };
+  const action = vi.fn();
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action }} sessionState={{ status: 'owned', activeWorkout: warmup, blocked: false }} /></AuthContext.Provider>);
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
+  const start = action.mock.calls[0][0];
+  expect(start).toMatchObject({ type: 'startSet', timestamp: 5_000 });
+  const next = activeWorkoutReducer(warmup, start);
+  expect(next.activeWorkTimer.startedAt).toBe(5_000);
+  expect(next.phaseLedger.lastAcceptedEpochMs).toBe(5_000);
+});
+
+test('a recovered Performance timer seeds Confirm set work, rest, and ledger boundaries', () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date(1_000));
+  let performance = initializeActiveWorkout([{ ...timedWorkout[0] }], { phaseTimingEnabled: true });
+  for (const action of [{ type: 'startWorkout', timestamp: 100 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 6_000 }]) performance = activeWorkoutReducer(performance, action);
+  performance = { ...performance, phaseLedger: { ...performance.phaseLedger, openedAtEpochMs: 6_000, lastAcceptedEpochMs: 6_000 } };
+  const action = vi.fn();
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action }} sessionState={{ status: 'owned', activeWorkout: performance, blocked: false }} /></AuthContext.Provider>);
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+  const confirm = action.mock.calls[0][0];
+  expect(confirm).toMatchObject({ type: 'confirmSet', timestamp: 6_000 });
+  const next = activeWorkoutReducer(performance, confirm);
+  expect(next.exercises[0].setRecords[0]).toMatchObject({ workDurationSeconds: 0, _activeRest: { startedAt: 6_000 } });
+  expect(next.phaseLedger.lastAcceptedEpochMs).toBe(6_000);
+});
+
+test('a recovered active rest seeds the next Start set without a negative rest duration', () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date(1_000));
+  let resting = initializeActiveWorkout([{ ...timedWorkout[0] }], { phaseTimingEnabled: true });
+  for (const action of [{ type: 'startWorkout', timestamp: 100 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 7_000 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 7_000 }]) resting = activeWorkoutReducer(resting, action);
+  resting = { ...resting, phaseLedger: { ...resting.phaseLedger, openedAtEpochMs: 7_000, lastAcceptedEpochMs: 7_000 } };
+  const action = vi.fn();
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action }} sessionState={{ status: 'owned', activeWorkout: resting, blocked: false }} /></AuthContext.Provider>);
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i }));
+  const start = action.mock.calls[0][0];
+  expect(start).toMatchObject({ type: 'startSet', timestamp: 7_000 });
+  const next = activeWorkoutReducer(resting, start);
+  expect(next.exercises[0].setRecords[0].actualRestSeconds).toBe(0);
+  expect(next.activeWorkTimer.startedAt).toBe(7_000);
+});
+
+test('a recovered Cooldown honors a newer snapshot epoch when finishing', () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date(1_000));
+  let cooldown = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
+  for (const action of [{ type: 'startWorkout', timestamp: 100 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 200 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 300 }]) cooldown = activeWorkoutReducer(cooldown, action);
+  cooldown = { ...cooldown, phaseLedger: { ...cooldown.phaseLedger, openedAtEpochMs: 9_000, lastAcceptedEpochMs: 9_000 } };
+  const action = vi.fn();
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action }} sessionState={{ status: 'owned', activeWorkout: cooldown, snapshot: { lastMutationAtEpochMs: 9_500 }, blocked: false }} /></AuthContext.Provider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  const finish = action.mock.calls[0][0];
+  expect(finish).toMatchObject({ type: 'finishWorkout', timestamp: 9_500 });
+  const next = activeWorkoutReducer(cooldown, finish);
+  expect(next.phaseLedger).toMatchObject({
+    closedSeconds: { warmup: 0, performance: 0, cooldown: 1 },
+    lastAcceptedEpochMs: 9_500,
+  });
+  expect(next.phaseCandidate).toMatchObject({
+    phaseActualSeconds: { warmup: 0, performance: 0, cooldown: 1 },
+    actualDurationSeconds: 1,
+    finishRequestedAtEpochMs: 9_500,
+  });
+});
+
+test('a newer recovered publication raises the accepted epoch before the next action without remounting', () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date(1_000));
+  const generated = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
+  const action = vi.fn();
+  const renderState = (activeWorkout, snapshot) => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action }} sessionState={{ status: 'owned', activeWorkout, snapshot, blocked: false }} /></AuthContext.Provider>;
+  const view = render(renderState(generated));
+  const recovered = { ...generated, workoutStartedAt: 8_000, phase: 'warmup', phaseLedger: { closedMilliseconds: { warmup: 0, performance: 0, cooldown: 0 }, closedSeconds: { warmup: 0, performance: 0, cooldown: 0 }, openPhase: 'warmup', openedAtEpochMs: 8_000, lastAcceptedEpochMs: 8_000 } };
+  view.rerender(renderState(recovered, { lastMutationAtEpochMs: 10_000 }));
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
+  expect(action).toHaveBeenCalledWith({ type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 10_000 });
+});
+
 test('live work and rest readouts retain their forward display value after a backward clock tick', () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date(15_000));

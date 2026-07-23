@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useRef } from 'react';
+import { useState, useEffect, useContext, useRef, useCallback } from 'react';
 import { getHistoryPage } from '../utils/storage';
 import { AuthContext } from '../context/AuthContext';
 import { getSetStatus } from '../utils/activeWorkout';
@@ -88,6 +88,23 @@ function publicStatusMessage(status, pendingState) {
 function hasRecoveryIdentity(snapshot) {
   return typeof snapshot?.draftId === 'string' && snapshot.draftId.length > 0
     && Number.isSafeInteger(snapshot.ownershipGeneration) && snapshot.ownershipGeneration >= 1;
+}
+
+function durableDisplayEpoch(activeWorkout, snapshot) {
+  const epochs = [
+    activeWorkout?.workoutStartedAt,
+    activeWorkout?.phaseLedger?.lastAcceptedEpochMs,
+    activeWorkout?.phaseLedger?.openedAtEpochMs,
+    activeWorkout?.activeWorkTimer?.startedAt,
+    activeWorkout?.phaseCandidate?.finishRequestedAtEpochMs,
+    snapshot?.lastMutationAtEpochMs,
+  ];
+  activeWorkout?.exercises?.forEach(exercise => exercise.setRecords?.forEach(record => {
+    epochs.push(record?._activeRest?.startedAt);
+  }));
+  return epochs.reduce((latest, epoch) => (
+    Number.isSafeInteger(epoch) ? Math.max(latest, epoch) : latest
+  ), 0);
 }
 
 function WorkoutSummary({ candidate, phaseTargets, isSaving, saveError, saveStatus, blockedConflict, onBack, onSave, onKeepPending, onExit, summaryRef }) {
@@ -216,7 +233,8 @@ function exerciseTimingStatus(exercise, exerciseIndex, activeTimer, now) {
 export default function WorkoutView({ session, sessionState, onFinish, onResume }) {
   const user = useContext(AuthContext);
   const activeWorkout = sessionState?.activeWorkout ?? EMPTY_ACTIVE_WORKOUT;
-  const initialDisplayEpochMs = Date.now();
+  const durableEpochFloor = durableDisplayEpoch(activeWorkout, sessionState?.snapshot);
+  const initialDisplayEpochMs = Math.max(Date.now(), durableEpochFloor);
   const [now, setNow] = useState(initialDisplayEpochMs);
   const [expanded, setExpanded] = useState(() => {
     const firstIncomplete = (activeWorkout.exercises ?? []).findIndex(exercise => !Array.isArray(exercise.setRecords)
@@ -255,12 +273,16 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
   const displayedElapsedSeconds = activeWorkout.phaseLedger
     ? ['warmup', 'performance', 'cooldown'].reduce((total, phase) => total + getPhaseElapsedSeconds(activeWorkout, phase, now), 0)
     : calculateElapsedSeconds(activeWorkout.workoutStartedAt, now);
-  const acceptDisplayTime = timestamp => {
-    const accepted = Math.max(acceptedDisplayEpochMsRef.current ?? timestamp, timestamp);
+  const acceptDisplayTime = useCallback(timestamp => {
+    const accepted = Math.max(acceptedDisplayEpochMsRef.current ?? timestamp, timestamp, durableEpochFloor);
     acceptedDisplayEpochMsRef.current = accepted;
     setNow(accepted);
     return accepted;
-  };
+  }, [durableEpochFloor]);
+
+  useEffect(() => {
+    if (durableEpochFloor > acceptedDisplayEpochMsRef.current) acceptDisplayTime(durableEpochFloor);
+  }, [acceptDisplayTime, durableEpochFloor]);
 
   useEffect(() => {
     if (activeWorkout.phase !== 'review' || !activeWorkout.phaseCandidate || finishCandidate || backPendingRef.current) return;
@@ -282,7 +304,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
     if (!started) return undefined;
     const interval = setInterval(() => acceptDisplayTime(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [started]);
+  }, [acceptDisplayTime, started]);
 
   useEffect(() => {
     const markHiddenOverdue = () => {
@@ -294,7 +316,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
     };
     document.addEventListener('visibilitychange', markHiddenOverdue);
     return () => document.removeEventListener('visibilitychange', markHiddenOverdue);
-  }, [activeWorkout.exercises]);
+  }, [acceptDisplayTime, activeWorkout.exercises]);
 
   useEffect(() => {
     if (document.visibilityState !== 'visible') return;
