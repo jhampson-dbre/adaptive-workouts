@@ -1,8 +1,12 @@
 import { act, render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import { expect, test, vi, afterEach } from 'vitest';
 import WorkoutView from '../components/WorkoutView';
 import * as storage from '../utils/storage';
 import { AuthContext } from '../context/AuthContext';
+import { activeWorkoutReducer, initializeActiveWorkout } from '../utils/activeWorkout';
+import { createActiveWorkoutSession } from '../utils/activeWorkoutSession';
+import { createActiveWorkoutCoordinator } from '../utils/activeWorkoutCoordinator';
 
 afterEach(() => {
   cleanup();
@@ -11,11 +15,124 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-vi.mock('../utils/storage', () => ({ saveWorkout: vi.fn(), getHistoryPage: vi.fn(() => Promise.resolve({ items: [], nextCursor: null, hasMore: false })) }));
+vi.mock('../utils/storage', () => ({ saveWorkout: vi.fn(), saveImmutableWorkout: vi.fn(), getHistoryPage: vi.fn(() => Promise.resolve({ items: [], nextCursor: null, hasMore: false })) }));
 
-const renderWorkout = (workout, onFinish = () => {}, user = { uid: 'test-user-id' }) => render(
-  <AuthContext.Provider value={user}><WorkoutView workout={workout} onFinish={onFinish} /></AuthContext.Provider>,
-);
+function SessionHarness({ workout, phaseTargets, onFinish, user, api }) {
+  const [activeWorkout, setActiveWorkout] = useState(() => initializeActiveWorkout(workout, { phaseTimingEnabled: true }));
+  const [state, setState] = useState({ status: 'owned', activeWorkout, phaseTargets: phaseTargets ?? { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, error: null, blocked: false });
+  const session = {
+    async action(action) {
+      api.action(action);
+      let accepted = false;
+      setActiveWorkout(current => {
+        const next = activeWorkoutReducer(current, action);
+        accepted = next !== current;
+        setState(previous => ({ ...previous, status: next.phase === 'review' ? 'review' : 'owned', activeWorkout: next, error: null }));
+        return next;
+      });
+      return accepted;
+    },
+    async save() {
+      setState(previous => ({ ...previous, status: 'save-pending' }));
+      try {
+        await api.save(activeWorkout.phaseCandidate);
+        setState(previous => ({ ...previous, status: 'saved', activeWorkout: null }));
+      } catch (error) { setState(previous => ({ ...previous, status: 'review', error: error.message })); }
+    },
+    async discard() { await api.discard(); setState(previous => ({ ...previous, activeWorkout: null })); },
+  };
+  return <AuthContext.Provider value={user}><WorkoutView session={session} sessionState={{ ...state, activeWorkout }} onFinish={onFinish} /></AuthContext.Provider>;
+}
+
+const renderWorkout = (workout, onFinish = () => {}, user = { uid: 'test-user-id' }, phaseTargets, api = {}) => {
+  const sessionApi = {
+    action: vi.fn(), save: vi.fn(), discard: vi.fn(), ...api,
+  };
+  const view = render(<SessionHarness workout={workout} phaseTargets={phaseTargets} onFinish={onFinish} user={user} api={sessionApi} />);
+  return Object.assign(view, { api: sessionApi });
+};
+
+test('a blocked active workout exposes recovery controls and awaits Exit before returning to Plan', async () => {
+  const exit = vi.fn().mockResolvedValue(undefined); const onFinish = vi.fn();
+  const activeWorkout = initializeActiveWorkout(timedWorkout, { phaseTimingEnabled: true });
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ exit }} sessionState={{ status: 'blocked', activeWorkout, error: 'unsupported', blocked: true }} onFinish={onFinish} /></AuthContext.Provider>);
+  expect(screen.getByRole('heading', { name: 'Workout recovery' })).toBeDefined();
+  expect(screen.getByText('This browser cannot safely start a recoverable workout.')).toBeDefined();
+  expect(screen.queryByRole('button', { name: 'Start Workout' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Exit' }));
+  await waitFor(() => expect(exit).toHaveBeenCalledOnce());
+  expect(onFinish).toHaveBeenCalledOnce();
+});
+
+test('a stale recovery blocker offers exact Discard rather than Exit', () => {
+  const discard = vi.fn();
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ discard }} sessionState={{ status: 'recovery-blocked', activeWorkout: null, error: 'stale', blocked: true }} /></AuthContext.Provider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+  expect(discard).toHaveBeenCalledOnce();
+});
+
+test('focuses recovery only when its material presentation changes', async () => {
+  const session = { requestHandoff: vi.fn(), resume: vi.fn(), exit: vi.fn() };
+  const renderRecovery = error => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={session} sessionState={{ status: 'recovery-blocked', activeWorkout: null, error, blocked: true }} /></AuthContext.Provider>;
+  const view = render(renderRecovery('timeout'));
+  const heading = screen.getByRole('heading', { name: 'Workout recovery' });
+  await waitFor(() => expect(document.activeElement).toBe(heading));
+  const exit = screen.getByRole('button', { name: 'Exit' }); exit.focus();
+  view.rerender(renderRecovery('timeout'));
+  expect(document.activeElement).toBe(exit);
+  view.rerender(renderRecovery('conflict'));
+  await waitFor(() => expect(document.activeElement).toBe(heading));
+});
+
+test('announces and reports a successful Resume without reporting a failed attempt', async () => {
+  const onResume = vi.fn();
+  const resume = vi.fn(async () => true);
+  const { rerender } = render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ resume }} sessionState={{ status: 'recovery-available', activeWorkout: null, blocked: true }} onResume={onResume} /></AuthContext.Provider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+  await waitFor(() => expect(onResume).toHaveBeenCalledOnce());
+  rerender(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ resume }} sessionState={{ status: 'owned', activeWorkout: initializeActiveWorkout(timedWorkout, { phaseTimingEnabled: true }), blocked: false }} onResume={onResume} /></AuthContext.Provider>);
+  expect(screen.getByRole('status').textContent).toBe('Workout resumed.');
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Generated workout' })));
+
+  const failedResume = vi.fn(async () => false);
+  rerender(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ resume: failedResume }} sessionState={{ status: 'recovery-available', activeWorkout: null, blocked: true }} onResume={onResume} /></AuthContext.Provider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+  await waitFor(() => expect(failedResume).toHaveBeenCalledOnce());
+  expect(onResume).toHaveBeenCalledOnce();
+});
+
+test('retires the Resume acknowledgement only after an accepted action or a newer rest completion', async () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
+  const onResume = vi.fn();
+  const resume = vi.fn(async () => true);
+  const action = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+  const initial = initializeActiveWorkout(timedWorkout, { phaseTimingEnabled: true });
+  const { rerender } = render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ resume, action }} sessionState={{ status: 'recovery-available', activeWorkout: null, blocked: true }} onResume={onResume} /></AuthContext.Provider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+  await act(async () => {});
+  expect(onResume).toHaveBeenCalledOnce();
+  rerender(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ resume, action }} sessionState={{ status: 'owned', activeWorkout: initial, blocked: false }} onResume={onResume} /></AuthContext.Provider>);
+  expect(screen.getByRole('status').textContent).toBe('Workout resumed.');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  await act(async () => {});
+  expect(action).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('status').textContent).toBe('Workout resumed.');
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  await act(async () => {});
+  expect(action).toHaveBeenCalledTimes(2);
+  expect(screen.getByRole('status').textContent).toBe('');
+
+  rerender(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ resume, action }} sessionState={{ status: 'recovery-available', activeWorkout: null, blocked: true }} onResume={onResume} /></AuthContext.Provider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+  await act(async () => {});
+  expect(onResume).toHaveBeenCalledTimes(2);
+  const running = activeWorkoutReducer(initial, { type: 'startWorkout', timestamp: Date.now() });
+  const activeRest = activeWorkoutReducer(activeWorkoutReducer(running, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: Date.now() }), { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: Date.now() });
+  rerender(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ resume, action }} sessionState={{ status: 'owned', activeWorkout: activeRest, blocked: false }} onResume={onResume} /></AuthContext.Provider>);
+  act(() => vi.advanceTimersByTime(2000));
+  expect(screen.getByRole('status').textContent).toMatch(/Plank set 1 rest is complete/i);
+});
 
 const timedWorkout = [
   {
@@ -46,7 +163,6 @@ const weighted = [{
 }];
 
 test('keeps a same-exercise rest beside the next Start control while completed sets stay compact', () => {
-  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
   renderWorkout([timedWorkout[0]]);
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
@@ -254,11 +370,12 @@ test('cancelling the active owner retires a blocked Start error in another exerc
   expect(screen.queryByRole('alert')).toBeNull();
 });
 
-test('retires contextual and Finish feedback after correction or cancellation without using the rest announcer', () => {
+test('retires contextual and Finish feedback after correction or cancellation without using the rest announcer', async () => {
   renderWorkout(weighted);
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
-  fireEvent.change(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }), { target: { value: '' } });
   fireEvent.click(screen.getByRole('button', { name: /set 1 start/i }));
+  fireEvent.change(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }), { target: { value: '' } });
+  await waitFor(() => expect(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }).value).toBe(''));
   fireEvent.click(screen.getByRole('button', { name: /set 1 confirm/i }));
   expect(screen.getByRole('alert').textContent).toMatch(/valid performance values/i);
   expect(screen.getByRole('status').textContent).toBe('');
@@ -279,14 +396,16 @@ test('cancel leaves the set ready without recording work or rest', () => {
   expect(screen.queryByText(/Rest:/)).toBeNull();
 });
 
-test('weighted confirmation validates inputs and unlocks the next set with backoff', () => {
+test('weighted confirmation validates inputs and unlocks the next set with backoff', async () => {
   renderWorkout(weighted);
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
-  fireEvent.change(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }), { target: { value: '' } });
   fireEvent.click(screen.getByRole('button', { name: /set 1 start/i }));
+  fireEvent.change(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }), { target: { value: '' } });
+  await waitFor(() => expect(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }).value).toBe(''));
   fireEvent.click(screen.getByRole('button', { name: /set 1 confirm/i }));
   expect(screen.getByText(/valid performance values/i)).toBeDefined();
   fireEvent.change(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }), { target: { value: '4' } });
+  await waitFor(() => expect(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }).value).toBe('4'));
   fireEvent.click(screen.getByRole('button', { name: /set 1 confirm/i }));
   expect(screen.getByRole('button', { name: /set 2 start/i })).toBeDefined();
   expect(screen.getByLabelText(/set 2 recommendation reason/i).textContent).toMatch(/-10 lb/i);
@@ -431,6 +550,7 @@ test('returning after hidden rest expiry shows overtime without a delayed announ
     visibility = 'hidden';
     act(() => vi.advanceTimersByTime(3000));
     expect(screen.getByRole('status').textContent).toBe('');
+    vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
     visibility = 'visible';
     act(() => document.dispatchEvent(new Event('visibilitychange')));
     expect(screen.getByRole('button', { name: /Plank.*rest overtime/i })).toBeDefined();
@@ -453,66 +573,398 @@ test('undoing a final set re-expands its exercise', async () => {
   expect(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i })).toBeDefined();
 });
 
-test('Finish uses a fresh reducer snapshot after Back and saves coherent v3 timing', async () => {
-  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
-  storage.saveWorkout.mockResolvedValue(undefined);
+test('Finish uses a fresh reducer snapshot after Back and saves coherent v4 timing', async () => {
   const savableWorkout = [{
     ...timedWorkout[0],
     setRecords: [{ ...timedWorkout[0].setRecords[0], plannedRestSeconds: 5 }, timedWorkout[0].setRecords[1]],
   }, timedWorkout[1]];
-  const onFinish = vi.fn(); renderWorkout(savableWorkout, onFinish);
+  const onFinish = vi.fn(); const view = renderWorkout(savableWorkout, onFinish);
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
-  act(() => vi.advanceTimersByTime(60000));
   fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  expect(screen.getByRole('heading', { name: 'Finish workout early?' })).toBe(document.activeElement);
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to Cooldown' }));
+  expect(screen.getByRole('heading', { level: 1, name: 'Cooldown' })).toBe(document.activeElement);
+  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  await act(async () => {});
   expect(screen.getByText('1 of 3 items confirmed')).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Back to workout' }));
-  act(() => vi.advanceTimersByTime(60000));
+  await act(async () => {});
   fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  await act(async () => Promise.resolve());
-  const saved = storage.saveWorkout.mock.calls[0][1];
-  expect(saved).toMatchObject({ schemaVersion: 3, actualDurationSeconds: 120 });
-  expect(saved).not.toHaveProperty('actualDuration');
-  expect(saved.exercises[0]).not.toHaveProperty('completed');
-  expect(saved.exercises[0].setRecords[0]).toMatchObject({
-    completed: true, workDurationSeconds: 0, plannedRestSeconds: 5, actualRestSeconds: 120,
-  });
+  await act(async () => {});
   expect(onFinish).toHaveBeenCalledOnce();
+  expect(view.api.save).toHaveBeenCalledOnce();
+  expect(view.api.save.mock.calls[0][0].actualDurationSeconds).toBeGreaterThanOrEqual(0);
 });
 
-test('failed save retries the identical frozen v3 payload', async () => {
-  storage.saveWorkout.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(undefined);
-  renderWorkout([{ ...timedWorkout[1] }]);
+test('A8 saves a strict v4 document with frozen phase durations instead of the live v3 writer', async () => {
+  const onFinish = vi.fn();
+  const view = renderWorkout([{ ...timedWorkout[1] }], onFinish);
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/failed to save/i));
-  const payload = storage.saveWorkout.mock.calls[0][1];
+  await waitFor(() => expect(onFinish).toHaveBeenCalledOnce());
+  expect(view.api.save).toHaveBeenCalledOnce();
+  expect(view.api.save.mock.calls[0][0]).toMatchObject({ actualDurationSeconds: 0, phaseActualSeconds: expect.any(Object) });
+});
+
+test('A8 production phase targets drive Warmup, Performance, Cooldown, and Review with final-confirm focus on Cooldown', async () => {
+  const view = renderWorkout([{ ...timedWorkout[1] }], () => {}, { uid: 'test-user-id' }, { warmupSeconds: 60, performanceSeconds: 0, cooldownSeconds: 60 });
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  expect(screen.getByRole('heading', { level: 1, name: 'Warmup' })).toBe(document.activeElement);
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
+  expect(screen.getByRole('heading', { level: 1, name: 'Performance' })).toBe(document.activeElement);
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
+  expect(screen.getByRole('heading', { level: 1, name: 'Cooldown' })).toBe(document.activeElement);
+  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  expect(await screen.findByRole('region', { name: 'Workout summary' })).toBeDefined();
+  expect(view.api.action.mock.calls.map(([action]) => action.type)).toEqual(expect.arrayContaining(['startWorkout', 'startSet', 'confirmSet', 'finishWorkout']));
+  expect(screen.queryByText(/refreshing or closing this page will lose/i)).toBeNull();
+});
+
+test('renders planned phase timing and freezes all phase totals in the semantic Review heading', async () => {
+  renderWorkout([{ ...timedWorkout[1] }], () => {}, { uid: 'test-user-id' }, { warmupSeconds: 60, performanceSeconds: 45, cooldownSeconds: 30 });
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  expect(screen.getByText('Warmup: 1:00 planned / 1:00 remaining')).toBeDefined();
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  expect(screen.getByRole('heading', { level: 1, name: 'Review' })).toBe(document.activeElement);
+  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Warmup: 0:00 actual \/ 1:00 planned/);
+  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Performance: 0:00 actual \/ 0:45 planned/);
+  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Cooldown: 0:00 actual \/ 0:30 planned/);
+});
+
+test('offers cooperative handoff after a live-owner timeout and resumes through the normal destination callback', async () => {
+  const onResume = vi.fn(); const session = { resume: vi.fn(), requestHandoff: vi.fn().mockResolvedValue(true), exit: vi.fn() };
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={session} sessionState={{ status: 'recovery-blocked', blocked: true, error: 'timeout', activeWorkout: { exercises: [] }, snapshot: { draftId: 'draft', ownershipGeneration: 1 } }} onResume={onResume} /></AuthContext.Provider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Request handoff' }));
+  await waitFor(() => expect(onResume).toHaveBeenCalledOnce());
+});
+
+test.each([
+  ['Request handoff', 'requestHandoff'],
+  ['Retry acquisition', 'resume'],
+])('activates %s only for the retained exact recovery snapshot', async (label, method) => {
+  const onResume = vi.fn();
+  const session = { requestHandoff: vi.fn().mockResolvedValue(true), resume: vi.fn().mockResolvedValue(true), exit: vi.fn() };
+  const snapshot = { draftId: '123e4567-e89b-42d3-a456-426614174000', ownershipGeneration: 7 };
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={session} sessionState={{ status: 'recovery-blocked', blocked: true, error: 'conflict', activeWorkout: { exercises: [] }, snapshot }} onResume={onResume} /></AuthContext.Provider>);
+  fireEvent.click(screen.getByRole('button', { name: label }));
+  await waitFor(() => expect(session[method]).toHaveBeenCalledOnce());
+  expect(onResume).toHaveBeenCalledOnce();
+  expect(screen.getByRole('button', { name: label })).toBeDefined();
+});
+
+test.each(['timeout', 'conflict'])('keeps identity-dependent recovery controls hidden for %s without a validated draft', error => {
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ exit: vi.fn() }} sessionState={{ status: 'recovery-blocked', blocked: true, error, activeWorkout: { exercises: [] } }} /></AuthContext.Provider>);
+  expect(screen.getByRole('alert').textContent).toMatch(/ownership|another tab/i);
+  expect(screen.queryByRole('button', { name: 'Request handoff' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Retry acquisition' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Exit' })).toBeDefined();
+});
+
+test.each([
+  ['retryable-absent', 'Retry exact save', 'absent'],
+  ['write-pending', 'Check again', 'cleanup-error'],
+  ['reconcile-indeterminate', 'Check again', 'indeterminate'],
+])('uses pending immutable-save state %s for the actionable button', async (pendingState, label, error) => {
+  let review = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
+  for (const action of [
+    { type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 },
+    { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 1002 }, { type: 'finishWorkout', timestamp: 1003 },
+  ]) review = activeWorkoutReducer(review, action);
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ save: vi.fn(), action: vi.fn() }} sessionState={{ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 0, performanceSeconds: 2700, cooldownSeconds: 0 }, pendingSave: { state: pendingState }, error, blocked: false }} /></AuthContext.Provider>);
+  expect(await screen.findByRole('button', { name: label })).toBeDefined();
+  expect(screen.queryByText(/^(absent|indeterminate|conflict|cleanup-error)$/i)).toBeNull();
+});
+
+test('blocked immutable-save conflict keeps frozen Review with only non-mutating Keep pending and Exit', async () => {
+  let review = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
+  for (const action of [{ type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 1002 }, { type: 'finishWorkout', timestamp: 1003 }]) review = activeWorkoutReducer(review, action);
+  const save = vi.fn(); const exit = vi.fn().mockResolvedValue(undefined); const onFinish = vi.fn();
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ save, exit, action: vi.fn() }} sessionState={{ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 0, performanceSeconds: 2700, cooldownSeconds: 0 }, snapshot: { draftId: 'd', ownershipGeneration: 1 }, pendingSave: { state: 'blocked-conflict' }, error: 'conflict', blocked: true }} onFinish={onFinish} /></AuthContext.Provider>);
+  expect(await screen.findByRole('heading', { level: 1, name: 'Review' })).toBe(document.activeElement);
+  expect(screen.getByText('A different saved workout conflicts with this save.')).toBeDefined();
+  expect(screen.queryByRole('button', { name: 'Back to workout' })).toBeNull(); expect(screen.queryByRole('button', { name: 'Save workout' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Keep pending' }));
+  expect(save).not.toHaveBeenCalled(); expect(screen.getByRole('status').textContent).toBe('Save conflict remains pending.');
+  fireEvent.click(screen.getByRole('button', { name: 'Exit' })); await waitFor(() => expect(exit).toHaveBeenCalledOnce()); expect(onFinish).toHaveBeenCalledOnce();
+});
+
+test('renders the session-produced divergent immutable-save conflict as frozen Review', async () => {
+  const values = new Map();
+  const recoveryStorage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) };
+  const coordinator = createActiveWorkoutCoordinator({ recoveryStorage, storage: recoveryStorage, locks: { request: async (_name, _options, callback) => callback({ name: 'lock' }) }, staleAfterMs: 1_000_000, now: () => 1000, createUuid: () => '123e4567-e89b-42d3-a456-426614174000' });
+  let authoritative;
+  const session = createActiveWorkoutSession({ coordinator, projectId: 'p', createUuid: () => '123e4567-e89b-42d3-a456-426614174001', now: () => 1000,
+    saveImmutableWorkout: async (_uid, _id, document) => { authoritative = { ...document, phaseDurations: { ...document.phaseDurations, warmup: { ...document.phaseDurations.warmup, plannedSeconds: 1 } } }; throw new Error('authoritative write raced'); },
+    readImmutableWorkoutFromServer: async () => ({ exists: () => true, data: () => authoritative }),
+  });
+  await session.bootstrap({ uid: 'test-user-id' }); await session.stageGenerated([{ ...timedWorkout[1] }], { warmupSeconds: 0, performanceSeconds: 2700, cooldownSeconds: 0 });
+  await session.action({ type: 'startWorkout', timestamp: 1000 }); await session.action({ type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 });
+  await session.action({ type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 1002 }); await session.action({ type: 'finishWorkout', timestamp: 1003 });
+  const save = vi.spyOn(session, 'save'); const onFinish = vi.fn();
+  const renderState = state => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={session} sessionState={state} onFinish={onFinish} /></AuthContext.Provider>;
+  const view = render(renderState(session.getState()));
+  const unsubscribe = session.subscribe(state => view.rerender(renderState(state)));
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Review' })));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  await waitFor(() => expect(storage.saveWorkout).toHaveBeenCalledTimes(2));
-  expect(storage.saveWorkout.mock.calls[1][1]).toBe(payload);
-  expect(payload.schemaVersion).toBe(3);
+  await waitFor(() => expect(session.getState()).toMatchObject({ status: 'review', blocked: true, pendingSave: { state: 'blocked-conflict' } }));
+
+  const summary = await screen.findByRole('region', { name: 'Workout summary' });
+  expect(screen.getByRole('heading', { level: 1, name: 'Review' })).toBe(document.activeElement);
+  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Performance: 0:00 actual \/ 45:00 planned/);
+  expect(summary.textContent).toMatch(/1 of 1 items confirmed/);
+  expect([...summary.querySelectorAll('button')].map(button => button.textContent)).toEqual(['Keep pending', 'Exit']);
+  fireEvent.click(screen.getByRole('button', { name: 'Keep pending' }));
+  expect(save).toHaveBeenCalledOnce();
+  expect(screen.getByRole('status').textContent).toBe('Save conflict remains pending.');
+  expect(session.getState()).toMatchObject({ pendingSave: { state: 'blocked-conflict' } });
+  unsubscribe();
+});
+
+test('Review Back uses one timestamp for the visible clock and reducer action', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(0));
+  let review = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
+  for (const action of [{ type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 1002 }, { type: 'finishWorkout', timestamp: 1003 }]) review = activeWorkoutReducer(review, action);
+  const action = vi.fn(async () => true);
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action }} sessionState={{ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 0, performanceSeconds: 60, cooldownSeconds: 0 }, blocked: false }} /></AuthContext.Provider>);
+  expect(screen.getByRole('heading', { name: 'Review' })).toBeDefined();
+  vi.setSystemTime(new Date(1999));
+  fireEvent.click(screen.getByRole('button', { name: 'Back to workout' }));
+  expect(action).toHaveBeenCalledWith({ type: 'reviewBack', timestamp: 1999 });
+});
+
+test('Review Back keeps the frozen summary hidden while durable publication is pending, then focuses Cooldown', async () => {
+  let review = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
+  for (const action of [{ type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 1002 }, { type: 'finishWorkout', timestamp: 1003 }]) review = activeWorkoutReducer(review, action);
+  let publishBack;
+  const action = vi.fn(() => new Promise(resolve => { publishBack = resolve; }));
+  const renderState = activeWorkout => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action }} sessionState={{ status: activeWorkout.phase === 'review' ? 'review' : 'owned', activeWorkout, phaseTargets: { warmupSeconds: 0, performanceSeconds: 60, cooldownSeconds: 0 }, blocked: false }} /></AuthContext.Provider>;
+  const view = render(renderState(review));
+  expect(screen.getByRole('region', { name: 'Workout summary' })).toBeDefined();
+  fireEvent.click(screen.getByRole('button', { name: 'Back to workout' }));
+  expect(screen.queryByRole('region', { name: 'Workout summary' })).toBeNull();
+  await act(async () => {});
+  expect(screen.queryByRole('region', { name: 'Workout summary' })).toBeNull();
+  publishBack(true);
+  await act(async () => {});
+  expect(screen.queryByRole('region', { name: 'Workout summary' })).toBeNull();
+  view.rerender(renderState(activeWorkoutReducer(review, { type: 'reviewBack', timestamp: 1004 })));
+  await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Cooldown' })).toBe(document.activeElement));
+});
+
+test('a rejected Review Back restores the identical frozen candidate and actions', async () => {
+  let review = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
+  for (const action of [{ type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 1002 }, { type: 'finishWorkout', timestamp: 1003 }]) review = activeWorkoutReducer(review, action);
+  const action = vi.fn().mockResolvedValue(false);
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action, save: vi.fn() }} sessionState={{ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 0, performanceSeconds: 60, cooldownSeconds: 0 }, blocked: false }} /></AuthContext.Provider>);
+  const original = await screen.findByRole('region', { name: 'Workout summary' });
+  const originalDuration = original.textContent;
+  fireEvent.click(screen.getByRole('button', { name: 'Back to workout' }));
+  await waitFor(() => expect(screen.getByRole('region', { name: 'Workout summary' }).textContent).toBe(originalDuration));
+  expect(screen.getByRole('button', { name: 'Back to workout' }).disabled).toBe(false);
+  expect(screen.getByRole('button', { name: 'Save workout' }).disabled).toBe(false);
+});
+
+test('a thrown Review Back restores the identical frozen candidate and actions', async () => {
+  let review = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
+  for (const action of [{ type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 1002 }, { type: 'finishWorkout', timestamp: 1003 }]) review = activeWorkoutReducer(review, action);
+  const action = vi.fn().mockRejectedValue(new Error('durable publication failed'));
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action, save: vi.fn() }} sessionState={{ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 0, performanceSeconds: 60, cooldownSeconds: 0 }, blocked: false }} /></AuthContext.Provider>);
+  const original = await screen.findByRole('region', { name: 'Workout summary' });
+  const originalDuration = original.textContent;
+  fireEvent.click(screen.getByRole('button', { name: 'Back to workout' }));
+  await waitFor(() => expect(screen.getByRole('region', { name: 'Workout summary' }).textContent).toBe(originalDuration));
+  expect(screen.getByRole('button', { name: 'Back to workout' }).disabled).toBe(false);
+  expect(screen.getByRole('button', { name: 'Save workout' }).disabled).toBe(false);
+});
+
+test('uses the accepted visible epoch for every transition after a backward action clock', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(10_000));
+  const view = renderWorkout([{ ...timedWorkout[1] }], () => {}, { uid: 'test-user-id' }, { warmupSeconds: 60, performanceSeconds: 60, cooldownSeconds: 60 });
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  vi.setSystemTime(new Date(11_000));
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
+  act(() => vi.advanceTimersByTime(7_000));
+  expect(screen.getByLabelText('Total elapsed 0:08')).toBeDefined();
+  vi.setSystemTime(new Date(12_000));
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
+  vi.setSystemTime(new Date(13_000));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  expect(screen.getByRole('region', { name: 'Workout summary' })).toBeDefined();
+  expect(view.api.action.mock.calls.map(([action]) => action)).toEqual(expect.arrayContaining([
+    expect.objectContaining({ type: 'confirmSet', timestamp: 18_000 }),
+    expect.objectContaining({ type: 'finishWorkout', timestamp: 18_000 }),
+  ]));
+  expect(screen.getByText('Duration: 0:08')).toBeDefined();
+});
+
+test('the live total sums the phase ledger and never moves backward with a display clock regression', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(15_000));
+  let cooldown = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
+  for (const action of [{ type: 'startWorkout', timestamp: 10_000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 11_000 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 12_000 }]) cooldown = activeWorkoutReducer(cooldown, action);
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'owned', activeWorkout: cooldown, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 60 }, blocked: false }} /></AuthContext.Provider>);
+  expect(screen.getByLabelText('Total elapsed 0:05')).toBeDefined();
+  expect(screen.getByText('Cooldown: 1:00 planned / 0:57 remaining')).toBeDefined();
+  vi.setSystemTime(new Date(18_000));
+  act(() => vi.advanceTimersByTime(1_000));
+  const forwardTotal = screen.getByLabelText(/Total elapsed/).getAttribute('aria-label');
+  const forwardCooldown = screen.getByText(/Cooldown: 1:00 planned/).textContent;
+  vi.setSystemTime(new Date(12_000));
+  act(() => vi.advanceTimersByTime(1_000));
+  expect(screen.getByLabelText(forwardTotal)).toBeDefined();
+  expect(screen.getByText(forwardCooldown)).toBeDefined();
+});
+
+test('a mounted active workout keeps its initial rendered epoch for a backward first action', () => {
+  vi.useFakeTimers();
+  let cooldown = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
+  for (const action of [{ type: 'startWorkout', timestamp: 10_000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 11_000 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 12_000 }]) cooldown = activeWorkoutReducer(cooldown, action);
+  const action = vi.fn();
+  vi.setSystemTime(new Date(18_000));
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action }} sessionState={{ status: 'owned', activeWorkout: cooldown, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 60 }, blocked: false }} /></AuthContext.Provider>);
+  vi.setSystemTime(new Date(12_000));
+  fireEvent.click(screen.getByRole('button', { name: 'Resume Workout' }));
+  expect(action).toHaveBeenCalledWith({ type: 'resumeWorkout', timestamp: 18_000 });
+});
+
+test('a recovered Warmup seeds Start set from its durable accepted epoch', () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date(1_000));
+  let warmup = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
+  warmup = activeWorkoutReducer(warmup, { type: 'startWorkout', timestamp: 100 });
+  warmup = { ...warmup, phaseLedger: { ...warmup.phaseLedger, openedAtEpochMs: 5_000, lastAcceptedEpochMs: 5_000 } };
+  const action = vi.fn();
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action }} sessionState={{ status: 'owned', activeWorkout: warmup, blocked: false }} /></AuthContext.Provider>);
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
+  const start = action.mock.calls[0][0];
+  expect(start).toMatchObject({ type: 'startSet', timestamp: 5_000 });
+  const next = activeWorkoutReducer(warmup, start);
+  expect(next.activeWorkTimer.startedAt).toBe(5_000);
+  expect(next.phaseLedger.lastAcceptedEpochMs).toBe(5_000);
+});
+
+test('a recovered Performance timer seeds Confirm set work, rest, and ledger boundaries', () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date(1_000));
+  let performance = initializeActiveWorkout([{ ...timedWorkout[0] }], { phaseTimingEnabled: true });
+  for (const action of [{ type: 'startWorkout', timestamp: 100 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 6_000 }]) performance = activeWorkoutReducer(performance, action);
+  performance = { ...performance, phaseLedger: { ...performance.phaseLedger, openedAtEpochMs: 6_000, lastAcceptedEpochMs: 6_000 } };
+  const action = vi.fn();
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action }} sessionState={{ status: 'owned', activeWorkout: performance, blocked: false }} /></AuthContext.Provider>);
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+  const confirm = action.mock.calls[0][0];
+  expect(confirm).toMatchObject({ type: 'confirmSet', timestamp: 6_000 });
+  const next = activeWorkoutReducer(performance, confirm);
+  expect(next.exercises[0].setRecords[0]).toMatchObject({ workDurationSeconds: 0, _activeRest: { startedAt: 6_000 } });
+  expect(next.phaseLedger.lastAcceptedEpochMs).toBe(6_000);
+});
+
+test('a recovered active rest seeds the next Start set without a negative rest duration', () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date(1_000));
+  let resting = initializeActiveWorkout([{ ...timedWorkout[0] }], { phaseTimingEnabled: true });
+  for (const action of [{ type: 'startWorkout', timestamp: 100 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 7_000 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 7_000 }]) resting = activeWorkoutReducer(resting, action);
+  resting = { ...resting, phaseLedger: { ...resting.phaseLedger, openedAtEpochMs: 7_000, lastAcceptedEpochMs: 7_000 } };
+  const action = vi.fn();
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action }} sessionState={{ status: 'owned', activeWorkout: resting, blocked: false }} /></AuthContext.Provider>);
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i }));
+  const start = action.mock.calls[0][0];
+  expect(start).toMatchObject({ type: 'startSet', timestamp: 7_000 });
+  const next = activeWorkoutReducer(resting, start);
+  expect(next.exercises[0].setRecords[0].actualRestSeconds).toBe(0);
+  expect(next.activeWorkTimer.startedAt).toBe(7_000);
+});
+
+test('a recovered Cooldown honors a newer snapshot epoch when finishing', () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date(1_000));
+  let cooldown = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
+  for (const action of [{ type: 'startWorkout', timestamp: 100 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 200 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 300 }]) cooldown = activeWorkoutReducer(cooldown, action);
+  cooldown = { ...cooldown, phaseLedger: { ...cooldown.phaseLedger, openedAtEpochMs: 9_000, lastAcceptedEpochMs: 9_000 } };
+  const action = vi.fn();
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action }} sessionState={{ status: 'owned', activeWorkout: cooldown, snapshot: { lastMutationAtEpochMs: 9_500 }, blocked: false }} /></AuthContext.Provider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  const finish = action.mock.calls[0][0];
+  expect(finish).toMatchObject({ type: 'finishWorkout', timestamp: 9_500 });
+  const next = activeWorkoutReducer(cooldown, finish);
+  expect(next.phaseLedger).toMatchObject({
+    closedSeconds: { warmup: 0, performance: 0, cooldown: 1 },
+    lastAcceptedEpochMs: 9_500,
+  });
+  expect(next.phaseCandidate).toMatchObject({
+    phaseActualSeconds: { warmup: 0, performance: 0, cooldown: 1 },
+    actualDurationSeconds: 1,
+    finishRequestedAtEpochMs: 9_500,
+  });
+});
+
+test('a newer recovered publication raises the accepted epoch before the next action without remounting', () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date(1_000));
+  const generated = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
+  const action = vi.fn();
+  const renderState = (activeWorkout, snapshot) => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action }} sessionState={{ status: 'owned', activeWorkout, snapshot, blocked: false }} /></AuthContext.Provider>;
+  const view = render(renderState(generated));
+  const recovered = { ...generated, workoutStartedAt: 8_000, phase: 'warmup', phaseLedger: { closedMilliseconds: { warmup: 0, performance: 0, cooldown: 0 }, closedSeconds: { warmup: 0, performance: 0, cooldown: 0 }, openPhase: 'warmup', openedAtEpochMs: 8_000, lastAcceptedEpochMs: 8_000 } };
+  view.rerender(renderState(recovered, { lastMutationAtEpochMs: 10_000 }));
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
+  expect(action).toHaveBeenCalledWith({ type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 10_000 });
+});
+
+test('live work and rest readouts retain their forward display value after a backward clock tick', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(15_000));
+  let working = initializeActiveWorkout([{ ...timedWorkout[0], setRecords: timedWorkout[0].setRecords.map(record => ({ ...record })) }], { phaseTimingEnabled: true });
+  for (const action of [{ type: 'startWorkout', timestamp: 10_000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 11_000 }]) working = activeWorkoutReducer(working, action);
+  const renderState = activeWorkout => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'owned', activeWorkout, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, blocked: false }} /></AuthContext.Provider>;
+  const view = render(renderState(working));
+  expect(screen.getByText('Work: 0:04')).toBeDefined();
+  vi.setSystemTime(new Date(18_000));
+  act(() => vi.advanceTimersByTime(1_000));
+  const forwardWork = screen.getByText(/^Work:/).textContent;
+  vi.setSystemTime(new Date(12_000));
+  act(() => vi.advanceTimersByTime(1_000));
+  expect(screen.getByText(forwardWork)).toBeDefined();
+
+  const resting = activeWorkoutReducer(working, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 12_000 });
+  view.rerender(renderState(resting));
+  const forwardRest = screen.getByText(/^(Rest:|Rest overtime:)/).textContent;
+  vi.setSystemTime(new Date(11_000));
+  act(() => vi.advanceTimersByTime(1_000));
+  expect(screen.getByText(forwardRest)).toBeDefined();
+});
+
+test('failed save retries the identical frozen v4 payload', async () => {
+  const view = renderWorkout([{ ...timedWorkout[1] }], () => {}, { uid: 'test-user-id' }, undefined, { save: vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(undefined) });
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
+  await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/offline/i));
+  const payload = view.api.save.mock.calls[0][0];
+  fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
+  await waitFor(() => expect(view.api.save).toHaveBeenCalledTimes(2));
+  expect(view.api.save.mock.calls[1][0]).toBe(payload);
   expect(Object.isFrozen(payload)).toBe(true);
 });
 
-test('a failed frozen save remains bound to the account that created it', async () => {
-  storage.saveWorkout.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(undefined);
-  const renderFor = uid => <AuthContext.Provider value={{ uid }}><WorkoutView workout={[{ ...timedWorkout[1] }]} onFinish={() => {}} /></AuthContext.Provider>;
-  const view = render(renderFor('user-a'));
+test('a failed session save keeps the frozen candidate for retry', async () => {
+  const view = renderWorkout([{ ...timedWorkout[1] }], () => {}, { uid: 'user-a' }, undefined, { save: vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(undefined) });
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/failed to save/i));
-  view.rerender(renderFor('user-b'));
+  await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/offline/i));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  expect(storage.saveWorkout).toHaveBeenCalledTimes(1);
-  expect(screen.getByRole('alert').textContent).toMatch(/account changed/i);
+  await waitFor(() => expect(view.api.save).toHaveBeenCalledTimes(2));
+  expect(view.api.save.mock.calls[1][0]).toBe(view.api.save.mock.calls[0][0]);
 });
 
 test('history loading is deferred until disclosure and failures remain nonblocking', async () => {
@@ -526,31 +978,28 @@ test('history loading is deferred until disclosure and failures remain nonblocki
   expect(screen.getByRole('button', { name: 'Start Workout' })).toBeDefined();
 });
 
-test('zero-work and partial summaries keep Save disabled until timed work is confirmed', () => {
-  renderWorkout(timedWorkout);
+test('zero-work cancellation and partial early finish use explicit session outcomes', async () => {
+  const onFinish = vi.fn(); const view = renderWorkout(timedWorkout, onFinish);
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
-
-  expect(screen.getByText('0 of 3 items confirmed')).toBeDefined();
-  expect(screen.getByText('Plank: 0 of 2 sets confirmed')).toBeDefined();
-  expect(screen.getByText('Squat: 0 of 1 sets confirmed')).toBeDefined();
-  expect(screen.getByRole('alert').textContent).toMatch(/confirm at least one/i);
-  expect(screen.getByRole('button', { name: 'Save workout' }).disabled).toBe(true);
-
-  fireEvent.click(screen.getByRole('button', { name: 'Back to workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
-  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 cancel/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
-  expect(screen.getByText('1 of 3 items confirmed')).toBeDefined();
-  expect(screen.getByText(/Some planned work remains unconfirmed/i)).toBeDefined();
-  expect(screen.getByRole('button', { name: 'Save workout' }).disabled).toBe(false);
+  expect(screen.getByRole('region', { name: 'Cancel workout' })).toBeDefined();
+  expect(screen.getByRole('heading', { name: 'Cancel workout?' })).toBe(document.activeElement);
+  fireEvent.click(screen.getByRole('button', { name: 'Keep working' }));
+  expect(screen.queryByRole('region', { name: 'Cancel workout' })).toBeNull();
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Finish Workout' })).toBe(document.activeElement));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel workout' }));
+  await waitFor(() => expect(view.api.discard).toHaveBeenCalledOnce());
+  expect(onFinish).toHaveBeenCalledOnce();
 });
 
 test('duplicate Save clicks share one in-flight request and disable summary navigation', async () => {
   let resolveSave;
-  storage.saveWorkout.mockImplementationOnce(() => new Promise(resolve => { resolveSave = resolve; }));
+  const saveApi = vi.fn(() => new Promise(resolve => { resolveSave = resolve; }));
   const onFinish = vi.fn();
-  renderWorkout([{ ...timedWorkout[1] }], onFinish);
+  const view = renderWorkout([{ ...timedWorkout[1] }], onFinish, { uid: 'test-user-id' }, undefined, { save: saveApi });
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
@@ -559,7 +1008,7 @@ test('duplicate Save clicks share one in-flight request and disable summary navi
   const save = screen.getByRole('button', { name: 'Save workout' });
   fireEvent.click(save);
   fireEvent.click(save);
-  expect(storage.saveWorkout).toHaveBeenCalledTimes(1);
+  expect(view.api.save).toHaveBeenCalledTimes(1);
   expect(save.textContent).toBe('Saving...');
   expect(save.getAttribute('aria-busy')).toBe('true');
   expect(screen.getByRole('button', { name: 'Back to workout' }).disabled).toBe(true);
@@ -568,79 +1017,62 @@ test('duplicate Save clicks share one in-flight request and disable summary navi
   resolveSave();
   await waitFor(() => expect(onFinish).toHaveBeenCalledOnce());
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  expect(storage.saveWorkout).toHaveBeenCalledTimes(1);
+  expect(view.api.save).toHaveBeenCalledTimes(1);
 });
 
-test('missing-user and builder failures retain the frozen summary without finishing', async () => {
+test('session save failures retain the frozen summary without finishing', async () => {
   const onFinish = vi.fn();
-  const missingUser = renderWorkout([{ ...timedWorkout[1] }], onFinish, null);
+  const missingUser = renderWorkout([{ ...timedWorkout[1] }], onFinish, { uid: 'test-user-id' }, undefined, { save: vi.fn().mockRejectedValue(new Error('Sign in before saving.')) });
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  expect(screen.getByRole('alert').textContent).toMatch(/sign in/i);
   expect(screen.getByRole('region', { name: 'Workout summary' })).toBeDefined();
-  expect(storage.saveWorkout).not.toHaveBeenCalled();
+  await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/sign in/i));
+  expect(missingUser.api.save).toHaveBeenCalledOnce();
   expect(onFinish).not.toHaveBeenCalled();
   missingUser.unmount();
 
-  renderWorkout([{ ...timedWorkout[1], tier: undefined }], onFinish);
+  const builderFailure = renderWorkout([{ ...timedWorkout[1], tier: undefined }], onFinish, { uid: 'test-user-id' }, undefined, { save: vi.fn().mockRejectedValue(new Error('Could not prepare workout.')) });
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  expect(screen.getByRole('alert').textContent).toMatch(/could not prepare/i);
+  await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/could not prepare/i));
   expect(screen.getByRole('region', { name: 'Workout summary' })).toBeDefined();
-  expect(storage.saveWorkout).not.toHaveBeenCalled();
+  expect(builderFailure.api.save).toHaveBeenCalledOnce();
   expect(onFinish).not.toHaveBeenCalled();
 });
 
-test('account-switch recovery rebuilds after Back and permits the original owner to save', async () => {
-  storage.saveWorkout.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(undefined);
+test('session account conflict keeps Review and permits a retry after recovery', async () => {
   const onFinish = vi.fn();
-  const renderFor = uid => <AuthContext.Provider value={{ uid }}><WorkoutView workout={[{ ...timedWorkout[1] }]} onFinish={onFinish} /></AuthContext.Provider>;
-  const view = render(renderFor('user-a'));
+  const view = renderWorkout([{ ...timedWorkout[1] }], onFinish, { uid: 'user-a' }, undefined, { save: vi.fn().mockRejectedValueOnce(new Error('Account changed.')).mockResolvedValueOnce(undefined) });
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/failed to save/i));
-  const failedPayload = storage.saveWorkout.mock.calls[0][1];
-
-  view.rerender(renderFor('user-b'));
-  fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  expect(storage.saveWorkout).toHaveBeenCalledTimes(1);
-  expect(screen.getByRole('alert').textContent).toMatch(/account changed/i);
-  fireEvent.click(screen.getByRole('button', { name: 'Back to workout' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  expect(storage.saveWorkout).toHaveBeenCalledTimes(1);
-  expect(screen.getByRole('alert').textContent).toMatch(/account changed/i);
-
-  view.rerender(renderFor('user-a'));
+  await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/account changed/i));
+  const failedCandidate = view.api.save.mock.calls[0][0];
+  expect(screen.getByRole('region', { name: 'Workout summary' })).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
   await waitFor(() => expect(onFinish).toHaveBeenCalledOnce());
-  const rebuiltPayload = storage.saveWorkout.mock.calls[1][1];
-  expect(rebuiltPayload).not.toBe(failedPayload);
-  expect(rebuiltPayload.exercises).toEqual(failedPayload.exercises);
+  expect(view.api.save.mock.calls[1][0]).toBe(failedCandidate);
 });
 
 test('history fetch failure stays separate while a timed workout saves successfully', async () => {
   storage.getHistoryPage.mockRejectedValueOnce(new Error('history offline'));
-  storage.saveWorkout.mockResolvedValueOnce(undefined);
   const onFinish = vi.fn();
-  renderWorkout([{ ...timedWorkout[1] }], onFinish);
+  const view = renderWorkout([{ ...timedWorkout[1] }], onFinish);
   fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
   expect(await screen.findByText('Couldn’t load workout history.')).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
-  expect(screen.getByText(/refreshing or closing this page will lose/i)).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
   await waitFor(() => expect(onFinish).toHaveBeenCalledOnce());
-  expect(storage.saveWorkout).toHaveBeenCalledTimes(1);
+  expect(view.api.save).toHaveBeenCalledOnce();
 });

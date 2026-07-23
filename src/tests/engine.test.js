@@ -496,6 +496,18 @@ describe('Generator Engine', () => {
             expect(ids(generateWorkout(1.75, [], false, catalog, v3History, { staleThreshold: 50 })))
                 .toEqual(['changed']);
 
+            const v4History = v3History.map(session => session.schemaVersion === 3 ? ({
+                ...session,
+                schemaVersion: 4,
+                phaseDurations: {
+                    warmup: { plannedSeconds: 0, actualSeconds: 0 },
+                    performance: { plannedSeconds: 60, actualSeconds: 60 },
+                    cooldown: { plannedSeconds: 0, actualSeconds: 0 },
+                },
+            }) : session);
+            expect(ids(generateWorkout(1.75, [], false, catalog, v4History, { staleThreshold: 50 })))
+                .toEqual(['changed']);
+
             const legacyHistory = [
                 legacyWorkout('2026-06-10T10:00:00Z', 'core'),
                 legacyWorkout('2026-06-20T10:00:00Z', 'changed'),
@@ -503,6 +515,48 @@ describe('Generator Engine', () => {
             ];
             expect(ids(generateWorkout(1.75, [], false, catalog, legacyHistory, { staleThreshold: 50 })))
                 .toEqual(['core']);
+        });
+
+        it('credits valid v4 quota history while treating malformed v4 as no usable history', () => {
+            const catalog = [exercise('core', 'Core', 4), exercise('chest', 'Chest', 3)];
+            const quotaReset = completedV2Workout(
+                '2026-06-20T10:00:00Z',
+                [simpleV2Occurrence(catalog[0], true)],
+            );
+            const validV4Credit = {
+                schemaVersion: 4,
+                status: 'completed',
+                date: '2026-06-21T10:00:00Z',
+                actualDurationSeconds: 60,
+                phaseDurations: {
+                    warmup: { plannedSeconds: 0, actualSeconds: 0 },
+                    performance: { plannedSeconds: 60, actualSeconds: 60 },
+                    cooldown: { plannedSeconds: 0, actualSeconds: 0 },
+                },
+                exercises: [{
+                    ...catalog[1],
+                    occurrenceId: 'chest:0',
+                    trackingMode: 'simple',
+                    prescribedSetCount: 1,
+                    setRecords: [{
+                        index: 0,
+                        completed: true,
+                        plannedRestSeconds: null,
+                        workDurationSeconds: 1,
+                        actualRestSeconds: null,
+                    }],
+                }],
+            };
+            const noUsableCredit = [quotaReset];
+            const malformedV4Credit = [quotaReset, { ...validV4Credit, actualDurationSeconds: 61 }];
+            const settings = { staleThreshold: 50 };
+
+            expect(ids(generateWorkout(1.75, [], false, catalog, [quotaReset, validV4Credit], settings)))
+                .toEqual(['core']);
+            expect(ids(generateWorkout(1.75, [], false, catalog, malformedV4Credit, settings)))
+                .toEqual(ids(generateWorkout(1.75, [], false, catalog, noUsableCredit, settings)));
+            expect(ids(generateWorkout(1.75, [], false, catalog, noUsableCredit, settings)))
+                .toEqual(['chest']);
         });
 
         it('is deterministic for unordered malformed history and equal-recency catalog ties', () => {
@@ -670,6 +724,29 @@ describe('Generator Engine', () => {
                 });
             });
             expect(generated[0].completed).toBe(false);
+        });
+
+        it('adds immutable phase targets without changing selected exercise output', () => {
+            const baseline = generateWorkout(60, [], false, trackingCatalog, [], { defaultRestSeconds: 75 });
+            const settings = {
+                defaultRestSeconds: 75, warmupSeconds: 600, cooldownSeconds: 300,
+            };
+            const generated = generateWorkout(60, [], false, trackingCatalog, [], settings);
+
+            expect(generated.map(exercise => exercise.id)).toEqual(baseline.map(exercise => exercise.id));
+            expect(generated.phaseTargets).toEqual({ warmupSeconds: 600, performanceSeconds: 3600, cooldownSeconds: 300 });
+            expect(Object.isFrozen(generated.phaseTargets)).toBe(true);
+            expect(Object.keys(generated)).not.toContain('phaseTargets');
+            settings.warmupSeconds = 0;
+            settings.cooldownSeconds = 3600;
+            expect(generated.phaseTargets).toEqual({ warmupSeconds: 600, performanceSeconds: 3600, cooldownSeconds: 300 });
+        });
+
+        it('rejects negative and fractional-second phase target budgets', () => {
+            expect(() => generateWorkout(-1, [], false, trackingCatalog, [], {}))
+                .toThrow('Time budget must be a nonnegative number of whole seconds.');
+            expect(() => generateWorkout(1.234, [], false, trackingCatalog, [], {}))
+                .toThrow('Time budget must be a nonnegative number of whole seconds.');
         });
 
         it('snapshots catalog rest overrides, inherits after clearing, and normalizes invalid defaults', () => {

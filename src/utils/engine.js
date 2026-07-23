@@ -164,7 +164,7 @@ function isTier4QuotaOpen(history, catalogMap, requiredTier3Groups) {
         const time = new Date(session.date).getTime();
         for (const occurrence of session.exercises) {
             if (!wasPerformed(session, occurrence)) continue;
-            const classification = session.schemaVersion === 2 || session.schemaVersion === 3
+            const classification = session.schemaVersion === 2 || session.schemaVersion === 3 || session.schemaVersion === 4
                 ? occurrence
                 : catalogMap.get(occurrence.id);
             if (!classification) continue;
@@ -303,6 +303,10 @@ export function checkIsLegDay(date, unrecoveredGroups, history, settings) {
 }
 
 export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay = false, catalog, history, settings) {
+    const performanceSeconds = timeBudget * 60;
+    if (!Number.isFinite(performanceSeconds) || performanceSeconds < 0 || !Number.isInteger(performanceSeconds)) {
+        throw new RangeError('Time budget must be a nonnegative number of whole seconds.');
+    }
     const normalizedSettings = normalizeWorkoutSettings(settings);
     const staleThreshold = normalizedSettings.staleThreshold || 5;
     const chronologicalHistory = getChronologicalHistory(history);
@@ -507,10 +511,18 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
     });
     for (const unit of selectedUnits) addMembers(unit.members);
     
-    return workout.map((exercise, ordinal) => enrichSelectedExercise(
+    const generatedWorkout = workout.map((exercise, ordinal) => enrichSelectedExercise(
         exercise,
         history,
         normalizedSettings.defaultRestSeconds,
         ordinal,
     ));
+    Object.defineProperty(generatedWorkout, 'phaseTargets', {
+        value: Object.freeze({
+            warmupSeconds: normalizedSettings.warmupSeconds,
+            performanceSeconds,
+            cooldownSeconds: normalizedSettings.cooldownSeconds,
+        }),
+    });
+    return generatedWorkout;
 }

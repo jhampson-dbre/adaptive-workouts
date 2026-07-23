@@ -3,8 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const approved = uid => ({ uid, email: `${uid}@example.test` })
 
-async function mount({ evaluate = vi.fn(async () => ({ claims: { approved: true } })), settingsFactory } = {}) {
+async function mount({ evaluate = vi.fn(async () => ({ claims: { approved: true } })), settingsFactory, initialSessionState = { status: 'idle', activeWorkout: null }, resumedWorkout } = {}) {
   const observers = []
+  let updateSessionState
   vi.doMock('../utils/auth', () => ({
     subscribeToIdTokenChanges: callback => { observers.push(callback); return vi.fn() },
     evaluateAccessToken: evaluate,
@@ -12,16 +13,73 @@ async function mount({ evaluate = vi.fn(async () => ({ claims: { approved: true 
     signOutUser: vi.fn(),
   }))
   vi.doMock('../utils/storage', () => ({ migrateLocalData: vi.fn() }))
+  vi.doMock('../utils/useActiveWorkoutSession', async () => {
+    const React = await import('react')
+    return {
+      useActiveWorkoutSession: () => {
+        const [state, setState] = React.useState(initialSessionState)
+        updateSessionState = setState
+        const session = React.useMemo(() => ({
+          stageGenerated: async (exercises, phaseTargets) => {
+            setState({ status: 'generated', activeWorkout: { exercises, phaseTargets } })
+            return true
+          },
+          resume: async () => {
+            if (!resumedWorkout) return false
+            setState({ status: 'owned', activeWorkout: { exercises: [resumedWorkout] } })
+            return true
+          },
+          discard: async () => {
+            setState({ status: 'idle', activeWorkout: null })
+          },
+          retireIdentity: async () => {},
+        }), [])
+        return [state, session]
+      },
+    }
+  })
   vi.doMock('../components/Generator', () => ({ default: ({ timeBudget, setTimeBudget, unrecoveredGroups, setUnrecoveredGroups, onGenerate }) => <section><h2>Generate Workout</h2><p>Budget {timeBudget}; groups {unrecoveredGroups.join(',')}</p><label>Time Budget<input aria-label="Time Budget" type="range" value={timeBudget} onChange={event => setTimeBudget(Number(event.target.value))} /></label><label><input aria-label="Back unrecovered" type="checkbox" checked={unrecoveredGroups.includes('Back')} onChange={event => setUnrecoveredGroups(event.target.checked ? ['Back'] : [])} />Back</label><button onClick={() => setTimeBudget(60)}>Set 60</button><button onClick={() => setUnrecoveredGroups(['Back'])}>Set Back</button><button onClick={() => onGenerate([{ id: 'same-workout' }])}>Generate nonempty</button></section> }))
   vi.doMock('../components/Settings', settingsFactory ?? (() => ({ default: ({ onClose }) => <section><h2>Catalog Management</h2><button onClick={onClose}>Close</button></section> })))
-  vi.doMock('../components/WorkoutView', () => ({ default: ({ workout }) => <section><h2>Ready to sweat?</h2><p>Workout {workout?.[0]?.id}</p></section> }))
+  vi.doMock('../components/WorkoutView', () => ({ default: ({ session, sessionState, onResume, onFinish }) => <section><h2>Ready to sweat?</h2><p>Status {sessionState.status}</p><p>Workout {sessionState.activeWorkout?.exercises?.[0]?.id}</p>{sessionState.status === 'recovery-available' && <button onClick={async () => { if (await session.resume()) onResume?.() }}>Resume</button>}{sessionState.status === 'generated' && <button onClick={async () => { await session.discard(); onFinish?.(); }}>Cancel generated</button>}</section> }))
   const { default: App } = await import('../App'); render(<App />)
-  return { emit: value => act(async () => observers[0](value)), emitSync: value => act(() => observers[0](value)), evaluate }
+  return { emit: value => act(async () => observers[0](value)), emitSync: value => act(() => observers[0](value)), setSessionState: value => act(() => updateSessionState(value)), evaluate }
 }
 
-afterEach(() => { cleanup(); vi.resetModules(); vi.doUnmock('../utils/auth'); vi.doUnmock('../utils/storage'); vi.doUnmock('../components/Generator'); vi.doUnmock('../components/Settings'); vi.doUnmock('../components/WorkoutView') })
+afterEach(() => { cleanup(); vi.resetModules(); vi.doUnmock('../utils/auth'); vi.doUnmock('../utils/storage'); vi.doUnmock('../utils/useActiveWorkoutSession'); vi.doUnmock('../components/Generator'); vi.doUnmock('../components/Settings'); vi.doUnmock('../components/WorkoutView') })
 
 describe('lazy authorized navigation', () => {
+  it('routes an active acquisition blocker to WorkoutView', async () => {
+    const app = await mount({ initialSessionState: { status: 'blocked', blocked: true, error: 'unsupported', activeWorkout: { exercises: [{ id: 'blocked-workout' }] } } })
+    await app.emit(approved('u1'))
+    expect(await screen.findByText('Status blocked')).toBeTruthy()
+  })
+
+  it('hides the Catalog utility only while the Workout destination is forced by session recovery', async () => {
+    const app = await mount(); await app.emit(approved('u1'))
+    expect(await screen.findByRole('button', { name: 'Manage Catalog' })).toBeTruthy()
+    for (const status of ['checking', 'recovery-available', 'recovery-blocked', 'blocked']) {
+      app.setSessionState({ status, blocked: true, error: status === 'recovery-blocked' ? 'timeout' : null, activeWorkout: null })
+      expect(await screen.findByText(`Status ${status}`)).toBeTruthy()
+      expect(screen.queryByRole('button', { name: 'Manage Catalog' })).toBeNull()
+    }
+    app.setSessionState({ status: 'owned', blocked: false, activeWorkout: { exercises: [{ id: 'ordinary-workout' }] } })
+    expect(await screen.findByRole('button', { name: 'Manage Catalog' })).toBeTruthy()
+    app.setSessionState({ status: 'review', blocked: true, pendingSave: { state: 'blocked-conflict' }, activeWorkout: { exercises: [{ id: 'ordinary-review' }] } })
+    expect(screen.getByRole('button', { name: 'Manage Catalog' })).toBeTruthy()
+  })
+
+  it('keeps the recovered workout destination after Resume and Settings detours', async () => {
+    const app = await mount({ initialSessionState: { status: 'recovery-available', blocked: true, activeWorkout: { exercises: [{ id: 'recovered-workout' }] } }, resumedWorkout: { id: 'recovered-workout' } })
+    await app.emit(approved('u1'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Resume' }))
+    expect(await screen.findByText('Status owned')).toBeTruthy()
+    expect(screen.getByText('Workout recovered-workout')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Manage Catalog' }))
+    await screen.findByRole('heading', { name: 'Catalog Management' })
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(await screen.findByText('Workout recovered-workout')).toBeTruthy()
+  })
+
   it('keeps focus on Plan controls when lifted selections rerender App', async () => {
     const app = await mount(); await app.emit(approved('u1')); await screen.findByRole('heading', { name: 'Generate Workout' })
     const slider = screen.getByRole('slider', { name: 'Time Budget' }); slider.focus(); fireEvent.change(slider, { target: { value: '60' } })
@@ -47,6 +105,15 @@ describe('lazy authorized navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close' })); const workout = await screen.findByRole('heading', { name: 'Ready to sweat?' }); await waitFor(() => expect(document.activeElement).toBe(workout)); expect(screen.getByText('Workout same-workout')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Manage Catalog' })); await screen.findByRole('heading', { name: 'Catalog Management' }); fireEvent.click(screen.getByRole('button', { name: 'Back to Workout' }))
     const returnedWorkout = await screen.findByRole('heading', { name: 'Ready to sweat?' }); await waitFor(() => expect(document.activeElement).toBe(returnedWorkout))
+  })
+
+  it('does not resurrect a cancelled generated plan after a Settings detour', async () => {
+    const app = await mount(); await app.emit(approved('u1')); await screen.findByRole('heading', { name: 'Generate Workout' });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate nonempty' })); await screen.findByText('Workout same-workout');
+    fireEvent.click(screen.getByRole('button', { name: 'Manage Catalog' })); await screen.findByRole('heading', { name: 'Catalog Management' }); fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel generated' }));
+    expect(await screen.findByRole('heading', { name: 'Generate Workout' })).toBeTruthy();
+    expect(screen.queryByText('Workout same-workout')).toBeNull();
   })
 
   it('preserves same-UID lifted state but clears it for changed UID, pending access, and signout/reapproval', async () => {

@@ -16,6 +16,8 @@
     "ci:check": "npm run ci:test && npm run ci:lint && npm run ci:build && npm run ci:rules && npm run ci:workflow && npm run ci:agent-models",
     "preview": "vite preview",
     "test": "vitest",
+    "timing:harness": "vite --host 127.0.0.1 --open /timing-harness.html",
+    "check:timing-harness": "node scripts/check-timing-harness.mjs",
     "approve-user": "node scripts/manage-user-approval.mjs approve",
     "revoke-user": "node scripts/manage-user-approval.mjs revoke",
     "emulators": "node scripts/emulator/run-emulators.mjs",

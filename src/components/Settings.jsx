@@ -10,6 +10,7 @@ const getTier1Groups = (currentCatalog, ignoreId = null) => {
 
 const coerceNumber = value => value === '' ? '' : Number(value);
 const isValidRestSeconds = value => Number.isInteger(value) && value >= 5 && value <= 600;
+const isValidPhaseMinutes = value => Number.isInteger(value) && value >= 0 && value <= 60;
 
 const getTrackingConfig = (trackingMode, values) => {
   if (trackingMode === 'weighted') {
@@ -120,6 +121,9 @@ export default function Settings({ onClose }) {
   const [legDayOfWeek, setLegDayOfWeek] = useState('None');
   const [defaultRestSeconds, setDefaultRestSeconds] = useState('60');
   const [settingsError, setSettingsError] = useState('');
+  const [warmupMinutes, setWarmupMinutes] = useState('10');
+  const [cooldownMinutes, setCooldownMinutes] = useState('5');
+  const [phaseErrors, setPhaseErrors] = useState({ warmup: '', cooldown: '' });
   
   // New exercise state
   const [newName, setNewName] = useState('');
@@ -168,6 +172,8 @@ export default function Settings({ onClose }) {
         const currentSettings = await getSettings(user.uid);
         setLegDayOfWeek(currentSettings.legDayOfWeek || 'None');
         setDefaultRestSeconds(String(currentSettings.defaultRestSeconds ?? 60));
+        setWarmupMinutes(String((currentSettings.warmupSeconds ?? 600) / 60));
+        setCooldownMinutes(String((currentSettings.cooldownSeconds ?? 300) / 60));
       } catch (error) {
         console.error("Failed to load data:", error);
       } finally {
@@ -193,6 +199,34 @@ export default function Settings({ onClose }) {
     }
     setSettingsError('');
     handleSaveSettings({ defaultRestSeconds: value });
+  };
+
+  const handlePhaseBlur = async (phase, minutes) => {
+    if (minutes === '') {
+      setPhaseErrors(current => ({
+        ...current,
+        [phase]: `${phase === 'warmup' ? 'Warmup' : 'Cooldown'} must be a whole number from 0 through 60 minutes.`,
+      }));
+      return;
+    }
+    const value = Number(minutes);
+    if (!isValidPhaseMinutes(value)) {
+      setPhaseErrors(current => ({
+        ...current,
+        [phase]: `${phase === 'warmup' ? 'Warmup' : 'Cooldown'} must be a whole number from 0 through 60 minutes.`,
+      }));
+      return;
+    }
+    setPhaseErrors(current => ({ ...current, [phase]: '' }));
+    try {
+      await saveSettings(user.uid, { [`${phase}Seconds`]: value * 60 });
+    } catch (error) {
+      console.error('Failed to save phase setting:', error);
+      setPhaseErrors(current => ({
+        ...current,
+        [phase]: `Could not save ${phase === 'warmup' ? 'Warmup' : 'Cooldown'}. Try again.`,
+      }));
+    }
   };
 
   const handleSave = async (newCatalog, changedItem = null) => {
@@ -428,6 +462,46 @@ export default function Settings({ onClose }) {
           />
         </label>
         {settingsError && <div id="default-rest-error" className="catalog-form-error" role="alert">{settingsError}</div>}
+      </div>
+
+      <div className="setting-group" style={{ padding: '15px' }}>
+        <label>
+          Warmup minutes
+          <input
+            aria-label="Warmup minutes"
+            type="number"
+            min="0"
+            max="60"
+            step="1"
+            className="phase-duration-input"
+            value={warmupMinutes}
+            onChange={event => setWarmupMinutes(event.target.value)}
+            onBlur={() => handlePhaseBlur('warmup', warmupMinutes)}
+            aria-invalid={phaseErrors.warmup ? true : undefined}
+            aria-describedby={phaseErrors.warmup ? 'warmup-error' : undefined}
+          />
+        </label>
+        {phaseErrors.warmup && <div id="warmup-error" className="catalog-form-error" role="alert">{phaseErrors.warmup}</div>}
+      </div>
+
+      <div className="setting-group" style={{ padding: '15px' }}>
+        <label>
+          Cooldown minutes
+          <input
+            aria-label="Cooldown minutes"
+            type="number"
+            min="0"
+            max="60"
+            step="1"
+            className="phase-duration-input"
+            value={cooldownMinutes}
+            onChange={event => setCooldownMinutes(event.target.value)}
+            onBlur={() => handlePhaseBlur('cooldown', cooldownMinutes)}
+            aria-invalid={phaseErrors.cooldown ? true : undefined}
+            aria-describedby={phaseErrors.cooldown ? 'cooldown-error' : undefined}
+          />
+        </label>
+        {phaseErrors.cooldown && <div id="cooldown-error" className="catalog-form-error" role="alert">{phaseErrors.cooldown}</div>}
       </div>
 
       <div className="setting-group" style={{ padding: '15px' }}>

@@ -1,10 +1,65 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null
+    function owner(userId) {
+      return request.auth != null
         && request.auth.uid == userId
         && request.auth.token.approved == true;
+    }
+
+    function canonicalV4(workoutId) {
+      return request.resource.data.keys().hasOnly([
+          'id', 'schemaVersion', 'status', 'date', 'actualDurationSeconds', 'phaseDurations', 'exercises'
+        ])
+        && request.resource.data.keys().hasAll([
+          'id', 'schemaVersion', 'status', 'date', 'actualDurationSeconds', 'phaseDurations', 'exercises'
+        ])
+        && workoutId.matches('^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
+        && request.resource.data.id == workoutId
+        && request.resource.data.schemaVersion == 4
+        && request.resource.data.status == 'completed'
+        && request.resource.data.date is string
+        && request.resource.data.actualDurationSeconds is int
+        && request.resource.data.actualDurationSeconds >= 0
+        && request.resource.data.exercises is list
+        && request.resource.data.exercises.size() > 0
+        && request.resource.data.phaseDurations.keys().hasOnly(['warmup', 'performance', 'cooldown'])
+        && request.resource.data.phaseDurations.keys().hasAll(['warmup', 'performance', 'cooldown'])
+        && validPhase(request.resource.data.phaseDurations.warmup)
+        && validPhase(request.resource.data.phaseDurations.performance)
+        && validPhase(request.resource.data.phaseDurations.cooldown)
+        && request.resource.data.actualDurationSeconds == request.resource.data.phaseDurations.warmup.actualSeconds
+          + request.resource.data.phaseDurations.performance.actualSeconds
+          + request.resource.data.phaseDurations.cooldown.actualSeconds;
+    }
+
+    function validPhase(phase) {
+      return phase.keys().hasOnly(['plannedSeconds', 'actualSeconds'])
+        && phase.keys().hasAll(['plannedSeconds', 'actualSeconds'])
+        && phase.plannedSeconds is int && phase.plannedSeconds >= 0
+        && phase.actualSeconds is int && phase.actualSeconds >= 0;
+    }
+
+    function legacyCompatibleHistory() {
+      return !request.resource.data.keys().hasAny(['id'])
+        && (!request.resource.data.keys().hasAny(['schemaVersion'])
+          || request.resource.data.schemaVersion == 2
+          || request.resource.data.schemaVersion == 3);
+    }
+
+    match /users/{userId} {
+      allow read, write: if owner(userId);
+    }
+
+    match /users/{userId}/history/{workoutId} {
+      allow read: if owner(userId);
+      allow create: if owner(userId) && (canonicalV4(workoutId) || legacyCompatibleHistory());
+      allow update: if owner(userId) && request.resource.data == resource.data;
+      allow delete: if false;
+    }
+
+    match /users/{userId}/{collectionId}/{document=**} {
+      allow read, write: if collectionId != 'history' && owner(userId);
     }
   }
 }
