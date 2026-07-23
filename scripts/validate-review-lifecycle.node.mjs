@@ -1,0 +1,281 @@
+import assert from 'node:assert/strict'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import test from 'node:test'
+
+import { parseReviewLifecycleBlocks, validateReviewLifecycle, validateReviewLifecycleFile } from './validate-review-lifecycle.mjs'
+
+const sha = (character) => character.repeat(40)
+
+function validLifecycle() {
+  return {
+    taskId: 'TREK-252',
+    taskRange: { baseSha: sha('a'), candidateSha: sha('b'), terminalSha: sha('b') },
+    history: { rewritten: false, staleUpstream: false, unaccountedIntegration: false },
+    baseline: {
+      id: 'RB-TREK-252-01',
+      taskBaseSha: sha('a'),
+      candidateSha: sha('b'),
+      terminalSha: sha('b'),
+      sync: { mainSha: sha('d'), syncSha: sha('a'), conflicts: false },
+      verification: ['node --test scripts/validate-review-lifecycle.node.mjs'],
+      risk: 'medium',
+      matrixId: 'RM-TREK-252-01',
+      authorities: [
+        { id: 'RA-1', kind: 'technical', reviewerId: 'technical-broad' },
+        { id: 'RA-2', kind: 'conformance', reviewerId: 'conformance-broad' },
+      ],
+    },
+    matrix: [
+      { id: 'RM-1', obligation: 'criterion', authorityId: 'RA-1' },
+      { id: 'RM-2', obligation: 'changed-surface', authorityId: 'RA-2' },
+      { id: 'RM-3', obligation: 'risk', authorityId: 'RA-1' },
+    ],
+    expectedCoverage: ['criterion', 'changed-surface', 'risk'],
+    findings: [{ id: 'RF-1', authorityId: 'RA-1', severity: 'P1', matrixRows: ['RM-1'], states: ['open', 'accepted', 'fixed-pending-closure', 'closed'] }],
+    batches: [{ id: 'RBATCH-1', baselineId: 'RB-TREK-252-01', findingIds: ['RF-1'], fromSha: sha('b'), toSha: sha('c'), artifactChanged: true, evidenceChanged: true, affectedMatrixRows: ['RM-1', 'RM-2'], affectedAuthorityIds: ['RA-1', 'RA-2'], closureRound: 1 }],
+    closures: [
+      { id: 'RC-1', batchId: 'RBATCH-1', authorityId: 'RA-1', closerId: 'technical-closer', fresh: true, terminalSha: sha('c'), disposition: 'closed' },
+      { id: 'RC-2', batchId: 'RBATCH-1', authorityId: 'RA-2', closerId: 'conformance-closer', fresh: true, terminalSha: sha('c'), disposition: 'closed' },
+    ],
+    invalidators: [],
+  }
+}
+
+test('accepts a reconciled lifecycle with fresh P1 replacement closers', () => {
+  assert.doesNotThrow(() => validateReviewLifecycle(validLifecycle()))
+})
+
+test('rejects duplicate IDs, illegal transitions, incomplete coverage, and missing closure', () => {
+  const duplicate = validLifecycle()
+  duplicate.matrix[1].id = 'RM-1'
+  assert.throws(() => validateReviewLifecycle(duplicate), /duplicate ID/i)
+
+  const transition = validLifecycle()
+  transition.findings[0].states = ['open', 'closed']
+  assert.throws(() => validateReviewLifecycle(transition), /illegal finding transition/i)
+
+  const coverage = validLifecycle()
+  coverage.expectedCoverage.push('ux')
+  assert.throws(() => validateReviewLifecycle(coverage), /incomplete coverage/i)
+
+  const closure = validLifecycle()
+  closure.closures = closure.closures.filter((entry) => entry.authorityId !== 'RA-2')
+  assert.throws(() => validateReviewLifecycle(closure), /exactly one fresh replacement conformance closer/i)
+})
+
+test('rejects stale, rewritten, unaccounted ranges and invalidator escalation omissions', () => {
+  const stale = validLifecycle()
+  stale.baseline.candidateSha = sha('z')
+  assert.throws(() => validateReviewLifecycle(stale), /candidate SHA/i)
+
+  const unaccounted = validLifecycle()
+  unaccounted.history.unaccountedIntegration = true
+  assert.throws(() => validateReviewLifecycle(unaccounted), /unaccounted integration/i)
+
+  const invalidated = validLifecycle()
+  invalidated.invalidators = [{ id: 'RI-1', baselineId: 'RB-TREK-252-01', trigger: 'history-rewritten', decision: 'new-cycle' }]
+  assert.throws(() => validateReviewLifecycle(invalidated), /successor cycle/i)
+})
+
+test('requires a checkpoint and escalation after two unsuccessful closure rounds', () => {
+  const lifecycle = validLifecycle()
+  lifecycle.findings[0].states = ['open', 'accepted', 'fixed-pending-closure']
+  lifecycle.batches = [
+    { ...lifecycle.batches[0], id: 'RBATCH-2', closureRound: 2 },
+  ]
+  lifecycle.closures = []
+  assert.throws(() => validateReviewLifecycle(lifecycle), /checkpoint and coordinator escalation/i)
+})
+
+test('parses canonical append-only Review blocks', () => {
+  const lifecycle = validLifecycle()
+  const markdown = `Review-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle })}\n\`\`\``
+  assert.deepEqual(parseReviewLifecycleBlocks(markdown), [{ type: 'Baseline', lifecycle }])
+})
+
+test('requires UX closure when changed prescribed UX evidence is affected', () => {
+  const lifecycle = validLifecycle()
+  lifecycle.baseline.authorities.push({ id: 'RA-3', kind: 'ux', reviewerId: 'ux-broad' })
+  lifecycle.matrix.push({ id: 'RM-4', obligation: 'ux-evidence', authorityId: 'RA-3' })
+  lifecycle.expectedCoverage.push('ux-evidence')
+  lifecycle.batches[0].affectedMatrixRows.push('RM-4')
+  assert.throws(() => validateReviewLifecycle(lifecycle), /UX closure/i)
+})
+
+test('introduces findings append-only in Review-Batch after a finding-free baseline', () => {
+  const lifecycle = validLifecycle()
+  delete lifecycle.findings
+  lifecycle.batches[0].findings = [{ id: 'RF-1', authorityId: 'RA-1', severity: 'P1', matrixRows: ['RM-1'], states: ['open', 'accepted', 'fixed-pending-closure', 'closed'] }]
+  delete lifecycle.batches[0].findingIds
+  const directory = mkdtempSync(join(tmpdir(), 'review-lifecycle-'))
+  const evidencePath = join(directory, 'evidence.md')
+  writeFileSync(evidencePath, `Review-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle })}\n\`\`\`\nReview-Batch:\n\`\`\`review-lifecycle\n${JSON.stringify({ batch: lifecycle.batches[0] })}\n\`\`\`\n${lifecycle.closures.map((closure) => `Review-Closure:\n\`\`\`review-lifecycle\n${JSON.stringify({ closure })}\n\`\`\``).join('\n')}`)
+  try {
+    assert.doesNotThrow(() => validateReviewLifecycleFile(evidencePath))
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test('rejects unauthorised N/A, duplicated P1 closers, and a non-replacement fresh closer', () => {
+  const na = validLifecycle()
+  na.matrix[2] = { id: 'RM-3', obligation: 'N/A', covers: 'risk', authorityId: 'RA-1' }
+  assert.throws(() => validateReviewLifecycle(na), /N\/A.*rationale.*authority/i)
+
+  const duplicate = validLifecycle()
+  duplicate.closures.push({ ...duplicate.closures[0], id: 'RC-3' })
+  assert.throws(() => validateReviewLifecycle(duplicate), /exactly one fresh replacement/i)
+
+  const replacement = validLifecycle()
+  replacement.baseline.authorities[0].reviewerId = 'technical-closer'
+  replacement.findings[0].authorityId = 'RA-1'
+  replacement.closures[0].authorityId = 'RA-1'
+  replacement.closures[1].authorityId = 'RA-2'
+  assert.throws(() => validateReviewLifecycle(replacement), /must differ from original broad reviewer/i)
+})
+
+test('separately rejects rewritten history, stale upstream, and terminal accepted findings', () => {
+  for (const [key, message] of [['rewritten', /history rewrite/i], ['staleUpstream', /stale upstream/i]]) {
+    const lifecycle = validLifecycle()
+    lifecycle.history[key] = true
+    assert.throws(() => validateReviewLifecycle(lifecycle), message)
+  }
+  const accepted = validLifecycle()
+  accepted.findings[0].states = ['open', 'accepted']
+  assert.throws(() => validateReviewLifecycle(accepted), /terminal accepted finding/i)
+})
+
+test('caps specialist authority at one reviewer', () => {
+  const lifecycle = validLifecycle()
+  lifecycle.baseline.authorities.push(
+    { id: 'RA-3', kind: 'specialist', reviewerId: 'specialist-one' },
+    { id: 'RA-4', kind: 'specialist', reviewerId: 'specialist-two' },
+  )
+  assert.throws(() => validateReviewLifecycle(lifecycle), /specialist authority is capped/i)
+})
+
+test('requires an append-only successor baseline for a correction invalidator', () => {
+  const lifecycle = validLifecycle()
+  lifecycle.taskRange.candidateSha = sha('c')
+  lifecycle.taskRange.terminalSha = sha('c')
+  lifecycle.baseline.candidateSha = sha('c')
+  lifecycle.baseline.terminalSha = sha('c')
+  lifecycle.findings = []
+  lifecycle.batches = []
+  lifecycle.closures = []
+  lifecycle.invalidators = [{ id: 'RI-1', baselineId: 'RB-TREK-252-01', trigger: 'evidence-stale', decision: 'new-cycle', successorBaselineId: 'RB-TREK-252-02' }]
+  const directory = mkdtempSync(join(tmpdir(), 'review-lifecycle-'))
+  const evidencePath = join(directory, 'evidence.md')
+  writeFileSync(evidencePath, `Review-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle })}\n\`\`\`\nReview-Invalidator:\n\`\`\`review-lifecycle\n${JSON.stringify({ invalidator: lifecycle.invalidators[0] })}\n\`\`\``)
+  try {
+    assert.throws(() => validateReviewLifecycleFile(evidencePath), /successor baseline block/i)
+    const successor = structuredClone(lifecycle)
+    successor.baseline.id = 'RB-TREK-252-02'
+    successor.baseline.matrixId = 'RM-TREK-252-02'
+    successor.baseline.authorities = [{ id: 'RA-3', kind: 'technical', reviewerId: 'technical-successor' }, { id: 'RA-4', kind: 'conformance', reviewerId: 'conformance-successor' }]
+    successor.matrix = [{ id: 'RM-4', obligation: 'criterion', authorityId: 'RA-3' }, { id: 'RM-5', obligation: 'changed-surface', authorityId: 'RA-4' }, { id: 'RM-6', obligation: 'risk', authorityId: 'RA-3' }]
+    successor.invalidators = []
+    writeFileSync(evidencePath, `${readFileSync(evidencePath, 'utf8')}\nReview-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle: successor })}\n\`\`\``)
+    assert.doesNotThrow(() => validateReviewLifecycleFile(evidencePath))
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test('keeps the baseline terminal immutable and derives a later additive terminal', () => {
+  const lifecycle = validLifecycle()
+  lifecycle.batches[0].toSha = sha('d')
+  lifecycle.closures.forEach((closure) => { closure.terminalSha = sha('d') })
+  const validated = validateReviewLifecycle(lifecycle)
+  assert.equal(validated.currentTerminalSha, sha('d'))
+  assert.equal(validated.baseline.terminalSha, sha('b'))
+})
+
+test('validates appended successor cycles and rejects malformed successors', () => {
+  const initial = validLifecycle()
+  initial.taskRange.candidateSha = sha('c')
+  initial.taskRange.terminalSha = sha('c')
+  initial.baseline.candidateSha = sha('c')
+  initial.baseline.terminalSha = sha('c')
+  initial.findings = []
+  initial.batches = []
+  initial.closures = []
+  initial.invalidators = [{ id: 'RI-1', baselineId: 'RB-TREK-252-01', trigger: 'evidence-stale', decision: 'new-cycle', successorBaselineId: 'RB-TREK-252-02' }]
+  const successor = structuredClone(initial)
+  successor.baseline.id = 'RB-TREK-252-02'
+  successor.baseline.matrixId = 'RM-TREK-252-02'
+  successor.baseline.authorities = [{ id: 'RA-3', kind: 'technical', reviewerId: 'technical-successor' }, { id: 'RA-4', kind: 'conformance', reviewerId: 'conformance-successor' }]
+  successor.matrix = [{ id: 'RM-4', obligation: 'criterion', authorityId: 'RA-3' }, { id: 'RM-5', obligation: 'changed-surface', authorityId: 'RA-4' }, { id: 'RM-6', obligation: 'risk', authorityId: 'RA-3' }]
+  successor.invalidators = []
+  delete successor.baseline.risk
+  const directory = mkdtempSync(join(tmpdir(), 'review-lifecycle-'))
+  const evidencePath = join(directory, 'evidence.md')
+  writeFileSync(evidencePath, `Review-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle: initial })}\n\`\`\`\nReview-Invalidator:\n\`\`\`review-lifecycle\n${JSON.stringify({ invalidator: initial.invalidators[0] })}\n\`\`\`\nReview-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle: successor })}\n\`\`\``)
+  try {
+    assert.throws(() => validateReviewLifecycleFile(evidencePath), /risk classification/i)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test('rejects a batch attached to the wrong cycle', () => {
+  const lifecycle = validLifecycle()
+  lifecycle.batches[0].baselineId = 'RB-TREK-252-02'
+  assert.throws(() => validateReviewLifecycle(lifecycle), /wrong baseline cycle/i)
+})
+
+test('rejects duplicate stable IDs across appended cycles', () => {
+  const initial = validLifecycle()
+  initial.taskRange.candidateSha = sha('c')
+  initial.taskRange.terminalSha = sha('c')
+  initial.baseline.candidateSha = sha('c')
+  initial.baseline.terminalSha = sha('c')
+  initial.findings = []
+  initial.batches = []
+  initial.closures = []
+  const successor = structuredClone(initial)
+  successor.baseline.id = 'RB-TREK-252-02'
+  const directory = mkdtempSync(join(tmpdir(), 'review-lifecycle-'))
+  const evidencePath = join(directory, 'evidence.md')
+  writeFileSync(evidencePath, `Review-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle: initial })}\n\`\`\`\nReview-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle: successor })}\n\`\`\``)
+  try {
+    assert.throws(() => validateReviewLifecycleFile(evidencePath), /duplicate ID across cycles: RA-1/i)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test('accepts rejected-only no-change batches and mixed rejected plus closed remediation', () => {
+  const rejected = validLifecycle()
+  rejected.taskRange.candidateSha = sha('c')
+  rejected.taskRange.terminalSha = sha('c')
+  rejected.baseline.candidateSha = sha('c')
+  rejected.baseline.terminalSha = sha('c')
+  rejected.findings = [{ id: 'RF-1', authorityId: 'RA-1', severity: 'P2', matrixRows: ['RM-1'], states: ['open', 'rejected'] }]
+  rejected.batches = [{ id: 'RBATCH-1', baselineId: 'RB-TREK-252-01', findingIds: ['RF-1'], fromSha: sha('c'), toSha: sha('c'), artifactChanged: false, evidenceChanged: false, affectedMatrixRows: ['RM-1'], affectedAuthorityIds: ['RA-1'], closureRound: 1 }]
+  rejected.closures = []
+  assert.doesNotThrow(() => validateReviewLifecycle(rejected))
+
+  const mixed = validLifecycle()
+  mixed.findings.push({ id: 'RF-2', authorityId: 'RA-2', severity: 'P2', matrixRows: ['RM-2'], states: ['open', 'rejected'] })
+  mixed.batches[0].findingIds.push('RF-2')
+  assert.doesNotThrow(() => validateReviewLifecycle(mixed))
+})
+
+test('rejects unresolved sync conflicts, extra closures, and cross-task baseline IDs', () => {
+  const conflict = validLifecycle()
+  conflict.baseline.sync.conflicts = true
+  assert.throws(() => validateReviewLifecycle(conflict), /unresolved conflicts/i)
+
+  const extraClosure = validLifecycle()
+  extraClosure.baseline.authorities.push({ id: 'RA-3', kind: 'ux', reviewerId: 'ux-broad' })
+  extraClosure.closures.push({ id: 'RC-3', batchId: 'RBATCH-1', authorityId: 'RA-3', closerId: 'ux-closer', fresh: false, terminalSha: sha('c'), disposition: 'closed' })
+  assert.throws(() => validateReviewLifecycle(extraClosure), /unaffected authority closure/i)
+
+  const crossTask = validLifecycle()
+  crossTask.baseline.id = 'RB-TREK-999-01'
+  crossTask.batches[0].baselineId = 'RB-TREK-999-01'
+  assert.throws(() => validateReviewLifecycle(crossTask), /baseline task ID/i)
+})

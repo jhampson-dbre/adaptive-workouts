@@ -120,6 +120,35 @@ review-driven fixes, rerun simplification only when those fixes materially resha
 reintroduce complexity, and at most once after review per task. Simplifier edits and
 reviewer requests to re-verify do not by themselves start another simplification loop.
 
+### Immutable Task-Review Lifecycle
+
+For every non-trivial tracked implementation task, preserve the planning commit as
+provenance only and create an immutable review baseline `RB-<TASK-ID>-<cycle>` after
+green implementation, required simplification, and coordinator verification. The
+sanitized append-only `Review-Baseline:` block records task base, candidate and
+terminal SHAs, sync provenance, verification, risk, and the exhaustive coverage and
+authority matrix from `docs/templates/review-lifecycle-evidence.md`. Cover every
+criterion, changed surface, issue-class obligation, prescribed UX evidence, and
+relevant high-risk boundary (or explicit N/A), with technical, conformance, UX, or at
+most one specialist authority. Matrix rows use stable authority IDs; an N/A row needs
+authority acknowledgement, what it covers, and rationale.
+The baseline terminal is its immutable initial candidate snapshot; derive later final
+terminal SHA from additive batches without mutating that baseline. Every batch names
+its baseline cycle, and each appended successor cycle is validated independently.
+
+Use stable finding IDs and only legal transitions. Freeze accepted remediation in a
+`Review-Batch:` block. Every artifact/evidence delta needs technical and conformance
+scoped closure in `Review-Closure:`; repeat UX closure when UI or prescribed UX
+evidence changes. An accepted P0/P1 batch receives exactly one fresh replacement
+scoped closer per affected authority, rather than another broad review. Record
+rewritten, stale, conflicted, unrelated, unaccounted, missing-authority, or material
+intent-change histories in `Review-Invalidator:` blocks. Two unsuccessful closure
+rounds require a `Checkpoint:` and coordinator escalation. Validate evidence exports
+before relying on them with `node scripts/validate-review-lifecycle.mjs <file>`.
+The baseline precedes broad review; append later frozen finding records in
+`Review-Batch:` blocks, record artifactChanged and evidenceChanged separately, and
+require every P0/P1 replacement closer to differ from the original broad reviewer.
+
 An agent may receive a follow-up only for the same Trekker task when the coordinator
 labels it as a same-task continuation and supplies the changed scope, new evidence,
 and the decision needed. A follow-up must not silently expand into another task. For

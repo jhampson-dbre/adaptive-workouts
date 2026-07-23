@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate UX quality gate contract
+      - name: Validate agent workflow contracts
         run: npm run ci:workflow
 
       - name: Run tests

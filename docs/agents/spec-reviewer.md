@@ -57,6 +57,19 @@ or refine requirements. Flag an unsupported scope decision as a clarification or
 escalation; the normal fresh post-verification task-conformance review is still
 required.
 
+## Immutable Baseline And Scoped Closure
+
+Review conformance against the immutable review baseline and its
+coverage/authority matrix. Findings need stable IDs and legal transitions. For a
+remediation batch, assess the additive range, affected rows, prior findings, and new
+verification evidence; every artifact/evidence delta requires both technical and
+conformance scoped closure, plus UX closure where prescribed UX evidence changed.
+An accepted P0/P1 batch uses exactly one fresh replacement closer for each affected
+authority, rather than another broad review. Escalate stale, rewritten, conflicted,
+unaccounted, or missing-authority records as invalidators.
+Confirm stable authority IDs, authority-acknowledged N/A rows, and that a P0/P1 fresh
+replacement closer differs from the original broad reviewer.
+
 ## Task Freshness And Follow-Ups
 
 Use a fresh task-conformance spec reviewer for each tracked task so task assumptions

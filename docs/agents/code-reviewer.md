@@ -24,6 +24,19 @@ the task-conformance spec reviewer separately checks the same final diff and evi
 against approved Trekker intent. A review-driven fix requires review of the changed
 final diff and updated evidence.
 
+## Immutable Baseline And Scoped Closure
+
+Review the immutable review baseline and its coverage/authority matrix, not a
+moving branch tip. Use stable finding IDs and legal state transitions. For a scoped
+remediation batch, review only the additive range, affected rows, findings, and new
+verification evidence. Technical and conformance closure are both required for any
+artifact/evidence delta; UX closes its affected prescribed UX evidence. For accepted
+P0/P1 work, the coordinator dispatches exactly one fresh replacement closer for each
+affected authority, not an extra broad review. Flag stale, rewritten, conflicted, or
+unaccounted ranges and missing authority as invalidators.
+Confirm stable authority IDs, authority-acknowledged N/A rows, and that a P0/P1 fresh
+replacement closer differs from the original broad reviewer.
+
 ## Required UX Evidence Boundary
 
 For UI work classified `required`, review only after the coordinator records the

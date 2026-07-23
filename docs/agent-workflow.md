@@ -169,6 +169,37 @@ Use this dispatch matrix:
   Invoke `$epic-development-branch-completion` to coordinate that PR-stage or
   epic-completion handoff.
 
+### Immutable Task-Review Lifecycle
+
+For every non-trivial tracked implementation task, preserve planning provenance but
+create an immutable review baseline `RB-<TASK-ID>-<cycle>` only after green
+implementation, required simplification, and coordinator verification. Record the
+task base, candidate, terminal SHA, sync provenance, verification, risk, and an
+exhaustive coverage and authority matrix in sanitized append-only `Review-Baseline:`
+blocks using `docs/templates/review-lifecycle-evidence.md`. The matrix covers every
+criterion, changed surface, issue-class obligation, prescribed UX evidence, and
+high-risk boundary (or an explicit N/A rationale), assigning technical, conformance,
+UX, or at most one specialist authority.
+Matrix rows use stable authority IDs; N/A rows require authority acknowledgement,
+what they cover, and rationale. The baseline precedes broad review, so later frozen
+finding records are introduced only in append-only `Review-Batch:` blocks.
+The baseline terminal is the immutable initial candidate snapshot. Derive the current
+terminal from that cycle's additive batches without rewriting it; every batch names
+its baseline cycle and each appended successor cycle is independently validated.
+
+Normalize findings to stable IDs and legal transitions only. Freeze accepted
+remediation in `Review-Batch:` blocks. Every artifact or evidence delta requires
+technical and conformance scoped closure in `Review-Closure:` blocks; repeat UX
+closure when UI implementation or prescribed UX evidence changes. An accepted P0/P1
+batch gets exactly one fresh replacement scoped closer for each affected authority,
+not another broad review. Record rewritten/stale/unaccounted histories, conflicts,
+missing authority, stale evidence, or material approved-intent changes in a
+`Review-Invalidator:` block. Two unsuccessful scoped-closure rounds require a
+`Checkpoint:` and coordinator escalation. Validate exported blocks before relying on
+them: `node scripts/validate-review-lifecycle.mjs <evidence-file>`.
+Record artifactChanged and evidenceChanged separately. A fresh P0/P1 replacement
+closer must differ from the original broad reviewer.
+
 Use this handoff packet:
 
 ```text

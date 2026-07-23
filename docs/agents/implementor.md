@@ -39,6 +39,12 @@ the changed scope, new evidence, and requested decision.
 7. Run enough broader verification to establish a green implementor handoff when the change touches shared behavior, UI flow, storage, auth, deployment, or PWA behavior.
 8. Report the green diff and evidence to the main agent for the coordinator-owned code-simplification gate. The coordinator owns final verification after any simplifier edits.
 
+For non-trivial tasks, provide the task base and green candidate SHA plus verification
+evidence to the coordinator so it can create the immutable review baseline
+`Review-Baseline:` record.
+Do not create or amend review lifecycle records yourself; remediation later follows
+the coordinator-owned `Review-Batch:` and scoped-closure workflow.
+
 ## Approved UX Artifact Boundary
 
 For UI work classified `required`, the implementor preserves the approved UX artifact
