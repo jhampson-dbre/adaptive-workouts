@@ -1,0 +1,8 @@
+.timing-presentation, .timing-harness { max-width: 48rem; margin: auto; padding: 1rem; overflow-wrap: anywhere; box-sizing: border-box; }
+.timing-presentation button, .timing-harness button, .timing-harness select, .timing-harness-control { min-height: 44px; min-width: 44px; margin: .25rem; max-width: 100%; }
+.timing-harness select { width: min(100%, 28rem); }
+.timing-status { min-height: 1.5rem; }
+.timing-recovery { border: 2px solid currentColor; padding: .75rem; }
+.timing-presentation dl { display: grid; grid-template-columns: 1fr auto; gap: .25rem .75rem; }
+.timing-presentation dt, .timing-presentation dd { margin: 0; }
+@media (max-width: 360px) { .timing-presentation { padding: .5rem; } }

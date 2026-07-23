@@ -387,6 +387,27 @@ test('renders valid v3 total and per-set work, planned rest, actual rest, and ov
   expect(screen.queryByText(/Duration: .*mins/)).toBeNull();
 });
 
+test('renders valid v4 total and accessible planned-versus-actual phase durations', () => {
+  const entry = {
+    ...v3Workout(),
+    schemaVersion: 4,
+    actualDurationSeconds: 125,
+    phaseDurations: {
+      warmup: { plannedSeconds: 600, actualSeconds: 0 },
+      performance: { plannedSeconds: 1800, actualSeconds: 125 },
+      cooldown: { plannedSeconds: 300, actualSeconds: 0 },
+    },
+  };
+  render(<WorkoutHistory history={[entry]} />);
+  openHistory();
+
+  expect(screen.getByText('Duration: 2:05')).toBeDefined();
+  const phases = screen.getByRole('region', { name: 'Phase durations' }).textContent;
+  expect(phases).toContain('Warmup: Planned 10:00 · Actual 0:00');
+  expect(phases).toContain('Performance: Planned 30:00 · Actual 2:05');
+  expect(phases).toContain('Cooldown: Planned 5:00 · Actual 0:00');
+});
+
 test('treats malformed v3 as wholly unavailable instead of salvaging occurrences', () => {
   const malformed = v3Workout({
     exercises: [v3Workout().exercises[0], { bad: true }],

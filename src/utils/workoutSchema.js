@@ -18,14 +18,25 @@ const isFiniteNonnegative = value => Number.isFinite(value) && value >= 0;
 const isNonnegativeInteger = value => Number.isInteger(value) && value >= 0;
 const isPositiveInteger = value => Number.isInteger(value) && value > 0;
 const isValidPlannedRestSeconds = value => Number.isInteger(value) && value >= 5 && value <= 600;
+const isValidPhaseTargetSeconds = value => Number.isInteger(value)
+  && value >= 0 && value <= 3600 && value % 60 === 0;
 
 export function normalizeWorkoutSettings(settings) {
   const source = isObject(settings) ? settings : {};
+  const warmupSeconds = isValidPhaseTargetSeconds(source.warmupSeconds)
+    ? source.warmupSeconds
+    : (!hasOwn(source, 'warmupSeconds') && isValidPhaseTargetSeconds(source.warmupTime * 60)
+      ? source.warmupTime * 60
+      : 600);
   return {
     ...source,
     defaultRestSeconds: isValidPlannedRestSeconds(source.defaultRestSeconds)
       ? source.defaultRestSeconds
       : 60,
+    warmupSeconds,
+    cooldownSeconds: isValidPhaseTargetSeconds(source.cooldownSeconds)
+      ? source.cooldownSeconds
+      : 300,
   };
 }
 
@@ -275,6 +286,97 @@ export function isValidV3WorkoutDocument(workout) {
   return new Set(occurrenceIds).size === occurrenceIds.length;
 }
 
+const V4_DOCUMENT_FIELDS = new Set([
+  'id', 'schemaVersion', 'status', 'date', 'actualDurationSeconds', 'phaseDurations', 'exercises',
+]);
+const V4_PHASE_FIELDS = new Set(['plannedSeconds', 'actualSeconds']);
+const V4_PHASE_NAMES = ['warmup', 'performance', 'cooldown'];
+const V4_PHASE_NAME_SET = new Set(V4_PHASE_NAMES);
+const V4_OCCURRENCE_FIELDS = Object.freeze({
+  simple: new Set([
+    'id', 'occurrenceId', 'name', 'muscleGroup', 'tier', 'linkedTo', 'isActive',
+    'trackingMode', 'sets', 'prescribedSetCount', 'setRecords',
+  ]),
+  weighted: new Set([
+    'id', 'occurrenceId', 'name', 'muscleGroup', 'tier', 'linkedTo', 'isActive',
+    'trackingMode', 'sets', 'prescribedSetCount', 'startingWeight', 'targetReps',
+    'floorReps', 'weightStep', 'setRecords',
+  ]),
+  bodyweight: new Set([
+    'id', 'occurrenceId', 'name', 'muscleGroup', 'tier', 'linkedTo', 'isActive',
+    'trackingMode', 'sets', 'prescribedSetCount', 'targetReps', 'setRecords',
+  ]),
+});
+const V4_SET_FIELDS = Object.freeze({
+  simple: new Set([
+    'index', 'completed', 'plannedRestSeconds', 'workDurationSeconds', 'actualRestSeconds',
+  ]),
+  weighted: new Set([
+    'index', 'completed', 'plannedRestSeconds', 'workDurationSeconds', 'actualRestSeconds',
+    'targetWeight', 'targetReps', 'actualWeight', 'actualReps', 'recommendationReason',
+  ]),
+  bodyweight: new Set([
+    'index', 'completed', 'plannedRestSeconds', 'workDurationSeconds', 'actualRestSeconds',
+    'targetReps', 'fullReps', 'assistedReps', 'eccentricReps',
+  ]),
+});
+const V4_TOP_SET_REASON_FIELDS = new Set([
+  'decision', 'sourceWorkoutId', 'sourceWorkoutDate', 'sourceAnchorWeight',
+  'appliedWeightStep', 'recommendedWeight', 'reasonCode',
+]);
+const V4_BACKOFF_REASON_FIELDS = new Set(BACKOFF_REASON_FIELDS);
+
+function hasOnlyFields(value, fields) {
+  return isObject(value) && Object.keys(value).every(key => fields.has(key));
+}
+
+function isValidV4PhaseDurations(phaseDurations) {
+  return hasOnlyFields(phaseDurations, V4_PHASE_NAME_SET)
+    && V4_PHASE_NAMES.every(name => (
+      hasOnlyFields(phaseDurations[name], V4_PHASE_FIELDS)
+      && isNonnegativeInteger(phaseDurations[name].plannedSeconds)
+      && isNonnegativeInteger(phaseDurations[name].actualSeconds)
+    ));
+}
+
+function hasValidV4SavedOccurrenceShape(exercise) {
+  const occurrenceFields = V4_OCCURRENCE_FIELDS[exercise?.trackingMode];
+  const setFields = V4_SET_FIELDS[exercise?.trackingMode];
+  if (!occurrenceFields
+    || !hasOnlyFields(exercise, occurrenceFields)
+    || !Array.isArray(exercise.setRecords)
+    || !exercise.setRecords.every(record => hasOnlyFields(record, setFields))) {
+    return false;
+  }
+  if (exercise.trackingMode !== TRACKING_MODE.WEIGHTED) return true;
+  return exercise.setRecords.every((record, index) => hasOnlyFields(
+    record.recommendationReason,
+    index === 0 ? V4_TOP_SET_REASON_FIELDS : V4_BACKOFF_REASON_FIELDS,
+  ));
+}
+
+export function isValidV4WorkoutDocument(workout) {
+  if (!hasOnlyFields(workout, V4_DOCUMENT_FIELDS)
+    || workout.schemaVersion !== 4
+    || workout.status !== 'completed'
+    || !isNonEmptyString(workout.date)
+    || !Number.isFinite(Date.parse(workout.date))
+    || !isNonnegativeInteger(workout.actualDurationSeconds)
+    || !Array.isArray(workout.exercises)
+    || !isValidV4PhaseDurations(workout.phaseDurations)
+    || !workout.exercises.every(exercise => isValidV3ExerciseOccurrence(exercise))
+    || !workout.exercises.every(hasValidV4SavedOccurrenceShape)
+    || !hasConfirmedWork(workout.exercises)) {
+    return false;
+  }
+  const actualSeconds = V4_PHASE_NAMES.reduce((total, name) => (
+    total + workout.phaseDurations[name].actualSeconds
+  ), 0);
+  const occurrenceIds = workout.exercises.map(exercise => exercise.occurrenceId);
+  return workout.actualDurationSeconds === actualSeconds
+    && new Set(occurrenceIds).size === occurrenceIds.length;
+}
+
 export function isMalformedV2WorkoutDocument(workout) {
   return isObject(workout)
     && hasOwn(workout, 'schemaVersion')
@@ -285,6 +387,7 @@ export function classifyWorkoutDocument(workout) {
   if (isLegacyWorkoutDocument(workout)) return 'legacy';
   if (isValidV2WorkoutDocument(workout)) return 'valid-v2';
   if (isValidV3WorkoutDocument(workout)) return 'valid-v3';
+  if (isValidV4WorkoutDocument(workout)) return 'valid-v4';
   return 'malformed-versioned';
 }
 
@@ -302,8 +405,8 @@ export function wasPerformed(workout, occurrence) {
   if (isLegacyWorkoutDocument(workout)) {
     return occurrence !== null && typeof occurrence === 'object' && !Array.isArray(occurrence);
   }
-  if (workout?.schemaVersion === 3) {
-    return isValidV3WorkoutDocument(workout)
+  if (workout?.schemaVersion === 3 || workout?.schemaVersion === 4) {
+    return (workout.schemaVersion === 3 ? isValidV3WorkoutDocument(workout) : isValidV4WorkoutDocument(workout))
       && isValidV3ExerciseOccurrence(occurrence)
       && occurrence.setRecords.some(record => record.completed === true);
   }

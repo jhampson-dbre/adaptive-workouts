@@ -10,6 +10,7 @@ const firestore = vi.hoisted(() => ({
     documentId: vi.fn(),
     doc: vi.fn(),
     getDoc: vi.fn(),
+    getDocFromServer: vi.fn(),
     setDoc: vi.fn(),
     addDoc: vi.fn(),
 }));
@@ -17,7 +18,7 @@ const firestore = vi.hoisted(() => ({
 vi.mock('../utils/firestoreClient', () => ({
     loadFirestoreClient: async () => ({ ...firestore, db: { name: 'test-db' } }),
 }));
-import { getGenerationHistory, getHistoryPage, saveWorkout, getSettings, getCatalog, migrateLocalData } from '../utils/storage';
+import { getGenerationHistory, getHistoryPage, saveWorkout, saveImmutableWorkout, readImmutableWorkoutFromServer, getSettings, getCatalog, migrateLocalData } from '../utils/storage';
 
 describe('Storage Layer (Async)', () => {
     beforeEach(() => {
@@ -29,6 +30,7 @@ describe('Storage Layer (Async)', () => {
         expect(typeof getGenerationHistory).toBe('function');
         expect(typeof getHistoryPage).toBe('function');
         expect(typeof saveWorkout).toBe('function');
+        expect(typeof saveImmutableWorkout).toBe('function');
         expect(typeof getSettings).toBe('function');
         expect(typeof getCatalog).toBe('function');
         expect(typeof migrateLocalData).toBe('function');
@@ -56,6 +58,18 @@ describe('Storage Layer (Async)', () => {
         expect(firestore.orderBy).toHaveBeenCalledWith('date', 'desc');
         expect(firestore.query).toHaveBeenCalledWith(historyCollection, { field: 'date', direction: 'desc' }, { count: 100 });
         expect(firestore.getDocs).toHaveBeenCalledWith(orderedQuery);
+    });
+
+    it('keeps Firestore document IDs authoritative over payload IDs in both history readers', async () => {
+        firestore.collection.mockReturnValue({ path: 'history' });
+        firestore.orderBy.mockReturnValue({ ordered: true });
+        firestore.documentId.mockReturnValue('DOCUMENT_ID');
+        firestore.limit.mockReturnValue({ count: 101 });
+        firestore.query.mockReturnValue({ ordered: true });
+        firestore.getDocs.mockResolvedValue({ docs: [{ id: 'path-id', data: () => ({ id: 'payload-id', date: '2026-07-20' }) }] });
+
+        await expect(getGenerationHistory('test-user')).resolves.toEqual([{ id: 'path-id', date: '2026-07-20' }]);
+        await expect(getHistoryPage('test-user')).resolves.toMatchObject({ items: [{ id: 'path-id', date: '2026-07-20' }] });
     });
 
     it('pages newest-first by date then document ID without exposing the lookahead row', async () => {
@@ -136,10 +150,22 @@ describe('Storage Layer (Async)', () => {
 
     it('normalizes missing and invalid default rest settings in memory without writing', async () => {
         firestore.getDoc.mockResolvedValueOnce({ exists: () => true, data: () => ({ staleThreshold: 7 }) });
-        await expect(getSettings('test-user')).resolves.toEqual({ staleThreshold: 7, defaultRestSeconds: 60 });
+        await expect(getSettings('test-user')).resolves.toMatchObject({ staleThreshold: 7, defaultRestSeconds: 60 });
 
         firestore.getDoc.mockResolvedValueOnce({ exists: () => true, data: () => ({ defaultRestSeconds: '90' }) });
-        await expect(getSettings('test-user')).resolves.toEqual({ defaultRestSeconds: 60 });
+        await expect(getSettings('test-user')).resolves.toMatchObject({ defaultRestSeconds: 60 });
+        expect(firestore.setDoc).not.toHaveBeenCalled();
+    });
+
+    it('normalizes canonical phase settings in memory without writing', async () => {
+        firestore.getDoc.mockResolvedValueOnce({ exists: () => true, data: () => ({ warmupSeconds: 0, cooldownSeconds: 3600 }) });
+        await expect(getSettings('test-user')).resolves.toMatchObject({ warmupSeconds: 0, cooldownSeconds: 3600 });
+
+        firestore.getDoc.mockResolvedValueOnce({ exists: () => true, data: () => ({ warmupSeconds: 600, warmupTime: 45, cooldownSeconds: 300 }) });
+        await expect(getSettings('test-user')).resolves.toMatchObject({ warmupSeconds: 600, cooldownSeconds: 300 });
+
+        firestore.getDoc.mockResolvedValueOnce({ exists: () => true, data: () => ({ warmupTime: 10 }) });
+        await expect(getSettings('test-user')).resolves.toMatchObject({ warmupSeconds: 600, cooldownSeconds: 300 });
         expect(firestore.setDoc).not.toHaveBeenCalled();
     });
 
@@ -156,6 +182,21 @@ describe('Storage Layer (Async)', () => {
         expect(firestore.addDoc).toHaveBeenNthCalledWith(2, historyCollection, v2);
         expect(firestore.addDoc.mock.calls[0][1]).toBe(legacy);
         expect(firestore.addDoc.mock.calls[1][1]).toBe(v2);
+    });
+
+    it('keeps A6 stable-ID operations separate from the legacy writer', async () => {
+        const candidate = { id: '123e4567-e89b-42d3-a456-426614174000', schemaVersion: 4 };
+        const ref = { path: 'users/test-user/history/123e4567-e89b-42d3-a456-426614174000' };
+        firestore.doc.mockReturnValue(ref);
+        firestore.getDocFromServer.mockResolvedValue({ exists: () => false });
+
+        await saveImmutableWorkout('test-user', candidate.id, candidate);
+        await expect(readImmutableWorkoutFromServer('test-user', candidate.id)).resolves.toEqual({ exists: expect.any(Function) });
+
+        expect(firestore.doc).toHaveBeenNthCalledWith(1, { name: 'test-db' }, 'users', 'test-user', 'history', candidate.id);
+        expect(firestore.setDoc).toHaveBeenCalledWith(ref, candidate);
+        expect(firestore.getDocFromServer).toHaveBeenCalledWith(ref);
+        expect(firestore.addDoc).not.toHaveBeenCalled();
     });
 
     it('preserves legacy shapes during localStorage migration', async () => {
