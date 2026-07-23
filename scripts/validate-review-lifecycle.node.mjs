@@ -327,3 +327,49 @@ test('rejects invalidator, matrix ID, and injected Git topology gaps', () => {
   const topology = validLifecycle()
   assert.throws(() => validateReviewLifecycle(topology, { gitVerifier: { exists: () => false, isAncestor: () => false } }), /Git object/i)
 })
+
+test('rejects a cross-task successor even when both cycles are cycle 01', () => {
+  const source = validLifecycle()
+  source.taskRange.candidateSha = sha('c')
+  source.taskRange.terminalSha = sha('c')
+  source.baseline.candidateSha = sha('c')
+  source.baseline.terminalSha = sha('c')
+  source.findings = []
+  source.batches = []
+  source.closures = []
+  const invalidator = { id: 'RI-1', baselineId: 'RB-TREK-252-01', trigger: 'evidence-stale', decision: 'new-cycle', successorBaselineId: 'RB-TREK-999-01' }
+  const successor = structuredClone(source)
+  successor.taskId = 'TREK-999'
+  successor.baseline.id = 'RB-TREK-999-01'
+  successor.baseline.matrixId = 'RM-TREK-999-01'
+  successor.baseline.authorities = [{ id: 'RA-9', kind: 'technical', reviewerId: 'technical-next' }, { id: 'RA-10', kind: 'conformance', reviewerId: 'conformance-next' }]
+  successor.matrix = [{ id: 'RM-9', obligation: 'criterion', authorityId: 'RA-9' }, { id: 'RM-10', obligation: 'changed-surface', authorityId: 'RA-10' }, { id: 'RM-11', obligation: 'risk', authorityId: 'RA-9' }]
+  const directory = mkdtempSync(join(tmpdir(), 'review-lifecycle-'))
+  const evidencePath = join(directory, 'evidence.md')
+  writeFileSync(evidencePath, `Review-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle: source })}\n\`\`\`\nReview-Invalidator:\n\`\`\`review-lifecycle\n${JSON.stringify({ invalidator })}\n\`\`\`\nReview-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle: successor })}\n\`\`\``)
+  try {
+    assert.throws(() => validateReviewLifecycleFile(evidencePath), /successor.*same task/i)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test('does not allow injected order fields to hide Batch-before-Baseline text order', () => {
+  const lifecycle = validLifecycle()
+  lifecycle.taskRange.candidateSha = sha('c')
+  lifecycle.taskRange.terminalSha = sha('c')
+  lifecycle.baseline.candidateSha = sha('c')
+  lifecycle.baseline.terminalSha = sha('c')
+  lifecycle.findings = []
+  lifecycle.batches = []
+  lifecycle.closures = []
+  const batch = { id: 'RBATCH-1', baselineId: lifecycle.baseline.id, findings: [{ id: 'RF-1', authorityId: 'RA-1', severity: 'P2', matrixRows: ['RM-1'], states: ['open', 'rejected'] }], fromSha: sha('c'), toSha: sha('c'), artifactChanged: false, evidenceChanged: false, affectedMatrixRows: ['RM-1'], affectedAuthorityIds: ['RA-1'], closureRound: 1 }
+  const directory = mkdtempSync(join(tmpdir(), 'review-lifecycle-'))
+  const evidencePath = join(directory, 'evidence.md')
+  writeFileSync(evidencePath, `Review-Batch:\n\`\`\`review-lifecycle\n${JSON.stringify({ order: 2, batch })}\n\`\`\`\nReview-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ order: 0, lifecycle })}\n\`\`\``)
+  try {
+    assert.throws(() => validateReviewLifecycleFile(evidencePath), /reserved.*order|must follow its baseline/i)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})

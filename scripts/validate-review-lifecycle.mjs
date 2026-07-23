@@ -179,7 +179,10 @@ export function validateReviewLifecycle(lifecycle, { gitVerifier } = {}) {
     assert.match(invalidator.baselineId ?? '', /^RB-TREK-\d+-\d+$/, `invalidator ${invalidator.id} needs a baseline ID`)
     assert.ok(invalidatorTriggers.has(invalidator.trigger), `invalidator trigger is not supported: ${invalidator.trigger}`)
     assert.ok(['new-cycle', 'escalated'].includes(invalidator.decision), `invalidator ${invalidator.id} needs a decision`)
-    if (invalidator.decision === 'new-cycle') assert.match(invalidator.successorBaselineId ?? '', /^RB-TREK-\d+-\d+$/, `invalidator ${invalidator.id} requires successor cycle`)
+    if (invalidator.decision === 'new-cycle') {
+      assert.match(invalidator.successorBaselineId ?? '', /^RB-TREK-\d+-\d+$/, `invalidator ${invalidator.id} requires successor cycle`)
+      assert.equal(invalidator.successorBaselineId.match(/^RB-(TREK-\d+)-/)?.[1], lifecycle.taskId, `successor ${invalidator.successorBaselineId} must remain in the same task`)
+    }
     if (invalidator.decision === 'escalated') assert.ok(invalidator.coordinatorEscalation, `invalidator ${invalidator.id} requires coordinator escalation`)
   }
   assert.equal(baseline.matrixId, baseline.id.replace(/^RB-/, 'RM-'), 'baseline matrix ID must match task lifecycle')
@@ -192,7 +195,9 @@ export function parseReviewLifecycleBlocks(markdown) {
   const pattern = /^Review-(Baseline|Batch|Closure|Invalidator):\s*\r?\n```review-lifecycle\r?\n([\s\S]*?)\r?\n```$/gm
   for (const match of markdown.matchAll(pattern)) {
     try {
-      blocks.push({ type: match[1], order: blocks.length, ...JSON.parse(match[2]) })
+      const payload = JSON.parse(match[2])
+      assert.ok(!Object.hasOwn(payload, 'type') && !Object.hasOwn(payload, 'order'), 'review lifecycle block cannot contain reserved top-level type or order fields')
+      blocks.push({ ...payload, type: match[1], order: blocks.length })
     } catch (error) {
       throw new Error(`malformed Review-${match[1]} block: ${error.message}`)
     }
