@@ -73,6 +73,12 @@ unstaged changes are the whole epic.
   substantive change.
 - Require an independent epic spec/conformance review of the same cumulative range
   and working-tree state before PR publication or epic completion.
+- Consume the coordinator's final-integration equivalence decision, reason codes, and
+  reviewed SHA. Ineligible evidence requires full cumulative gates. Eligible clean
+  one-task low/medium-risk reconciled canonical evidence preserves your independent
+  authority while avoiding redundant cumulative re-analysis; it never waives
+  escalation, reviewed-SHA, or draft-PR handoff requirements. Tree/patch IDs are
+  diagnostic only.
 
 ## Expected Output
 

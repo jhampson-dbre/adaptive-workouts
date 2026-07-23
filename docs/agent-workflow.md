@@ -260,6 +260,10 @@ Route findings by impact:
 - A product, architecture, data, auth, migration, or scope change: return to architecture/design review and obtain the applicable user approval before updating the design or plan.
 - Any change after task or final-integration review requires a new review of the changed final diff; use the single allowed post-review simplifier rerun only when a substantive task fix materially reshapes complexity, then use code review plus task conformance for the changed task diff. After committing a substantive final-integration fix, rerun both final-integration gates.
 
+### Final-integration equivalence
+
+Run the final-integration equivalence decision before publication. Only clean one-task low/medium-risk canonical evidence with reconciled `RB-<task>-<cycle>` baseline identity, producer-validation reference, task-base/candidate/terminal topology, exhaustive row coverage, technical/conformance closure records (authority, kind, closed/pass disposition, terminal SHA, evidence reference), invalidator records, terminal Summary, and ordered non-planning commits is eligible. Planning commits are never review baselines; Git verifies planning ancestors and task topology, while tree/patch IDs are diagnostic only. Malformed, stale, rewritten, merge-affected, conflict-resolved, high-risk, multi-task, invalidated, dirty, scope-drifted, incomplete, or unaccounted evidence requires **full cumulative gates**. Eligible evidence preserves independent authority acknowledgements while avoiding redundant cumulative re-analysis, and never waives escalation, reviewed SHA, or draft-PR checks. Record decision and reason codes.
+
 ## 7. Plan New Features
 
 For new feature requests, use `docs/feature-planning.md`.

@@ -95,6 +95,13 @@ and the epic branch review again against the updated range and current clean or 
 reported working-tree evidence before PR publication or epic completion. Another loop
 is needed only after a further substantive change.
 
+Consume the coordinator's final-integration equivalence decision, reason codes, and
+reviewed SHA. Ineligible evidence requires full cumulative gates. Eligible clean
+one-task low/medium-risk reconciled canonical evidence preserves your independent
+conformance authority while avoiding redundant cumulative re-analysis; it never
+waives escalation, reviewed-SHA, or draft-PR handoff requirements. Tree/patch IDs are
+diagnostic only.
+
 ## Hard Constraints
 
 - Do not update Trekker status.

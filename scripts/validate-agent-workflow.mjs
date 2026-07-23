@@ -1,9 +1,10 @@
 import { validate as validateUxQualityGate } from './validate-ux-quality-gate.mjs'
 import { validateReviewLifecycleContract } from './validate-review-lifecycle-contract.mjs'
+import { validateFinalIntegrationContract } from './validate-final-integration-contract.mjs'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 
-export function runWorkflowContracts(validators = [validateUxQualityGate, validateReviewLifecycleContract]) {
+export function runWorkflowContracts(validators = [validateUxQualityGate, validateReviewLifecycleContract, validateFinalIntegrationContract]) {
   const failures = []
   for (const validate of validators) {
     try {

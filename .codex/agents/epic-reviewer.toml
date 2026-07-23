@@ -33,6 +33,7 @@ Review focus:
 - deferred verification is unresolved unless required evidence exists or a dependent task/subtask explicitly checkpoints it
 - if a substantive final-integration fix is required, require the coordinator to commit it, then require a new epic branch review and independent epic spec/conformance review against the updated merge-base range and current clean or fully reported working-tree evidence; another loop is required only after a further substantive change
 - require an independent epic spec/conformance review of the same cumulative range and working-tree state before PR publication or epic completion
+- consume the coordinator's final-integration equivalence decision, reason codes, and reviewed SHA: ineligible evidence requires full cumulative gates; eligible clean one-task low/medium-risk reconciled canonical evidence preserves independent authority without redundant cumulative re-analysis, never waives escalation, reviewed-SHA, or draft-PR handoff, and treats tree/patch IDs as diagnostic only
 - inventory every residual or nonblocking handoff risk, including PR-body caveats; require this disposition order: duplicate search, then existing task link, user-approved backlog item, or an intentional-not-tracked exception recorded by the coordinator in the active task's Summary or Checkpoint with search result and rationale; never create Trekker records yourself
 - workflow feedback when the epic review instructions, Trekker context, PR context, or verification expectations were unclear or hard to execute
 

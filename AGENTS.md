@@ -168,6 +168,12 @@ Conformance escalation and re-review are explicit:
 - Any fix or clarification that changes the final task diff requires renewed code review and task-conformance review of that changed final diff; after committing a substantive final-integration change, rerun both the epic branch review and fresh epic spec/conformance review.
 - A substantive review-driven task fix gets the single allowed post-review simplification rerun only when complexity was materially reintroduced or reshaped. Whether run or skipped, record the rationale; then verify and review the changed final diff again.
 
+### Final-integration equivalence
+
+Before publication, run the final-integration equivalence decision against canonical task evidence and current branch topology. Eligibility is only for one clean low/medium-risk implementation task whose canonical `RB-<task>-<cycle>` baseline identity, producer-validation reference, task base, candidate/terminal SHAs, exhaustive row coverage, required technical/conformance closure records (authority, kind, closed/pass disposition, terminal SHA, evidence reference), invalidator records, terminal `Summary:`, and every ordered non-planning branch commit reconcile. Git verifies every planning commit is an ancestor of task base and verifies task-base/candidate/terminal topology; self-asserted SHA, tree, and patch IDs cannot restore equivalence. A planning commit may precede `task_base_sha`, but is never a review baseline.
+
+Malformed, stale, rewritten, merge-affected, conflict-resolved, high-risk, multi-task, invalidated, dirty, scope-drifted, missing, or unaccounted evidence is ineligible and requires **full cumulative gates**: an epic branch review and fresh epic spec/conformance review. An eligible result permits those independent authorities to consume equivalent reviewed task scope without redundant cumulative re-analysis; it never removes escalation, exact reviewed SHA, or draft-PR check handoff. Record the decision and reason codes.
+
 ## Subagent Handoff Packet
 
 When dispatching a subagent, the main agent must provide:

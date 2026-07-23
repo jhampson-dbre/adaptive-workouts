@@ -101,6 +101,17 @@ gates for the design and Trekker writes themselves.
 - Invoke `$epic-development-branch-completion` at that boundary to verify completed
   task commit/`Summary:` evidence, coordinate both gates, and prepare the draft-PR
   handoff. Retain Trekker, approval, push, and PR ownership.
+- Run the final-integration equivalence decision first. It is eligible only for a
+  clean one-task low/medium-risk branch with reconciled canonical `RB-<task>-<cycle>`
+  baseline identity, producer-validation reference, base/candidate/terminal SHAs,
+  exhaustive coverage rows, technical/conformance closures, invalidator records,
+  Summary, and ordered non-planning commits. Git verifies topology; planning commits
+  are never review baselines. Malformed,
+  stale, rewritten, merge-affected, conflict-resolved, high-risk, multi-task,
+  invalidated, dirty, scope-drifted, or unaccounted evidence requires full cumulative
+  gates. Eligible evidence preserves independent authority scope without redundant
+  cumulative re-analysis; record reason codes and exact reviewed SHA and never waive
+  escalation or draft-PR checks. Tree/patch IDs are diagnostic only.
 
 Project-scoped Codex custom agents are defined in `.codex/agents/`. Prefer those native agents when spawning subagents:
 
