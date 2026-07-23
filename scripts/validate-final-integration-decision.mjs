@@ -12,7 +12,8 @@ const handoffs = {
 
 const sha = /^[0-9a-f]{40}$/i
 
-function consumeCanonicalEvidence(markdown) {
+function consumeCanonicalEvidence(task) {
+  const markdown = task?.canonicalEvidence
   if (typeof markdown !== 'string') throw new Error('canonical evidence export is required')
   const directory = mkdtempSync(join(tmpdir(), 'final-integration-evidence-'))
   const path = join(directory, 'evidence.md')
@@ -20,13 +21,12 @@ function consumeCanonicalEvidence(markdown) {
     writeFileSync(path, markdown)
     const cycles = validateReviewLifecycleFile(path)
     const lifecycle = cycles.at(-1)
-    const summaryMatches = [...markdown.matchAll(/Summary:\s*```review-lifecycle\s*([\s\S]*?)```/g)]
-    if (!summaryMatches.length) throw new Error('machine-readable terminal Summary is required')
-    const summary = JSON.parse(summaryMatches.at(-1)[1]).summary
+    const summary = task.terminalSummary
+    if (!summary || !task.summaryReference?.trim()) throw new Error('terminal Summary fields and reference are required')
     const blocks = parseReviewLifecycleBlocks(markdown)
     const batchIds = new Set(lifecycle.batches.map((batch) => batch.id))
     const closures = blocks.filter((block) => block.type === 'Closure' && batchIds.has(block.closure.batchId)).map((block) => block.closure)
-    const authorityPasses = summary?.authorityPasses
+    const authorityPasses = task.authorityPasses
     if (!Array.isArray(authorityPasses)) throw new Error('terminal Summary authorityPasses is required')
     return { lifecycle, summary, closures, authorityPasses }
   } finally { rmSync(directory, { recursive: true, force: true }) }
@@ -68,7 +68,7 @@ export function createGitTopologyVerifier(cwd = process.cwd()) {
 
 export function evaluateFinalIntegration(evidence, { topologyVerifier } = {}) {
   try {
-    const canonical = consumeCanonicalEvidence(evidence?.task?.canonicalEvidence)
+    const canonical = consumeCanonicalEvidence(evidence?.task)
     const authorities = canonical.lifecycle.baseline.authorities
     const closureRecords = canonical.closures.map((closure) => ({ authorityId: closure.authorityId, kind: authorities.find((authority) => authority.id === closure.authorityId)?.kind, disposition: closure.disposition, reviewedSha: closure.terminalSha, reference: closure.id }))
     const passRecords = canonical.authorityPasses.map((pass) => ({ authorityId: pass.authorityId, kind: pass.kind, disposition: pass.disposition, reviewedSha: pass.reviewedSha, reference: pass.reference }))

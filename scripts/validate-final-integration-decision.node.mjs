@@ -59,7 +59,15 @@ function eligibleEvidence() {
   Object.defineProperties(evidence.task, {
     canonicalCommitRange: { enumerable: true, get: () => evidence.task.lifecycle.accountedCommits },
     canonicalEvidence: { enumerable: true, get: () => canonicalExport(evidence) },
+    terminalSummary: { enumerable: true, get: () => evidence.task.summary },
+    authorityPasses: {
+      enumerable: true,
+      get: () => evidence.task.lifecycle.terminalSha === evidence.task.lifecycle.candidateSha
+        ? evidence.task.lifecycle.closures.map((closure) => ({ ...closure }))
+        : [],
+    },
   })
+  evidence.task.summaryReference = 'Summary:CMT-500'
   return evidence
 }
 
@@ -78,14 +86,13 @@ function canonicalExport(evidence) {
     closures: hasBatch && l.requiredAuthoritiesClosed ? l.closures.map((closure, index) => ({ id: `RC-${index + 1}`, batchId: 'RBATCH-1', authorityId: closure.authorityId, closerId: closure.kind, fresh: false, terminalSha: closure.reviewedSha, disposition: closure.disposition === 'pass' ? 'closed' : closure.disposition })) : [], invalidators: (l.invalidated || l.scopeDrift) && !l.invalidators.length ? [{ id: 'RI-1', baselineId: l.baselineId, trigger: l.scopeDrift ? 'unrelated-range' : 'evidence-stale', decision: 'escalated', coordinatorEscalation: 'test' }] : l.invalidators.map((invalidator) => ({ ...invalidator, trigger: 'evidence-stale', decision: 'escalated', coordinatorEscalation: 'test' })),
   }
   const baseline = { ...lifecycle, findings: [], batches: [], closures: [], invalidators: [] }
-  const summary = { ...evidence.task.summary, authorityPasses: hasBatch || !l.requiredAuthoritiesClosed ? [] : l.closures.map((closure) => ({ ...closure })) }
   const blocks = [`Review-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle: baseline })}\n\`\`\``]
   if (hasBatch) {
     blocks.push(`Review-Batch:\n\`\`\`review-lifecycle\n${JSON.stringify({ batch: lifecycle.batches[0] })}\n\`\`\``)
     for (const closure of lifecycle.closures) blocks.push(`Review-Closure:\n\`\`\`review-lifecycle\n${JSON.stringify({ closure })}\n\`\`\``)
   }
   for (const invalidator of lifecycle.invalidators) blocks.push(`Review-Invalidator:\n\`\`\`review-lifecycle\n${JSON.stringify({ invalidator })}\n\`\`\``)
-  blocks.push(`Summary:\n\`\`\`review-lifecycle\n${JSON.stringify({ summary })}\n\`\`\``)
+  blocks.push('Summary:\nValidated task terminal and authority evidence.')
   return blocks.join('\n')
 }
 
@@ -117,7 +124,7 @@ test('fails closed for each final-integration ineligibility condition', () => {
     ['scope drift', (evidence) => { evidence.task.lifecycle.scopeDrift = true }, 'SCOPE_DRIFT'],
     ['missing coverage', (evidence) => { evidence.task.lifecycle.coverageComplete = false }, 'CANONICAL_EVIDENCE_INVALID'],
     ['missing closure', (evidence) => { evidence.task.lifecycle.requiredAuthoritiesClosed = false }, 'CANONICAL_EVIDENCE_INVALID'],
-    ['missing summary', (evidence) => { delete evidence.task.summary }, 'MALFORMED_EVIDENCE'],
+    ['missing summary', (evidence) => { delete evidence.task.summary }, 'CANONICAL_EVIDENCE_INVALID'],
     ['unaccounted commit', (evidence) => { evidence.task.lifecycle.accountedCommits.pop() }, 'UNACCOUNTED_COMMIT'],
     ['substantive post-task change', (evidence) => { evidence.branch.nonPlanningCommits.push(sha('d')) }, 'UNACCOUNTED_COMMIT'],
     ['candidate not on branch', (evidence) => { evidence.branch.nonPlanningCommits[0] = sha('d') }, 'UNACCOUNTED_COMMIT'],
@@ -327,20 +334,33 @@ test('rejects a foreign-task pre-candidate commit across the full task range', (
   assert.ok(decision.reasonCodes.includes('CROSS_TASK_INTEGRATION'))
 })
 
-test('uses the last machine-readable Summary block in an append-only export', () => {
+test('accepts prose Summary compatibility and fails closed on divergent envelope evidence', () => {
   const evidence = structuredClone(eligibleEvidence())
-  const stale = {
-    taskId: 'TREK-246',
-    terminalSha: sha('b'),
-    commitBoundaries: [sha('b')],
-    authorityPasses: [],
-  }
-  evidence.task.canonicalEvidence = `Summary:\n\`\`\`review-lifecycle\n${JSON.stringify({ summary: stale })}\n\`\`\`\n${evidence.task.canonicalEvidence}`
+  assert.match(evidence.task.canonicalEvidence, /Summary:\nValidated task terminal/)
   assert.equal(evaluateFinalIntegration(evidence, trustedTopology).eligible, true)
 
-  const divergent = structuredClone(eligibleEvidence())
-  divergent.task.canonicalEvidence += `\nSummary:\n\`\`\`review-lifecycle\n${JSON.stringify({ summary: stale })}\n\`\`\``
+  const noFinding = structuredClone(eligibleEvidence())
+  noFinding.branch.nonPlanningCommits = [sha('b')]
+  noFinding.branch.commitTaskIds = { [sha('b')]: 'TREK-246' }
+  noFinding.branch.headSha = sha('b')
+  noFinding.task.lifecycle.terminalSha = sha('b')
+  noFinding.task.lifecycle.accountedCommits = [sha('b')]
+  noFinding.task.terminalSummary = { taskId: 'TREK-246', terminalSha: sha('b'), commitBoundaries: [sha('b')] }
+  noFinding.task.authorityPasses = [
+    { authorityId: 'RA-1', kind: 'technical', disposition: 'pass', reviewedSha: sha('b'), reference: 'Summary:RA-1' },
+    { authorityId: 'RA-2', kind: 'conformance', disposition: 'pass', reviewedSha: sha('b'), reference: 'Summary:RA-2' },
+  ]
+  noFinding.task.canonicalCommitRange = [sha('b')]
+  noFinding.task.canonicalEvidence = canonicalExport(noFinding)
+  assert.equal(evaluateFinalIntegration(noFinding, trustedTopology).eligible, true)
+
+  const divergent = structuredClone(evidence)
+  divergent.task.terminalSummary.terminalSha = sha('b')
   const decision = evaluateFinalIntegration(divergent, trustedTopology)
   assert.equal(decision.eligible, false)
-  assert.ok(decision.reasonCodes.some((code) => ['MISSING_AUTHORITY_CLOSURE', 'SUMMARY_TOPOLOGY_MISMATCH'].includes(code)))
+  assert.ok(decision.reasonCodes.includes('SUMMARY_TOPOLOGY_MISMATCH'))
+
+  const stalePass = structuredClone(noFinding)
+  stalePass.task.authorityPasses[0].reviewedSha = sha('c')
+  assert.ok(evaluateFinalIntegration(stalePass, trustedTopology).reasonCodes.includes('MISSING_AUTHORITY_CLOSURE'))
 })
