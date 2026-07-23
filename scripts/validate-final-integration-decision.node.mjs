@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
 import { tmpdir } from 'node:os'
@@ -13,13 +13,14 @@ function eligibleEvidence() {
   const baseSha = sha('a')
   const candidateSha = sha('b')
   const terminalSha = sha('c')
-  return {
+  const evidence = {
     branch: {
       clean: true,
       mergeAffected: false,
       conflictResolved: false,
       designatedHighRisk: false,
       planningCommits: [sha('d')],
+      preCandidateCommits: [],
       nonPlanningCommits: [candidateSha, terminalSha],
       commitTaskIds: { [candidateSha]: 'TREK-246', [terminalSha]: 'TREK-246' },
       taskIds: ['TREK-246'],
@@ -55,6 +56,37 @@ function eligibleEvidence() {
       },
     },
   }
+  Object.defineProperties(evidence.task, {
+    canonicalCommitRange: { enumerable: true, get: () => evidence.task.lifecycle.accountedCommits },
+    canonicalEvidence: { enumerable: true, get: () => canonicalExport(evidence) },
+  })
+  return evidence
+}
+
+function canonicalExport(evidence) {
+  const l = evidence.task.lifecycle
+  if (l.producerValidation?.state !== 'valid' || !l.producerValidation?.reference || l.closures.some((closure) => !closure.reference)) return ''
+  const hasBatch = l.terminalSha !== l.candidateSha
+  const authorities = Object.entries(l.authorityKinds).map(([id, kind]) => ({ id, kind, reviewerId: kind }))
+  const matrix = l.coverageComplete ? l.coveredCoverageRows.map((id, index) => ({ id, obligation: index ? 'changed-surface' : 'criterion', authorityId: index ? 'RA-2' : 'RA-1' })) : []
+  const lifecycle = {
+    taskId: evidence.task.id, taskRange: { baseSha: l.taskBaseSha, candidateSha: l.candidateSha, terminalSha: l.candidateSha }, history: { rewritten: l.rewritten, staleUpstream: l.stale, unaccountedIntegration: l.unaccountedIntegration },
+    baseline: { id: l.baselineId, taskBaseSha: l.taskBaseSha, candidateSha: l.candidateSha, terminalSha: l.candidateSha, sync: { mainSha: sha('d'), syncSha: l.taskBaseSha, conflicts: false }, verification: ['test'], risk: evidence.task.risk, matrixId: 'RM-TREK-246-01', authorities },
+    expectedCoverage: l.coverageComplete ? ['criterion', 'changed-surface'] : [], matrix,
+    findings: hasBatch ? [{ id: 'RF-1', authorityId: 'RA-1', severity: 'P2', matrixRows: ['RM-1'], states: ['open', 'accepted', 'fixed-pending-closure', 'closed'] }] : [],
+    batches: hasBatch ? [{ id: 'RBATCH-1', baselineId: l.baselineId, findingIds: ['RF-1'], findings: [{ id: 'RF-1', authorityId: 'RA-1', severity: 'P2', matrixRows: ['RM-1'], states: ['open', 'accepted', 'fixed-pending-closure', 'closed'] }], fromSha: l.candidateSha, toSha: l.terminalSha, artifactChanged: true, evidenceChanged: true, affectedMatrixRows: ['RM-1'], affectedAuthorityIds: ['RA-1', 'RA-2'], closureRound: 1 }] : [],
+    closures: hasBatch && l.requiredAuthoritiesClosed ? l.closures.map((closure, index) => ({ id: `RC-${index + 1}`, batchId: 'RBATCH-1', authorityId: closure.authorityId, closerId: closure.kind, fresh: false, terminalSha: closure.reviewedSha, disposition: closure.disposition === 'pass' ? 'closed' : closure.disposition })) : [], invalidators: (l.invalidated || l.scopeDrift) && !l.invalidators.length ? [{ id: 'RI-1', baselineId: l.baselineId, trigger: l.scopeDrift ? 'unrelated-range' : 'evidence-stale', decision: 'escalated', coordinatorEscalation: 'test' }] : l.invalidators.map((invalidator) => ({ ...invalidator, trigger: 'evidence-stale', decision: 'escalated', coordinatorEscalation: 'test' })),
+  }
+  const baseline = { ...lifecycle, findings: [], batches: [], closures: [], invalidators: [] }
+  const summary = { ...evidence.task.summary, authorityPasses: hasBatch || !l.requiredAuthoritiesClosed ? [] : l.closures.map((closure) => ({ ...closure })) }
+  const blocks = [`Review-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle: baseline })}\n\`\`\``]
+  if (hasBatch) {
+    blocks.push(`Review-Batch:\n\`\`\`review-lifecycle\n${JSON.stringify({ batch: lifecycle.batches[0] })}\n\`\`\``)
+    for (const closure of lifecycle.closures) blocks.push(`Review-Closure:\n\`\`\`review-lifecycle\n${JSON.stringify({ closure })}\n\`\`\``)
+  }
+  for (const invalidator of lifecycle.invalidators) blocks.push(`Review-Invalidator:\n\`\`\`review-lifecycle\n${JSON.stringify({ invalidator })}\n\`\`\``)
+  blocks.push(`Summary:\n\`\`\`review-lifecycle\n${JSON.stringify({ summary })}\n\`\`\``)
+  return blocks.join('\n')
 }
 
 const trustedTopology = { topologyVerifier: () => true }
@@ -79,13 +111,13 @@ test('fails closed for each final-integration ineligibility condition', () => {
     ['high risk', (evidence) => { evidence.task.risk = 'high' }, 'HIGH_RISK'],
     ['designated high risk', (evidence) => { evidence.branch.designatedHighRisk = true }, 'HIGH_RISK'],
     ['invalidated', (evidence) => { evidence.task.lifecycle.invalidated = true }, 'INVALIDATED_EVIDENCE'],
-    ['rewritten', (evidence) => { evidence.task.lifecycle.rewritten = true }, 'REWRITTEN_HISTORY'],
-    ['stale', (evidence) => { evidence.task.lifecycle.stale = true }, 'STALE_EVIDENCE'],
-    ['unaccounted integration', (evidence) => { evidence.task.lifecycle.unaccountedIntegration = true }, 'UNACCOUNTED_INTEGRATION'],
+    ['rewritten', (evidence) => { evidence.task.lifecycle.rewritten = true }, 'CANONICAL_EVIDENCE_INVALID'],
+    ['stale', (evidence) => { evidence.task.lifecycle.stale = true }, 'CANONICAL_EVIDENCE_INVALID'],
+    ['unaccounted integration', (evidence) => { evidence.task.lifecycle.unaccountedIntegration = true }, 'CANONICAL_EVIDENCE_INVALID'],
     ['scope drift', (evidence) => { evidence.task.lifecycle.scopeDrift = true }, 'SCOPE_DRIFT'],
-    ['missing coverage', (evidence) => { evidence.task.lifecycle.coverageComplete = false }, 'INCOMPLETE_COVERAGE'],
-    ['missing closure', (evidence) => { evidence.task.lifecycle.requiredAuthoritiesClosed = false }, 'MISSING_AUTHORITY_CLOSURE'],
-    ['missing summary', (evidence) => { delete evidence.task.summary }, 'MISSING_SUMMARY'],
+    ['missing coverage', (evidence) => { evidence.task.lifecycle.coverageComplete = false }, 'CANONICAL_EVIDENCE_INVALID'],
+    ['missing closure', (evidence) => { evidence.task.lifecycle.requiredAuthoritiesClosed = false }, 'CANONICAL_EVIDENCE_INVALID'],
+    ['missing summary', (evidence) => { delete evidence.task.summary }, 'MALFORMED_EVIDENCE'],
     ['unaccounted commit', (evidence) => { evidence.task.lifecycle.accountedCommits.pop() }, 'UNACCOUNTED_COMMIT'],
     ['substantive post-task change', (evidence) => { evidence.branch.nonPlanningCommits.push(sha('d')) }, 'UNACCOUNTED_COMMIT'],
     ['candidate not on branch', (evidence) => { evidence.branch.nonPlanningCommits[0] = sha('d') }, 'UNACCOUNTED_COMMIT'],
@@ -104,23 +136,23 @@ test('fails closed for each final-integration ineligibility condition', () => {
 
 test('requires canonical producer identity, invalidator records, auditable coverage, closure, summary, and trusted topology', () => {
   const cases = [
-    ['baseline missing', (evidence) => { delete evidence.task.lifecycle.baselineId }, 'MALFORMED_EVIDENCE'],
+    ['baseline missing', (evidence) => { delete evidence.task.lifecycle.baselineId }, 'CANONICAL_EVIDENCE_INVALID'],
     ['missing designated-risk boolean', (evidence) => { delete evidence.branch.designatedHighRisk }, 'MALFORMED_EVIDENCE'],
     ['string eligibility boolean', (evidence) => { evidence.branch.clean = 'true' }, 'MALFORMED_EVIDENCE'],
-    ['baseline mismatched', (evidence) => { evidence.task.lifecycle.baselineId = 'RB-TREK-252-01' }, 'BASELINE_ID_MISMATCH'],
-    ['missing producer state', (evidence) => { delete evidence.task.lifecycle.producerValidation.state }, 'MALFORMED_EVIDENCE'],
-    ['empty producer reference', (evidence) => { evidence.task.lifecycle.producerValidation.reference = '' }, 'MALFORMED_EVIDENCE'],
-    ['producer invalid', (evidence) => { evidence.task.lifecycle.producerValidation.state = 'invalid' }, 'PRODUCER_VALIDATION_FAILED'],
+    ['baseline mismatched', (evidence) => { evidence.task.lifecycle.baselineId = 'RB-TREK-252-01' }, 'CANONICAL_EVIDENCE_INVALID'],
+    ['missing producer state', (evidence) => { delete evidence.task.lifecycle.producerValidation.state }, 'CANONICAL_EVIDENCE_INVALID'],
+    ['empty producer reference', (evidence) => { evidence.task.lifecycle.producerValidation.reference = '' }, 'CANONICAL_EVIDENCE_INVALID'],
+    ['producer invalid', (evidence) => { evidence.task.lifecycle.producerValidation.state = 'invalid' }, 'CANONICAL_EVIDENCE_INVALID'],
     ['active invalidator', (evidence) => { evidence.task.lifecycle.invalidators = [{ id: 'RI-1', baselineId: 'RB-TREK-246-01', decision: 'new-cycle' }] }, 'ACTIVE_INVALIDATOR'],
-    ['malformed invalidator', (evidence) => { evidence.task.lifecycle.invalidators = [{ id: 'RI-1' }] }, 'MALFORMED_EVIDENCE'],
-    ['coverage mismatch', (evidence) => { evidence.task.lifecycle.coveredCoverageRows.pop() }, 'INCOMPLETE_COVERAGE'],
-    ['authority mismatch', (evidence) => { evidence.task.lifecycle.closures.pop() }, 'MISSING_AUTHORITY_CLOSURE'],
-    ['missing technical authority', (evidence) => { evidence.task.lifecycle.authorityKinds['RA-1'] = 'ux' }, 'MISSING_AUTHORITY_CLOSURE'],
-    ['duplicate closure', (evidence) => { evidence.task.lifecycle.closures.push({ ...evidence.task.lifecycle.closures[0] }) }, 'MISSING_AUTHORITY_CLOSURE'],
-    ['closure wrong terminal', (evidence) => { evidence.task.lifecycle.closures[0].reviewedSha = sha('d') }, 'MISSING_AUTHORITY_CLOSURE'],
-    ['closure invalid SHA', (evidence) => { evidence.task.lifecycle.closures[0].reviewedSha = 'bad' }, 'MISSING_AUTHORITY_CLOSURE'],
-    ['closure not closed', (evidence) => { evidence.task.lifecycle.closures[0].disposition = 'open' }, 'MISSING_AUTHORITY_CLOSURE'],
-    ['closure missing reference', (evidence) => { delete evidence.task.lifecycle.closures[0].reference }, 'MISSING_AUTHORITY_CLOSURE'],
+    ['malformed invalidator', (evidence) => { evidence.task.lifecycle.invalidators = [{ id: 'RI-1' }] }, 'CANONICAL_EVIDENCE_INVALID'],
+    ['coverage mismatch', (evidence) => { evidence.task.lifecycle.coveredCoverageRows.pop() }, 'CANONICAL_EVIDENCE_INVALID'],
+    ['authority mismatch', (evidence) => { evidence.task.lifecycle.closures.pop() }, 'CANONICAL_EVIDENCE_INVALID'],
+    ['missing technical authority', (evidence) => { evidence.task.lifecycle.authorityKinds['RA-1'] = 'ux' }, 'CANONICAL_EVIDENCE_INVALID'],
+    ['duplicate closure', (evidence) => { evidence.task.lifecycle.closures.push({ ...evidence.task.lifecycle.closures[0] }) }, 'CANONICAL_EVIDENCE_INVALID'],
+    ['closure wrong terminal', (evidence) => { evidence.task.lifecycle.closures[0].reviewedSha = sha('d') }, 'CANONICAL_EVIDENCE_INVALID'],
+    ['closure invalid SHA', (evidence) => { evidence.task.lifecycle.closures[0].reviewedSha = 'bad' }, 'CANONICAL_EVIDENCE_INVALID'],
+    ['closure not closed', (evidence) => { evidence.task.lifecycle.closures[0].disposition = 'open' }, 'CANONICAL_EVIDENCE_INVALID'],
+    ['closure missing reference', (evidence) => { delete evidence.task.lifecycle.closures[0].reference }, 'CANONICAL_EVIDENCE_INVALID'],
     ['summary task mismatch', (evidence) => { evidence.task.summary.taskId = 'TREK-252' }, 'SUMMARY_TOPOLOGY_MISMATCH'],
     ['head mismatch', (evidence) => { evidence.branch.headSha = sha('d') }, 'SUMMARY_TOPOLOGY_MISMATCH'],
     ['reversed topology', (evidence) => { evidence.branch.nonPlanningCommits.reverse(); evidence.task.lifecycle.accountedCommits.reverse() }, 'ORDERED_TOPOLOGY_MISMATCH'],
@@ -155,7 +187,7 @@ test('requires canonical producer identity, invalidator records, auditable cover
 test('treats malformed producer evidence and planning commits as ineligible rather than implicit passes', () => {
   const malformed = evaluateFinalIntegration({})
   assert.equal(malformed.eligible, false)
-  assert.ok(malformed.reasonCodes.includes('MALFORMED_EVIDENCE'))
+  assert.ok(malformed.reasonCodes.includes('CANONICAL_EVIDENCE_INVALID'))
 
   const planningAsCandidate = eligibleEvidence()
   planningAsCandidate.task.lifecycle.candidateSha = planningAsCandidate.task.lifecycle.taskBaseSha
@@ -216,7 +248,7 @@ test('CLI accepts a real Git topology and a candidate-equals-terminal lifecycle 
     writeFileSync(fixture, JSON.stringify(evidence))
     const output = execFileSync(process.execPath, [resolve('scripts/validate-final-integration-decision.mjs'), fixture], { cwd: directory, encoding: 'utf8' })
     const decision = JSON.parse(output)
-    assert.equal(decision.eligible, true)
+    assert.equal(decision.eligible, true, JSON.stringify(decision))
     assert.equal(decision.reviewedSha, terminal)
 
     const verifier = createGitTopologyVerifier(directory)
@@ -243,4 +275,39 @@ test('CLI accepts a real Git topology and a candidate-equals-terminal lifecycle 
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }
+})
+
+test('fails closed instead of throwing on malformed collections and detects an injected pre-candidate commit', () => {
+  for (const mutate of [
+    (evidence) => { evidence.branch.planningCommits = {} },
+    (evidence) => { evidence.branch.nonPlanningCommits = {} },
+  ]) {
+    const evidence = eligibleEvidence()
+    mutate(evidence)
+    assert.doesNotThrow(() => evaluateFinalIntegration(evidence, trustedTopology))
+    assert.ok(evaluateFinalIntegration(evidence, trustedTopology).reasonCodes.includes('MALFORMED_EVIDENCE'))
+  }
+
+  const directory = mkdtempSync(join(tmpdir(), 'final-integration-pre-candidate-'))
+  const runGit = (args) => execFileSync('git', args, { cwd: directory, encoding: 'utf8' }).trim()
+  const commit = (message) => {
+    writeFileSync(join(directory, 'history.txt'), `${message}\n`, { flag: 'a' })
+    runGit(['add', 'history.txt']); runGit(['commit', '-m', message]); return runGit(['rev-parse', 'HEAD'])
+  }
+  try {
+    runGit(['init']); runGit(['config', 'core.autocrlf', 'false']); runGit(['config', 'user.email', 'codex@example.test']); runGit(['config', 'user.name', 'Codex Test'])
+    const planning = commit('planning'); const base = commit('base'); const injected = commit('injected'); const candidate = commit('candidate'); const terminal = commit('terminal')
+    const evidence = eligibleEvidence()
+    Object.assign(evidence.branch, { planningCommits: [planning], nonPlanningCommits: [candidate, terminal], commitTaskIds: { [candidate]: 'TREK-246', [terminal]: 'TREK-246' }, headSha: terminal })
+    Object.assign(evidence.task.lifecycle, { taskBaseSha: base, candidateSha: candidate, terminalSha: terminal, accountedCommits: [candidate, terminal] })
+    evidence.task.summary = { taskId: 'TREK-246', terminalSha: terminal, commitBoundaries: [candidate, terminal] }
+    assert.equal(createGitTopologyVerifier(directory)({ branch: evidence.branch, task: evidence.task }), false, `injected ${injected} must be reconciled`)
+  } finally { rmSync(directory, { recursive: true, force: true }) }
+})
+
+test('epic completion dispatches full cumulative gates only for ineligible decisions', () => {
+  const skill = readFileSync('.codex/skills/epic-development-branch-completion/SKILL.md', 'utf8')
+  assert.match(skill, /When the decision is \*\*ineligible\*\*, dispatch both full cumulative reviews/)
+  assert.match(skill, /When the decision is \*\*eligible\*\*, dispatch the same two independent authorities as\s+scoped acknowledgements/)
+  assert.match(skill, /Do not ask them to repeat cumulative branch analysis/)
 })

@@ -1,5 +1,9 @@
 import { readFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { parseReviewLifecycleBlocks, validateReviewLifecycleFile } from './validate-review-lifecycle.mjs'
 
 const handoffs = {
   equivalent: ['independent-epic-authority', 'independent-conformance-authority', 'reviewed-sha', 'draft-pr-checks'],
@@ -8,18 +12,39 @@ const handoffs = {
 
 const sha = /^[0-9a-f]{40}$/i
 
+function consumeCanonicalEvidence(markdown) {
+  if (typeof markdown !== 'string') throw new Error('canonical evidence export is required')
+  const directory = mkdtempSync(join(tmpdir(), 'final-integration-evidence-'))
+  const path = join(directory, 'evidence.md')
+  try {
+    writeFileSync(path, markdown)
+    const cycles = validateReviewLifecycleFile(path)
+    const lifecycle = cycles.at(-1)
+    const summaryMatch = markdown.match(/Summary:\s*```review-lifecycle\s*([\s\S]*?)```/)
+    if (!summaryMatch) throw new Error('machine-readable terminal Summary is required')
+    const summary = JSON.parse(summaryMatch[1]).summary
+    const blocks = parseReviewLifecycleBlocks(markdown)
+    const batchIds = new Set(lifecycle.batches.map((batch) => batch.id))
+    const closures = blocks.filter((block) => block.type === 'Closure' && batchIds.has(block.closure.batchId)).map((block) => block.closure)
+    const authorityPasses = summary?.authorityPasses
+    if (!Array.isArray(authorityPasses)) throw new Error('terminal Summary authorityPasses is required')
+    return { lifecycle, summary, closures, authorityPasses }
+  } finally { rmSync(directory, { recursive: true, force: true }) }
+}
+
 function malformed(evidence) {
   const { branch, task } = evidence ?? {}
   const lifecycle = task?.lifecycle
   const booleans = ['clean', 'mergeAffected', 'conflictResolved', 'designatedHighRisk']
   const lifecycleBooleans = ['coverageComplete', 'requiredAuthoritiesClosed', 'invalidated', 'rewritten', 'stale', 'unaccountedIntegration', 'scopeDrift']
-  const summaryShas = task?.summary ? [task.summary.terminalSha, ...(task.summary.commitBoundaries ?? [])] : []
-  const shaValues = [branch?.headSha, ...(branch?.planningCommits ?? []), ...(branch?.nonPlanningCommits ?? []), ...(lifecycle?.accountedCommits ?? []), lifecycle?.taskBaseSha, lifecycle?.candidateSha, lifecycle?.terminalSha, ...summaryShas]
-  return !branch || !task || !lifecycle || !/^TREK-\d+$/.test(task.id ?? '') || !Array.isArray(branch.planningCommits) || !Array.isArray(branch.nonPlanningCommits) || !Array.isArray(branch.taskIds)
+  if (!branch || !task || !lifecycle || typeof branch !== 'object' || typeof task !== 'object' || typeof lifecycle !== 'object') return true
+  const arrays = [branch.planningCommits, branch.preCandidateCommits, branch.nonPlanningCommits, branch.taskIds, lifecycle.accountedCommits, lifecycle.closures, lifecycle.invalidators, lifecycle.expectedCoverageRows, lifecycle.coveredCoverageRows, lifecycle.requiredAuthorityIds]
+  if (arrays.some((value) => !Array.isArray(value)) || (task.summary && !Array.isArray(task.summary.commitBoundaries))) return true
+  const summaryShas = task.summary ? [task.summary.terminalSha, ...task.summary.commitBoundaries] : []
+  const shaValues = [branch.headSha, ...branch.planningCommits, ...branch.preCandidateCommits, ...branch.nonPlanningCommits, ...lifecycle.accountedCommits, lifecycle.taskBaseSha, lifecycle.candidateSha, lifecycle.terminalSha, ...summaryShas]
+  return !/^TREK-\d+$/.test(task.id ?? '')
     || !branch.commitTaskIds || booleans.some((key) => typeof branch[key] !== 'boolean')
-    || lifecycleBooleans.some((key) => typeof lifecycle[key] !== 'boolean') || !Array.isArray(lifecycle.accountedCommits) || !Array.isArray(lifecycle.closures)
-    || !Array.isArray(lifecycle.invalidators) || !Array.isArray(lifecycle.expectedCoverageRows) || !Array.isArray(lifecycle.coveredCoverageRows)
-    || !Array.isArray(lifecycle.requiredAuthorityIds) || !lifecycle.authorityKinds
+    || lifecycleBooleans.some((key) => typeof lifecycle[key] !== 'boolean') || !lifecycle.authorityKinds
     || typeof lifecycle.baselineId !== 'string' || !lifecycle.producerValidation || typeof lifecycle.producerValidation.state !== 'string' || !lifecycle.producerValidation.reference?.trim()
     || shaValues.some((value) => !sha.test(value ?? ''))
 }
@@ -36,12 +61,46 @@ export function createGitTopologyVerifier(cwd = process.cwd()) {
     if (branch.planningCommits.some((commit) => run(['merge-base', '--is-ancestor', commit, taskBaseSha]) === null)) return false
     if (run(['merge-base', '--is-ancestor', taskBaseSha, candidateSha]) === null) return false
     if (run(['merge-base', '--is-ancestor', candidateSha, terminalSha]) === null) return false
-    const commits = run(['rev-list', '--reverse', `${candidateSha}^..${terminalSha}`])
-    return commits !== null && sameOrder(commits.split(/\r?\n/).filter(Boolean), branch.nonPlanningCommits)
+    const commits = run(['rev-list', '--reverse', `${taskBaseSha}..${terminalSha}`])
+    return commits !== null && sameOrder(commits.split(/\r?\n/).filter(Boolean), [...branch.preCandidateCommits, ...branch.nonPlanningCommits])
   }
 }
 
 export function evaluateFinalIntegration(evidence, { topologyVerifier } = {}) {
+  try {
+    const canonical = consumeCanonicalEvidence(evidence?.task?.canonicalEvidence)
+    const authorities = canonical.lifecycle.baseline.authorities
+    const closureRecords = canonical.closures.map((closure) => ({ authorityId: closure.authorityId, kind: authorities.find((authority) => authority.id === closure.authorityId)?.kind, disposition: closure.disposition, reviewedSha: closure.terminalSha, reference: closure.id }))
+    const passRecords = canonical.authorityPasses.map((pass) => ({ authorityId: pass.authorityId, kind: pass.kind, disposition: pass.disposition, reviewedSha: pass.reviewedSha, reference: pass.reference }))
+    evidence = {
+      ...evidence,
+      task: {
+        ...evidence.task,
+        lifecycle: {
+          taskBaseSha: canonical.lifecycle.baseline.taskBaseSha,
+          candidateSha: canonical.lifecycle.baseline.candidateSha,
+          terminalSha: canonical.lifecycle.currentTerminalSha,
+          baselineId: canonical.lifecycle.baseline.id,
+          producerValidation: { state: 'valid', reference: canonical.lifecycle.baseline.id },
+          invalidators: canonical.lifecycle.invalidators,
+          coverageComplete: canonical.lifecycle.matrix.length > 0,
+          requiredAuthoritiesClosed: true,
+          expectedCoverageRows: canonical.lifecycle.matrix.map((row) => row.id),
+          coveredCoverageRows: canonical.lifecycle.matrix.map((row) => row.id),
+          requiredAuthorityIds: authorities.map((authority) => authority.id),
+          authorityKinds: Object.fromEntries(authorities.map((authority) => [authority.id, authority.kind])),
+          closures: [...closureRecords, ...passRecords],
+          invalidated: canonical.lifecycle.invalidators.length > 0,
+          rewritten: canonical.lifecycle.history.rewritten,
+          stale: canonical.lifecycle.history.staleUpstream,
+          unaccountedIntegration: canonical.lifecycle.history.unaccountedIntegration,
+          scopeDrift: canonical.lifecycle.invalidators.some((invalidator) => invalidator.trigger === 'approved-intent-change' || invalidator.trigger === 'unrelated-range'),
+          accountedCommits: evidence.task.canonicalCommitRange,
+        },
+        summary: canonical.summary,
+      },
+    }
+  } catch { return ineligible(['CANONICAL_EVIDENCE_INVALID']) }
   if (malformed(evidence)) return ineligible(['MALFORMED_EVIDENCE'])
 
   const { branch, task } = evidence
@@ -71,8 +130,9 @@ export function evaluateFinalIntegration(evidence, { topologyVerifier } = {}) {
   add(lifecycle.candidateSha === lifecycle.taskBaseSha || lifecycle.terminalSha === lifecycle.taskBaseSha, 'INVALID_TASK_TOPOLOGY')
 
   const commits = branch.nonPlanningCommits
-  const accountedCommitsMatch = sameOrder(lifecycle.accountedCommits, commits)
-  const topologyMismatch = !commits.length || duplicate(commits) || duplicate(branch.planningCommits)
+  const taskRangeCommits = [...branch.preCandidateCommits, ...commits]
+  const accountedCommitsMatch = sameOrder(lifecycle.accountedCommits, taskRangeCommits)
+  const topologyMismatch = !commits.length || duplicate(taskRangeCommits) || duplicate(branch.planningCommits)
     || branch.planningCommits.some((commit) => commits.includes(commit)) || commits[0] !== lifecycle.candidateSha
     || branch.planningCommits.includes(lifecycle.taskBaseSha) || branch.planningCommits.includes(lifecycle.candidateSha) || branch.planningCommits.includes(lifecycle.terminalSha)
     || commits.at(-1) !== lifecycle.terminalSha || !accountedCommitsMatch
