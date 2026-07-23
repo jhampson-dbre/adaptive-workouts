@@ -92,7 +92,7 @@ test('requires a checkpoint and escalation after two unsuccessful closure rounds
 test('parses canonical append-only Review blocks', () => {
   const lifecycle = validLifecycle()
   const markdown = `Review-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle })}\n\`\`\``
-  assert.deepEqual(parseReviewLifecycleBlocks(markdown), [{ type: 'Baseline', lifecycle }])
+  assert.deepEqual(parseReviewLifecycleBlocks(markdown), [{ type: 'Baseline', order: 0, lifecycle }])
 })
 
 test('requires UX closure when changed prescribed UX evidence is affected', () => {
@@ -111,8 +111,15 @@ test('introduces findings append-only in Review-Batch after a finding-free basel
   delete lifecycle.batches[0].findingIds
   const directory = mkdtempSync(join(tmpdir(), 'review-lifecycle-'))
   const evidencePath = join(directory, 'evidence.md')
-  writeFileSync(evidencePath, `Review-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle })}\n\`\`\`\nReview-Batch:\n\`\`\`review-lifecycle\n${JSON.stringify({ batch: lifecycle.batches[0] })}\n\`\`\`\n${lifecycle.closures.map((closure) => `Review-Closure:\n\`\`\`review-lifecycle\n${JSON.stringify({ closure })}\n\`\`\``).join('\n')}`)
+  const baselineBlock = `Review-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle })}\n\`\`\``
+  const batchBlock = `Review-Batch:\n\`\`\`review-lifecycle\n${JSON.stringify({ batch: lifecycle.batches[0] })}\n\`\`\``
+  const closureBlocks = lifecycle.closures.map((closure) => `Review-Closure:\n\`\`\`review-lifecycle\n${JSON.stringify({ closure })}\n\`\`\``).join('\n')
   try {
+    writeFileSync(evidencePath, `${batchBlock}\n${baselineBlock}\n${closureBlocks}`)
+    assert.throws(() => validateReviewLifecycleFile(evidencePath), /batch RBATCH-1 must follow its baseline/i)
+    writeFileSync(evidencePath, `${baselineBlock}\n${closureBlocks}\n${batchBlock}`)
+    assert.throws(() => validateReviewLifecycleFile(evidencePath), /closure RC-1 must follow its batch/i)
+    writeFileSync(evidencePath, `${baselineBlock}\n${batchBlock}\n${closureBlocks}`)
     assert.doesNotThrow(() => validateReviewLifecycleFile(evidencePath))
   } finally {
     rmSync(directory, { recursive: true, force: true })
@@ -241,7 +248,7 @@ test('rejects duplicate stable IDs across appended cycles', () => {
   const evidencePath = join(directory, 'evidence.md')
   writeFileSync(evidencePath, `Review-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle: initial })}\n\`\`\`\nReview-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle: successor })}\n\`\`\``)
   try {
-    assert.throws(() => validateReviewLifecycleFile(evidencePath), /duplicate ID across cycles: RA-1/i)
+    assert.throws(() => validateReviewLifecycleFile(evidencePath), /successor cycle RB-TREK-252-02 requires exactly one predecessor/i)
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }
@@ -278,4 +285,45 @@ test('rejects unresolved sync conflicts, extra closures, and cross-task baseline
   crossTask.baseline.id = 'RB-TREK-999-01'
   crossTask.batches[0].baselineId = 'RB-TREK-999-01'
   assert.throws(() => validateReviewLifecycle(crossTask), /baseline task ID/i)
+})
+
+test('rejects review schema gaps that bypass authority or fresh-closer rules', () => {
+  const na = validLifecycle()
+  na.matrix[2] = { id: 'RM-3', obligation: 'N/A', covers: '', rationale: '', authorityId: 'RA-1' }
+  assert.throws(() => validateReviewLifecycle(na), /N\/A.*covers.*rationale/i)
+
+  const missingTechnical = validLifecycle()
+  missingTechnical.baseline.authorities = missingTechnical.baseline.authorities.filter((authority) => authority.kind !== 'technical')
+  missingTechnical.matrix.forEach((row) => { row.authorityId = 'RA-2' })
+  missingTechnical.findings[0].authorityId = 'RA-2'
+  missingTechnical.batches[0].affectedAuthorityIds = ['RA-2']
+  missingTechnical.closures = [{ ...missingTechnical.closures[1] }]
+  assert.throws(() => validateReviewLifecycle(missingTechnical), /technical authority/i)
+
+  const findingScope = validLifecycle()
+  findingScope.baseline.authorities.push({ id: 'RA-3', kind: 'ux', reviewerId: 'ux-broad' })
+  findingScope.findings[0].authorityId = 'RA-3'
+  assert.throws(() => validateReviewLifecycle(findingScope), /finding.*authority.*affected/i)
+
+  const sameRange = validLifecycle()
+  sameRange.batches[0].toSha = sameRange.batches[0].fromSha
+  sameRange.closures.forEach((closure) => { closure.terminalSha = sameRange.batches[0].fromSha })
+  assert.throws(() => validateReviewLifecycle(sameRange), /distinct additive range/i)
+
+  const severity = validLifecycle()
+  severity.findings[0].severity = 'P9'
+  assert.throws(() => validateReviewLifecycle(severity), /supported severity/i)
+})
+
+test('rejects invalidator, matrix ID, and injected Git topology gaps', () => {
+  const trigger = validLifecycle()
+  trigger.invalidators = [{ id: 'RI-1', baselineId: 'RB-TREK-252-01', trigger: 'invented-trigger', decision: 'escalated', coordinatorEscalation: 'owner' }]
+  assert.throws(() => validateReviewLifecycle(trigger), /invalidator trigger/i)
+
+  const matrixId = validLifecycle()
+  matrixId.baseline.matrixId = 'RM-TREK-252-02'
+  assert.throws(() => validateReviewLifecycle(matrixId), /matrix ID/i)
+
+  const topology = validLifecycle()
+  assert.throws(() => validateReviewLifecycle(topology, { gitVerifier: { exists: () => false, isAncestor: () => false } }), /Git object/i)
 })
