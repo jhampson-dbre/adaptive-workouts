@@ -43,8 +43,88 @@ function validLifecycle() {
   }
 }
 
+function baselineOnlyLifecycle(cycle, idOffset = 0) {
+  const lifecycle = validLifecycle()
+  lifecycle.taskRange.candidateSha = sha('c')
+  lifecycle.taskRange.terminalSha = sha('c')
+  lifecycle.baseline.candidateSha = sha('c')
+  lifecycle.baseline.terminalSha = sha('c')
+  lifecycle.baseline.id = `RB-TREK-252-${cycle}`
+  lifecycle.baseline.matrixId = `RM-TREK-252-${cycle}`
+  lifecycle.baseline.authorities = [
+    { id: `RA-${idOffset + 1}`, kind: 'technical', reviewerId: `technical-${cycle}` },
+    { id: `RA-${idOffset + 2}`, kind: 'conformance', reviewerId: `conformance-${cycle}` },
+  ]
+  lifecycle.matrix = [
+    { id: `RM-${idOffset + 1}`, obligation: 'criterion', authorityId: `RA-${idOffset + 1}` },
+    { id: `RM-${idOffset + 2}`, obligation: 'changed-surface', authorityId: `RA-${idOffset + 2}` },
+    { id: `RM-${idOffset + 3}`, obligation: 'risk', authorityId: `RA-${idOffset + 1}` },
+  ]
+  lifecycle.findings = []
+  lifecycle.batches = []
+  lifecycle.closures = []
+  lifecycle.invalidators = []
+  return lifecycle
+}
+
+const baselineBlock = (lifecycle) => `Review-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle })}\n\`\`\``
+const invalidatorBlock = (invalidator) => `Review-Invalidator:\n\`\`\`review-lifecycle\n${JSON.stringify({ invalidator })}\n\`\`\``
+
 test('accepts a reconciled lifecycle with fresh P1 replacement closers', () => {
   assert.doesNotThrow(() => validateReviewLifecycle(validLifecycle()))
+})
+
+test('requires canonical two-digit baseline and invalidator cycle identities', () => {
+  for (const cycle of ['00', '001', '100']) {
+    const lifecycle = baselineOnlyLifecycle(cycle)
+    assert.throws(() => validateReviewLifecycle(lifecycle), /cycle.*01.*99/i, cycle)
+  }
+
+  const invalidatorAlias = baselineOnlyLifecycle('01')
+  invalidatorAlias.invalidators = [{ id: 'RI-1', baselineId: 'RB-TREK-252-001', trigger: 'evidence-stale', decision: 'escalated', coordinatorEscalation: 'owner' }]
+  assert.throws(() => validateReviewLifecycle(invalidatorAlias), /invalidator.*cycle.*01.*99/i)
+
+  const successorAlias = baselineOnlyLifecycle('01')
+  successorAlias.invalidators = [{ id: 'RI-1', baselineId: 'RB-TREK-252-01', trigger: 'evidence-stale', decision: 'new-cycle', successorBaselineId: 'RB-TREK-252-002' }]
+  assert.throws(() => validateReviewLifecycle(successorAlias), /successor.*cycle.*01.*99/i)
+})
+
+test('accepts only an initial 01 and adjacent, ordered, invalidator-linked successor cycles', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'review-lifecycle-cycles-'))
+  const evidencePath = join(directory, 'evidence.md')
+  const initial = baselineOnlyLifecycle('01')
+  const second = baselineOnlyLifecycle('02', 3)
+  const link = { id: 'RI-1', baselineId: initial.baseline.id, trigger: 'evidence-stale', decision: 'new-cycle', successorBaselineId: second.baseline.id }
+  try {
+    writeFileSync(evidencePath, baselineBlock(initial))
+    assert.doesNotThrow(() => validateReviewLifecycleFile(evidencePath))
+
+    writeFileSync(evidencePath, [baselineBlock(initial), invalidatorBlock(link), baselineBlock(second)].join('\n'))
+    assert.doesNotThrow(() => validateReviewLifecycleFile(evidencePath))
+
+    writeFileSync(evidencePath, baselineBlock(baselineOnlyLifecycle('02')))
+    assert.throws(() => validateReviewLifecycleFile(evidencePath), /initial baseline cycle must be 01/i)
+
+    writeFileSync(evidencePath, [baselineBlock(initial), baselineBlock(second)].join('\n'))
+    assert.throws(() => validateReviewLifecycleFile(evidencePath), /exactly one preceding new-cycle invalidator/i)
+
+    const third = baselineOnlyLifecycle('03', 6)
+    const skippedLink = { ...link, successorBaselineId: third.baseline.id }
+    writeFileSync(evidencePath, [baselineBlock(initial), invalidatorBlock(skippedLink), baselineBlock(third)].join('\n'))
+    assert.throws(() => validateReviewLifecycleFile(evidencePath), /expected adjacent cycle 02/i)
+
+    const reverseLink = { id: 'RI-2', baselineId: third.baseline.id, trigger: 'evidence-stale', decision: 'new-cycle', successorBaselineId: second.baseline.id }
+    writeFileSync(evidencePath, [
+      baselineBlock(initial),
+      invalidatorBlock(skippedLink),
+      baselineBlock(third),
+      invalidatorBlock(reverseLink),
+      baselineBlock(second),
+    ].join('\n'))
+    assert.throws(() => validateReviewLifecycleFile(evidencePath), /expected adjacent cycle 02/i)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
 })
 
 test('rejects duplicate IDs, illegal transitions, incomplete coverage, and missing closure', () => {
@@ -248,7 +328,7 @@ test('rejects duplicate stable IDs across appended cycles', () => {
   const evidencePath = join(directory, 'evidence.md')
   writeFileSync(evidencePath, `Review-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle: initial })}\n\`\`\`\nReview-Baseline:\n\`\`\`review-lifecycle\n${JSON.stringify({ lifecycle: successor })}\n\`\`\``)
   try {
-    assert.throws(() => validateReviewLifecycleFile(evidencePath), /successor cycle RB-TREK-252-02 requires exactly one predecessor/i)
+    assert.throws(() => validateReviewLifecycleFile(evidencePath), /successor cycle RB-TREK-252-02 requires exactly one preceding/i)
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }

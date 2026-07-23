@@ -4,6 +4,8 @@ Use these append-only, sanitized Trekker comment blocks for every non-trivial tr
 
 The coordinator records the immutable candidate only after the green diff, required simplification, and coordinator verification. `taskBaseSha`, candidate SHA, and terminal SHA are the immutable initial snapshot, so terminal equals candidate at baseline creation. Later additive batches derive the current terminal without mutating the baseline. Sync provenance, verification, risk, and the matrix reference are required. The planning commit is planning provenance, never a task review baseline.
 
+Baseline cycle suffixes are exactly two digits from `01` through `99`. Every lifecycle starts with exactly one `01` baseline. Append successors in adjacent order (`02`, `03`, and so on), with exactly one `new-cycle` invalidator between each baseline and its successor that names those exact predecessor and successor IDs. Aliases such as `00`, `001`, and `100`, skipped cycles, and out-of-order cycles are invalid.
+
 ## Review-Baseline
 
 ~~~~text
@@ -98,4 +100,4 @@ Review-Invalidator:
 ```
 ~~~~
 
-Invalidators cover history rewrites, stale or unaccounted upstream integration, unresolved conflicts, unrelated task range work, stale evidence, material approved-intent/architecture change, and missing high-risk authority. A new-cycle invalidator names its successor; an escalated invalidator records coordinator escalation. The `Summary:` links every canonical block, terminal SHA, final verification, commit boundaries, and residual-risk disposition. Validate an evidence export with `node scripts/validate-review-lifecycle.mjs <file>` before treating it as reconcilable.
+Invalidators cover history rewrites, stale or unaccounted upstream integration, unresolved conflicts, unrelated task range work, stale evidence, material approved-intent/architecture change, and missing high-risk authority. Invalidator baseline and successor IDs use the same canonical two-digit `01` through `99` cycle grammar. A new-cycle invalidator names its adjacent successor; an escalated invalidator records coordinator escalation. The `Summary:` links every canonical block, terminal SHA, final verification, commit boundaries, and residual-risk disposition. Validate an evidence export with `node scripts/validate-review-lifecycle.mjs <file>` before treating it as reconcilable.

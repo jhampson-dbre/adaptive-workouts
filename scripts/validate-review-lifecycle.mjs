@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const repositoryRoot = resolve(import.meta.dirname, '..')
 const shaPattern = /^[0-9a-f]{40}$/i
+const baselineIdPattern = /^RB-(TREK-\d+)-(0[1-9]|[1-9]\d)$/
 const authorities = new Set(['technical', 'conformance', 'ux', 'specialist'])
 const severities = new Set(['P0', 'P1', 'P2'])
 const invalidatorTriggers = new Set(['history-rewritten', 'stale-upstream', 'conflict', 'unrelated-range', 'evidence-stale', 'approved-intent-change', 'missing-authority'])
@@ -18,6 +19,12 @@ const transitions = new Map([
 
 function assertSha(value, label) {
   assert.match(value ?? '', shaPattern, `${label} must be a 40-character SHA`)
+}
+
+function parseBaselineId(value, label) {
+  const match = value?.match(baselineIdPattern)
+  assert.ok(match, `${label} must use a two-digit cycle from 01 through 99`)
+  return { taskId: match[1], cycle: Number(match[2]) }
 }
 
 function assertUniqueIds(lifecycle) {
@@ -70,8 +77,8 @@ export function validateReviewLifecycle(lifecycle, { gitVerifier } = {}) {
   const historyLabels = { rewritten: 'history rewrite', staleUpstream: 'stale upstream', unaccountedIntegration: 'unaccounted integration' }
   for (const key of Object.keys(historyLabels)) assert.equal(lifecycle.history?.[key], false, `${historyLabels[key]} must be false for a valid review baseline`)
   for (const [label, value] of Object.entries(taskRange)) assertSha(value, `task range ${label}`)
-  assert.match(baseline.id ?? '', /^RB-TREK-\d+-\d+$/, 'baseline ID must be immutable and task scoped')
-  assert.equal(baseline.id.match(/^RB-(TREK-\d+)-/)?.[1], lifecycle.taskId, 'baseline task ID must match lifecycle taskId')
+  const baselineIdentity = parseBaselineId(baseline.id, 'baseline ID')
+  assert.equal(baselineIdentity.taskId, lifecycle.taskId, 'baseline task ID must match lifecycle taskId')
   assertSha(baseline.taskBaseSha, 'baseline task base SHA')
   assertSha(baseline.candidateSha, 'baseline candidate SHA')
   assertSha(baseline.terminalSha, 'baseline terminal SHA')
@@ -176,12 +183,13 @@ export function validateReviewLifecycle(lifecycle, { gitVerifier } = {}) {
   }
 
   for (const invalidator of lifecycle.invalidators ?? []) {
-    assert.match(invalidator.baselineId ?? '', /^RB-TREK-\d+-\d+$/, `invalidator ${invalidator.id} needs a baseline ID`)
+    const invalidatedIdentity = parseBaselineId(invalidator.baselineId, `invalidator ${invalidator.id} baseline cycle`)
+    assert.equal(invalidatedIdentity.taskId, lifecycle.taskId, `invalidator ${invalidator.id} baseline must remain in the same task`)
     assert.ok(invalidatorTriggers.has(invalidator.trigger), `invalidator trigger is not supported: ${invalidator.trigger}`)
     assert.ok(['new-cycle', 'escalated'].includes(invalidator.decision), `invalidator ${invalidator.id} needs a decision`)
     if (invalidator.decision === 'new-cycle') {
-      assert.match(invalidator.successorBaselineId ?? '', /^RB-TREK-\d+-\d+$/, `invalidator ${invalidator.id} requires successor cycle`)
-      assert.equal(invalidator.successorBaselineId.match(/^RB-(TREK-\d+)-/)?.[1], lifecycle.taskId, `successor ${invalidator.successorBaselineId} must remain in the same task`)
+      const successorIdentity = parseBaselineId(invalidator.successorBaselineId, `invalidator ${invalidator.id} successor cycle`)
+      assert.equal(successorIdentity.taskId, lifecycle.taskId, `successor ${invalidator.successorBaselineId} must remain in the same task`)
     }
     if (invalidator.decision === 'escalated') assert.ok(invalidator.coordinatorEscalation, `invalidator ${invalidator.id} requires coordinator escalation`)
   }
@@ -221,17 +229,31 @@ export function validateReviewLifecycleFile(path, { gitVerifier } = {}) {
   const invalidators = invalidatorBlocks.map((block) => block.invalidator)
   const baselineIds = new Set(baselineBlocks.map((block) => block.lifecycle?.baseline?.id))
   assert.equal(baselineIds.size, baselineBlocks.length, 'duplicate baseline ID across cycles')
+  const baselineCycles = baselineBlocks.map((block) => ({
+    block,
+    id: block.lifecycle?.baseline?.id,
+    ...parseBaselineId(block.lifecycle?.baseline?.id, 'baseline ID'),
+  }))
+  for (const baseline of baselineCycles.slice(1)) {
+    assert.equal(baseline.taskId, baselineCycles[0].taskId, `successor ${baseline.id} must remain in the same task`)
+  }
+  assert.equal(baselineCycles[0].cycle, 1, 'initial baseline cycle must be 01')
+  assert.equal(baselineCycles.filter(({ cycle }) => cycle === 1).length, 1, 'review lifecycle requires exactly one initial 01 baseline cycle')
   for (const invalidator of invalidators) {
+    parseBaselineId(invalidator.baselineId, `invalidator ${invalidator.id} baseline cycle`)
+    if (invalidator.decision === 'new-cycle') parseBaselineId(invalidator.successorBaselineId, `invalidator ${invalidator.id} successor cycle`)
     if (invalidator.decision === 'new-cycle') assert.ok(baselineIds.has(invalidator.successorBaselineId), `invalidator ${invalidator.id} requires appended successor baseline block`)
   }
-  for (const block of baselineBlocks) {
-    const baselineId = block.lifecycle.baseline?.id
-    const cycle = Number(baselineId?.match(/-(\d+)$/)?.[1])
-    if (cycle > 1) {
-      const predecessors = invalidators.filter((invalidator) => invalidator.decision === 'new-cycle' && invalidator.successorBaselineId === baselineId)
-      assert.equal(predecessors.length, 1, `successor cycle ${baselineId} requires exactly one predecessor new-cycle invalidator`)
-      assert.equal(predecessors[0].baselineId.match(/^RB-(TREK-\d+)-/)?.[1], block.lifecycle.taskId, `successor cycle ${baselineId} must remain in the same task`)
-    }
+  for (let index = 1; index < baselineCycles.length; index += 1) {
+    const previous = baselineCycles[index - 1]
+    const current = baselineCycles[index]
+    const expectedCycle = String(previous.cycle + 1).padStart(2, '0')
+    assert.equal(current.cycle, previous.cycle + 1, `successor cycle ${current.id} expected adjacent cycle ${expectedCycle}`)
+    const predecessorBlocks = invalidatorBlocks.filter(({ invalidator }) =>
+      invalidator.decision === 'new-cycle' && invalidator.successorBaselineId === current.id)
+    assert.equal(predecessorBlocks.length, 1, `successor cycle ${current.id} requires exactly one preceding new-cycle invalidator from ${previous.id}`)
+    assert.equal(predecessorBlocks[0].invalidator.baselineId, previous.id, `successor cycle ${current.id} requires exactly one preceding new-cycle invalidator from ${previous.id}`)
+    assert.ok(predecessorBlocks[0].order > previous.block.order && predecessorBlocks[0].order < current.block.order, `successor cycle ${current.id} requires exactly one preceding new-cycle invalidator from ${previous.id}`)
   }
   const closureBlocks = blocks.filter((block) => block.type === 'Closure')
   const closures = closureBlocks.map((block) => block.closure)

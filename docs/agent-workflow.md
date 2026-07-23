@@ -186,6 +186,9 @@ finding records are introduced only in append-only `Review-Batch:` blocks.
 The baseline terminal is the immutable initial candidate snapshot. Derive the current
 terminal from that cycle's additive batches without rewriting it; every batch names
 its baseline cycle and each appended successor cycle is independently validated.
+Cycle suffixes are exactly two digits from `01` through `99`: create exactly one
+initial `01`, then append adjacent cycles in order. Each successor has exactly one
+preceding `new-cycle` invalidator naming the exact predecessor and successor IDs.
 
 Normalize findings to stable IDs and legal transitions only. Freeze accepted
 remediation in `Review-Batch:` blocks. Every artifact or evidence delta requires

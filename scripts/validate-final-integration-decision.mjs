@@ -52,6 +52,10 @@ function malformed(evidence) {
 const sameOrder = (left, right) => left.length === right.length && left.every((value, index) => value === right[index])
 const duplicate = (values) => new Set(values).size !== values.length
 
+export function isCanonicalBaselineId(taskId, baselineId) {
+  return new RegExp(`^RB-${taskId}-(?:0[1-9]|[1-9]\\d)$`).test(baselineId)
+}
+
 export function createGitTopologyVerifier(cwd = process.cwd()) {
   const run = (args) => {
     try { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() } catch { return null }
@@ -112,7 +116,7 @@ export function evaluateFinalIntegration(evidence, { topologyVerifier } = {}) {
   add(branch.conflictResolved, 'CONFLICT_RESOLVED')
   add(branch.taskIds.length !== 1 || branch.taskIds[0] !== task.id, 'MULTI_TASK_BRANCH')
   add(!['low', 'medium'].includes(task.risk) || branch.designatedHighRisk, 'HIGH_RISK')
-  add(!new RegExp(`^RB-${task.id}-\\d+$`).test(lifecycle.baselineId), 'BASELINE_ID_MISMATCH')
+  add(!isCanonicalBaselineId(task.id, lifecycle.baselineId), 'BASELINE_ID_MISMATCH')
   add(lifecycle.producerValidation.state !== 'valid', 'PRODUCER_VALIDATION_FAILED')
   add(lifecycle.invalidators.some((record) => !record?.id || record.baselineId !== lifecycle.baselineId || !['new-cycle', 'escalated'].includes(record.decision)), 'MALFORMED_EVIDENCE')
   add(lifecycle.invalidators.length > 0, 'ACTIVE_INVALIDATOR')

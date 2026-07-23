@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path'
 import test from 'node:test'
 import { tmpdir } from 'node:os'
 
-import { createGitTopologyVerifier, evaluateFinalIntegration } from './validate-final-integration-decision.mjs'
+import { createGitTopologyVerifier, evaluateFinalIntegration, isCanonicalBaselineId } from './validate-final-integration-decision.mjs'
 
 const sha = (character) => character.repeat(40)
 
@@ -79,7 +79,7 @@ function canonicalExport(evidence) {
   const matrix = l.coverageComplete ? l.coveredCoverageRows.map((id, index) => ({ id, obligation: index ? 'changed-surface' : 'criterion', authorityId: index ? 'RA-2' : 'RA-1' })) : []
   const lifecycle = {
     taskId: evidence.task.id, taskRange: { baseSha: l.taskBaseSha, candidateSha: l.candidateSha, terminalSha: l.candidateSha }, history: { rewritten: l.rewritten, staleUpstream: l.stale, unaccountedIntegration: l.unaccountedIntegration },
-    baseline: { id: l.baselineId, taskBaseSha: l.taskBaseSha, candidateSha: l.candidateSha, terminalSha: l.candidateSha, sync: { mainSha: sha('d'), syncSha: l.taskBaseSha, conflicts: false }, verification: ['test'], risk: evidence.task.risk, matrixId: 'RM-TREK-246-01', authorities },
+    baseline: { id: l.baselineId, taskBaseSha: l.taskBaseSha, candidateSha: l.candidateSha, terminalSha: l.candidateSha, sync: { mainSha: sha('d'), syncSha: l.taskBaseSha, conflicts: false }, verification: ['test'], risk: evidence.task.risk, matrixId: l.baselineId.replace(/^RB-/, 'RM-'), authorities },
     expectedCoverage: l.coverageComplete ? ['criterion', 'changed-surface'] : [], matrix,
     findings: hasBatch ? [{ id: 'RF-1', authorityId: 'RA-1', severity: 'P2', matrixRows: ['RM-1'], states: ['open', 'accepted', 'fixed-pending-closure', 'closed'] }] : [],
     batches: hasBatch ? [{ id: 'RBATCH-1', baselineId: l.baselineId, findingIds: ['RF-1'], findings: [{ id: 'RF-1', authorityId: 'RA-1', severity: 'P2', matrixRows: ['RM-1'], states: ['open', 'accepted', 'fixed-pending-closure', 'closed'] }], fromSha: l.candidateSha, toSha: l.terminalSha, artifactChanged: true, evidenceChanged: true, affectedMatrixRows: ['RM-1'], affectedAuthorityIds: ['RA-1', 'RA-2'], closureRound: 1 }] : [],
@@ -97,6 +97,14 @@ function canonicalExport(evidence) {
 }
 
 const trustedTopology = { topologyVerifier: () => true }
+
+test('final-integration baseline identity independently requires canonical cycles', () => {
+  assert.equal(isCanonicalBaselineId('TREK-246', 'RB-TREK-246-01'), true)
+  assert.equal(isCanonicalBaselineId('TREK-246', 'RB-TREK-246-99'), true)
+  for (const baselineId of ['RB-TREK-246-00', 'RB-TREK-246-001', 'RB-TREK-246-100']) {
+    assert.equal(isCanonicalBaselineId('TREK-246', baselineId), false, baselineId)
+  }
+})
 
 test('accepts only a clean single-task low or medium risk topology with reconciled canonical evidence', () => {
   const decision = evaluateFinalIntegration(eligibleEvidence(), trustedTopology)
@@ -144,6 +152,7 @@ test('fails closed for each final-integration ineligibility condition', () => {
 test('requires canonical producer identity, invalidator records, auditable coverage, closure, summary, and trusted topology', () => {
   const cases = [
     ['baseline missing', (evidence) => { delete evidence.task.lifecycle.baselineId }, 'CANONICAL_EVIDENCE_INVALID'],
+    ['baseline cycle alias', (evidence) => { evidence.task.lifecycle.baselineId = 'RB-TREK-246-001' }, 'CANONICAL_EVIDENCE_INVALID'],
     ['missing designated-risk boolean', (evidence) => { delete evidence.branch.designatedHighRisk }, 'MALFORMED_EVIDENCE'],
     ['string eligibility boolean', (evidence) => { evidence.branch.clean = 'true' }, 'MALFORMED_EVIDENCE'],
     ['baseline mismatched', (evidence) => { evidence.task.lifecycle.baselineId = 'RB-TREK-252-01' }, 'CANONICAL_EVIDENCE_INVALID'],
