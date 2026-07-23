@@ -133,7 +133,7 @@ export function evaluateFinalIntegration(evidence, { topologyVerifier } = {}) {
   const taskRangeCommits = [...branch.preCandidateCommits, ...commits]
   const accountedCommitsMatch = sameOrder(lifecycle.accountedCommits, taskRangeCommits)
   const topologyMismatch = !commits.length || duplicate(taskRangeCommits) || duplicate(branch.planningCommits)
-    || branch.planningCommits.some((commit) => commits.includes(commit)) || commits[0] !== lifecycle.candidateSha
+    || branch.planningCommits.some((commit) => taskRangeCommits.includes(commit)) || commits[0] !== lifecycle.candidateSha
     || branch.planningCommits.includes(lifecycle.taskBaseSha) || branch.planningCommits.includes(lifecycle.candidateSha) || branch.planningCommits.includes(lifecycle.terminalSha)
     || commits.at(-1) !== lifecycle.terminalSha || !accountedCommitsMatch
   add(topologyMismatch, 'ORDERED_TOPOLOGY_MISMATCH')

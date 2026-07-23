@@ -334,6 +334,21 @@ test('rejects a foreign-task pre-candidate commit across the full task range', (
   assert.ok(decision.reasonCodes.includes('CROSS_TASK_INTEGRATION'))
 })
 
+test('rejects planning commits that overlap pre-candidate task-range commits', () => {
+  const evidence = eligibleEvidence()
+  evidence.branch.preCandidateCommits = [sha('d')]
+  evidence.branch.commitTaskIds = {
+    [sha('d')]: 'TREK-246',
+    [sha('b')]: 'TREK-246',
+    [sha('c')]: 'TREK-246',
+  }
+  evidence.task.lifecycle.accountedCommits = [sha('d'), sha('b'), sha('c')]
+
+  const decision = evaluateFinalIntegration(evidence, trustedTopology)
+  assert.equal(decision.eligible, false)
+  assert.ok(decision.reasonCodes.includes('ORDERED_TOPOLOGY_MISMATCH'))
+})
+
 test('accepts prose Summary compatibility and fails closed on divergent envelope evidence', () => {
   const evidence = structuredClone(eligibleEvidence())
   assert.match(evidence.task.canonicalEvidence, /Summary:\nValidated task terminal/)
