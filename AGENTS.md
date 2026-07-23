@@ -120,6 +120,35 @@ review-driven fixes, rerun simplification only when those fixes materially resha
 reintroduce complexity, and at most once after review per task. Simplifier edits and
 reviewer requests to re-verify do not by themselves start another simplification loop.
 
+### Immutable Task-Review Lifecycle
+
+For every non-trivial tracked implementation task, preserve the planning commit as
+provenance only and create an immutable review baseline `RB-<TASK-ID>-<cycle>` after
+green implementation, required simplification, and coordinator verification. The
+sanitized append-only `Review-Baseline:` block records task base, candidate and
+terminal SHAs, sync provenance, verification, risk, and the exhaustive coverage and
+authority matrix from `docs/templates/review-lifecycle-evidence.md`. Cover every
+criterion, changed surface, issue-class obligation, prescribed UX evidence, and
+relevant high-risk boundary (or explicit N/A), with technical, conformance, UX, or at
+most one specialist authority. Matrix rows use stable authority IDs; an N/A row needs
+authority acknowledgement, what it covers, and rationale.
+The baseline terminal is its immutable initial candidate snapshot; derive later final
+terminal SHA from additive batches without mutating that baseline. Every batch names
+its baseline cycle, and each appended successor cycle is validated independently.
+
+Use stable finding IDs and only legal transitions. Freeze accepted remediation in a
+`Review-Batch:` block. Every artifact/evidence delta needs technical and conformance
+scoped closure in `Review-Closure:`; repeat UX closure when UI or prescribed UX
+evidence changes. An accepted P0/P1 batch receives exactly one fresh replacement
+scoped closer per affected authority, rather than another broad review. Record
+rewritten, stale, conflicted, unrelated, unaccounted, missing-authority, or material
+intent-change histories in `Review-Invalidator:` blocks. Two unsuccessful closure
+rounds require a `Checkpoint:` and coordinator escalation. Validate evidence exports
+before relying on them with `node scripts/validate-review-lifecycle.mjs <file>`.
+The baseline precedes broad review; append later frozen finding records in
+`Review-Batch:` blocks, record artifactChanged and evidenceChanged separately, and
+require every P0/P1 replacement closer to differ from the original broad reviewer.
+
 An agent may receive a follow-up only for the same Trekker task when the coordinator
 labels it as a same-task continuation and supplies the changed scope, new evidence,
 and the decision needed. A follow-up must not silently expand into another task. For
@@ -138,6 +167,12 @@ Conformance escalation and re-review are explicit:
 - For a product, architecture, data, auth, migration, or scope change, return to architecture/design review and obtain the applicable user approval before changing the design or plan.
 - Any fix or clarification that changes the final task diff requires renewed code review and task-conformance review of that changed final diff; after committing a substantive final-integration change, rerun both the epic branch review and fresh epic spec/conformance review.
 - A substantive review-driven task fix gets the single allowed post-review simplification rerun only when complexity was materially reintroduced or reshaped. Whether run or skipped, record the rationale; then verify and review the changed final diff again.
+
+### Final-integration equivalence
+
+Before publication, run the final-integration equivalence decision against canonical task evidence and current branch topology. Eligibility is only for one clean low/medium-risk implementation task whose canonical `RB-<task>-<cycle>` baseline identity, producer-validation reference, task base, candidate/terminal SHAs, exhaustive row coverage, required technical/conformance closure records (authority, kind, closed/pass disposition, terminal SHA, evidence reference), invalidator records, terminal `Summary:`, and every ordered non-planning branch commit reconcile. Git verifies every planning commit is an ancestor of task base and verifies task-base/candidate/terminal topology; self-asserted SHA, tree, and patch IDs cannot restore equivalence. A planning commit may precede `task_base_sha`, but is never a review baseline.
+
+Malformed, stale, rewritten, merge-affected, conflict-resolved, high-risk, multi-task, invalidated, dirty, scope-drifted, missing, or unaccounted evidence is ineligible and requires **full cumulative gates**: an epic branch review and fresh epic spec/conformance review. An eligible result permits those independent authorities to consume equivalent reviewed task scope without redundant cumulative re-analysis; it never removes escalation, exact reviewed SHA, or draft-PR check handoff. Record the decision and reason codes.
 
 ## Subagent Handoff Packet
 

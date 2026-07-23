@@ -354,11 +354,11 @@ export function validate(root = repositoryRoot) {
   }
 
   const packageJson = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
-  assert.equal(packageJson.scripts?.['ci:workflow'], 'node scripts/validate-ux-quality-gate.mjs', 'ci:workflow must run only the static validator')
+  assert.ok(packageJson.scripts?.['ci:workflow']?.includes('node scripts/validate-agent-workflow.mjs'), 'ci:workflow must run the static workflow validator aggregator')
   assert.ok(packageJson.scripts?.['ci:check']?.includes('npm run ci:workflow'), 'ci:check must include ci:workflow')
 
   const workflow = readContract(root, '.github/workflows/ci.yml')
-  assertIncludes(workflow, '.github/workflows/ci.yml', 'name: validate ux quality gate contract')
+  assertIncludes(workflow, '.github/workflows/ci.yml', 'name: validate agent workflow contracts')
   assertIncludes(workflow, '.github/workflows/ci.yml', 'run: npm run ci:workflow')
   assertLineMatches(readRawContract(root, '.github/workflows/ci.yml'), '.github/workflows/ci.yml', /^\s+run:\s+npm run ci:workflow\s*$/m, 'ci:workflow')
 }

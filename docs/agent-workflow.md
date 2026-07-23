@@ -169,6 +169,40 @@ Use this dispatch matrix:
   Invoke `$epic-development-branch-completion` to coordinate that PR-stage or
   epic-completion handoff.
 
+### Immutable Task-Review Lifecycle
+
+For every non-trivial tracked implementation task, preserve planning provenance but
+create an immutable review baseline `RB-<TASK-ID>-<cycle>` only after green
+implementation, required simplification, and coordinator verification. Record the
+task base, candidate, terminal SHA, sync provenance, verification, risk, and an
+exhaustive coverage and authority matrix in sanitized append-only `Review-Baseline:`
+blocks using `docs/templates/review-lifecycle-evidence.md`. The matrix covers every
+criterion, changed surface, issue-class obligation, prescribed UX evidence, and
+high-risk boundary (or an explicit N/A rationale), assigning technical, conformance,
+UX, or at most one specialist authority.
+Matrix rows use stable authority IDs; N/A rows require authority acknowledgement,
+what they cover, and rationale. The baseline precedes broad review, so later frozen
+finding records are introduced only in append-only `Review-Batch:` blocks.
+The baseline terminal is the immutable initial candidate snapshot. Derive the current
+terminal from that cycle's additive batches without rewriting it; every batch names
+its baseline cycle and each appended successor cycle is independently validated.
+Cycle suffixes are exactly two digits from `01` through `99`: create exactly one
+initial `01`, then append adjacent cycles in order. Each successor has exactly one
+preceding `new-cycle` invalidator naming the exact predecessor and successor IDs.
+
+Normalize findings to stable IDs and legal transitions only. Freeze accepted
+remediation in `Review-Batch:` blocks. Every artifact or evidence delta requires
+technical and conformance scoped closure in `Review-Closure:` blocks; repeat UX
+closure when UI implementation or prescribed UX evidence changes. An accepted P0/P1
+batch gets exactly one fresh replacement scoped closer for each affected authority,
+not another broad review. Record rewritten/stale/unaccounted histories, conflicts,
+missing authority, stale evidence, or material approved-intent changes in a
+`Review-Invalidator:` block. Two unsuccessful scoped-closure rounds require a
+`Checkpoint:` and coordinator escalation. Validate exported blocks before relying on
+them: `node scripts/validate-review-lifecycle.mjs <evidence-file>`.
+Record artifactChanged and evidenceChanged separately. A fresh P0/P1 replacement
+closer must differ from the original broad reviewer.
+
 Use this handoff packet:
 
 ```text
@@ -228,6 +262,10 @@ Route findings by impact:
 - A material task-plan conflict: pause completion and return to senior-developer implementation-plan review before changing planning records.
 - A product, architecture, data, auth, migration, or scope change: return to architecture/design review and obtain the applicable user approval before updating the design or plan.
 - Any change after task or final-integration review requires a new review of the changed final diff; use the single allowed post-review simplifier rerun only when a substantive task fix materially reshapes complexity, then use code review plus task conformance for the changed task diff. After committing a substantive final-integration fix, rerun both final-integration gates.
+
+### Final-integration equivalence
+
+Run the final-integration equivalence decision before publication. Only clean one-task low/medium-risk canonical evidence with reconciled `RB-<task>-<cycle>` baseline identity, producer-validation reference, task-base/candidate/terminal topology, exhaustive row coverage, technical/conformance closure records (authority, kind, closed/pass disposition, terminal SHA, evidence reference), invalidator records, terminal Summary, and ordered non-planning commits is eligible. Planning commits are never review baselines; Git verifies planning ancestors and task topology, while tree/patch IDs are diagnostic only. Malformed, stale, rewritten, merge-affected, conflict-resolved, high-risk, multi-task, invalidated, dirty, scope-drifted, incomplete, or unaccounted evidence requires **full cumulative gates**. Eligible evidence preserves independent authority acknowledgements while avoiding redundant cumulative re-analysis, and never waives escalation, reviewed SHA, or draft-PR checks. Record decision and reason codes.
 
 ## 7. Plan New Features
 

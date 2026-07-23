@@ -25,7 +25,9 @@ reviewers to push, merge, create a PR, or update Trekker.
 
 ## 2. Run independent final-integration gates
 
-Dispatch both reviews from the same evidence packet:
+First run `node scripts/validate-final-integration-decision.mjs <evidence.json>` and record its decision, reason codes, and exact reviewed SHA. **Final-integration equivalence** is eligible only for one clean low/medium-risk implementation task whose canonical `RB-<task>-<cycle>` baseline identity, producer-validation reference, base/candidate/terminal topology, exhaustive row coverage, technical/conformance closure records (authority, kind, closed/pass disposition, terminal SHA, evidence reference), invalidator records, terminal Summary, and every ordered non-planning commit reconcile. The CLI verifies each planning commit is an ancestor of task base, then verifies Git task-base/candidate/terminal ancestry and ordered commits; do not substitute self-asserted SHA, tree, or patch IDs. Planning commits are separate and never a review baseline. Malformed, stale, rewritten, merge-affected, conflict-resolved, high-risk, multi-task, invalidated, dirty, scope-drifted, incomplete, or unaccounted evidence requires **full cumulative gates**. Eligible evidence preserves the two independent authorities below while avoiding redundant cumulative re-analysis; it never waives escalation, reviewed-SHA, or draft-PR checks.
+
+When the decision is **ineligible**, dispatch both full cumulative reviews from the same evidence packet:
 
 - **Epic branch review:** an epic reviewer examines branch readiness, cross-task
   regressions, task evidence, residual risks, and publication state.
@@ -35,6 +37,11 @@ Dispatch both reviews from the same evidence packet:
 Supply each reviewer with the target branch, merge-base commit, cumulative diff,
 working-tree evidence, Trekker task evidence, approved intent, verification results,
 and draft-PR state when one exists. Neither review substitutes for the other.
+
+When the decision is **eligible**, dispatch the same two independent authorities as
+scoped acknowledgements of the validated canonical task evidence and exact reviewed
+SHA. Do not ask them to repeat cumulative branch analysis; retain escalation and
+draft-PR check handoff requirements.
 
 ## 3. Resolve final-integration findings
 

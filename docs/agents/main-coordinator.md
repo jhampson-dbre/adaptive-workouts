@@ -27,6 +27,28 @@ Use the default strong main-session model. Escalate to a stronger reasoning mode
 - Before execution handoff, validate planning-funnel feedback and capture an `EPIC-6` follow-up or an explicit deferral reason.
 - For behavior-bug tasks, after reproduction/root-cause identification and before implementor dispatch, invoke `$bugfix-issue-class-audit` and own its documented issue-class audit: targeted same-class search, candidates, affected/unaffected rationale, regression-test matrix, and scope decision. Use it for every non-mechanical or user-facing bug; record why a genuinely mechanical bug does not need it.
 - Run or confirm final verification.
+- For each non-trivial task, create the immutable review baseline only after green
+  implementation, required simplification, and coordinator verification. Preserve
+  planning provenance separately; record the candidate and terminal SHAs, sync tuple,
+  verification, risk, and exhaustive coverage and authority matrix in append-only,
+  sanitized `Review-Baseline:` evidence using `docs/templates/review-lifecycle-evidence.md`.
+- Normalize stable finding IDs and legal transitions, freeze remediation in
+  `Review-Batch:` blocks, and require technical plus conformance scoped closure in
+  `Review-Closure:` blocks for every artifact/evidence delta. Repeat UX closure when
+  UI or prescribed UX evidence changes. An accepted P0/P1 batch requires exactly one
+  fresh replacement scoped closer per affected authority; preserve the specialist cap.
+- Assign stable authority IDs and original broad-reviewer identities before dispatch.
+  N/A rows require authority acknowledgement, what they cover, and rationale. Keep
+  the baseline finding-free; append frozen finding records in `Review-Batch:` blocks,
+  record artifactChanged/evidenceChanged separately, and ensure P0/P1 replacements
+  differ from the original broad reviewer.
+- Treat baseline terminal as its immutable initial candidate snapshot. Record later
+  terminal progress only through additive batches that name their baseline cycle;
+  validate every successor cycle independently.
+- Record stale, rewritten, conflicted, unaccounted, missing-authority, or material
+  intent-change histories in `Review-Invalidator:` blocks. After two unsuccessful
+  closure rounds, add a `Checkpoint:` and escalate; validate evidence before relying
+  on it for later workflow stages.
 - Separate immediate verification from checks deferred until a PR, deployment, production setup, or user action; keep deferred checks open until evidence exists.
 - Before final handoff for non-trivial tracked, PR-bound, or epic work, run an after-action workflow audit: user reminders, handoff endpoint, sandbox/permission fallback use, reviewer-exposed drift, and Trekker accuracy. Surface either no follow-up or the relevant `EPIC-6` item.
 - Inventory every residual or nonblocking handoff risk before final handoff, search for duplicates, then give each one a durable Trekker disposition: linked existing task, approved backlog item, or an intentional-not-tracked exception in the active task's `Summary:`/`Checkpoint:` that names the search result and concise rationale. Do not rely on chat, a PR body, or an undesignated comment as the sole record.
@@ -79,6 +101,17 @@ gates for the design and Trekker writes themselves.
 - Invoke `$epic-development-branch-completion` at that boundary to verify completed
   task commit/`Summary:` evidence, coordinate both gates, and prepare the draft-PR
   handoff. Retain Trekker, approval, push, and PR ownership.
+- Run the final-integration equivalence decision first. It is eligible only for a
+  clean one-task low/medium-risk branch with reconciled canonical `RB-<task>-<cycle>`
+  baseline identity, producer-validation reference, base/candidate/terminal SHAs,
+  exhaustive coverage rows, technical/conformance closures, invalidator records,
+  Summary, and ordered non-planning commits. Git verifies topology; planning commits
+  are never review baselines. Malformed,
+  stale, rewritten, merge-affected, conflict-resolved, high-risk, multi-task,
+  invalidated, dirty, scope-drifted, or unaccounted evidence requires full cumulative
+  gates. Eligible evidence preserves independent authority scope without redundant
+  cumulative re-analysis; record reason codes and exact reviewed SHA and never waive
+  escalation or draft-PR checks. Tree/patch IDs are diagnostic only.
 
 Project-scoped Codex custom agents are defined in `.codex/agents/`. Prefer those native agents when spawning subagents:
 

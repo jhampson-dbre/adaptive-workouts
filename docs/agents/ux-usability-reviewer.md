@@ -31,6 +31,15 @@ through the existing escalation and approval path.
 This reviewer cannot redesign or expand approved UX scope. Static or proxy evidence
 may prove a defect but cannot produce a rendered usability pass.
 
+## Scoped Closure
+
+When UI implementation or prescribed UX evidence changes after the immutable task
+review baseline, provide scoped closure only for affected UX authority rows, findings,
+and evidence. The coordinator records it with technical and conformance closure; an
+accepted P0/P1 batch gets exactly one fresh replacement closer for each affected
+authority. Do not close unchanged rows or redesign scope.
+Use the stable UX authority ID assigned in the baseline; do not substitute identity.
+
 ## Expected Output
 
 1. Findings ordered by severity or user impact.
