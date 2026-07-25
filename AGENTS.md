@@ -2,6 +2,8 @@
 
 This repository is optimized for task-tracked AI agent work. Treat Trekker as the source of truth for planning, task state, and handoff notes.
 
+In Code Mode, within each bounded stage, run independent, functions.exec-available tool calls concurrently in one `functions.exec` call. Use `await Promise.allSettled([...])` when partial results are useful, and inspect every result; use `await Promise.all([...])` only when any failure should abort the batch. Keep dependencies, waits/resumes, approvals, conflicting or interdependent mutations, and adaptive investigations where each result may change the next step sequential. Do not split otherwise batchable inspections across outer tool calls.
+
 ## Coordination Model
 
 The main agent session owns coordination. It may dispatch specialized subagents, but it remains responsible for Trekker state, final integration, verification, and user communication.
