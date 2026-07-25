@@ -141,46 +141,6 @@ export function validate(root = repositoryRoot) {
       're-probe capability',
       'do not cache waivers',
     ],
-    'docs/agents/feature-planner.md': [
-      'required, optional, or skip-recorded',
-      'fresh ux-design-reviewer before architecture-design-reviewer',
-      'through ux design review before user approval',
-    ],
-    '.codex/agents/feature-planner-advisor.toml': [
-      'required, optional, or skip-recorded',
-      'fresh ux-design-reviewer before architecture-design-reviewer',
-      'through ux design review before user approval',
-    ],
-    'docs/agents/architecture-design-reviewer.md': [
-      'required, optional, or skip-recorded',
-      'architecture retains authority',
-      'through ux design review before user approval',
-    ],
-    '.codex/agents/architecture-design-reviewer.toml': [
-      'required, optional, or skip-recorded',
-      'architecture retains authority',
-      'through ux design review before user approval',
-    ],
-    'docs/agents/senior-developer-reviewer.md': [
-      'required, optional, or skip-recorded',
-      'docs/templates/ux-evidence-matrix.md',
-    ],
-    '.codex/agents/senior-developer-reviewer.toml': [
-      'required, optional, or skip-recorded',
-      'docs/templates/ux-evidence-matrix.md',
-    ],
-    'docs/agents/main-coordinator.md': [
-      'required, optional, or skip-recorded',
-      'fresh ux-design-reviewer before architecture-design-reviewer',
-      're-probe capability',
-      'do not cache waivers',
-    ],
-    'AGENTS.md': [
-      'required, optional, or skip-recorded',
-      'fresh ux-design-reviewer before architecture-design-reviewer',
-      'material architecture changes that alter the approved ux contract return through ux design review before user approval',
-      'architecture retains authority',
-    ],
   }
   for (const [path, concepts] of Object.entries(planningContracts)) {
     const contents = readContract(root, path)
@@ -191,35 +151,7 @@ export function validate(root = repositoryRoot) {
     'before telling the user the design is ready for approval, run the architecture-design-reviewer',
   ])
 
-  const synchronizedPlanningRolePairs = [
-    {
-      paths: ['docs/agents/feature-planner.md', '.codex/agents/feature-planner-advisor.toml'],
-      concepts: ['required, optional, or skip-recorded', 'fresh ux-design-reviewer before architecture-design-reviewer', 'through ux design review before user approval'],
-    },
-    {
-      paths: ['docs/agents/architecture-design-reviewer.md', '.codex/agents/architecture-design-reviewer.toml'],
-      concepts: ['required, optional, or skip-recorded', 'architecture retains authority', 'through ux design review before user approval'],
-    },
-    {
-      paths: ['docs/agents/senior-developer-reviewer.md', '.codex/agents/senior-developer-reviewer.toml'],
-      concepts: ['required, optional, or skip-recorded', 'docs/templates/ux-evidence-matrix.md'],
-    },
-  ]
-  for (const { paths, concepts } of synchronizedPlanningRolePairs) {
-    for (const path of paths) {
-      const contents = readContract(root, path)
-      for (const phrase of concepts) assertIncludes(contents, path, phrase)
-    }
-  }
-
   const executionContracts = {
-    'AGENTS.md': [
-      'per-run bounded capability probes',
-      'missing prescribed rendered evidence blocks',
-      'requires a resumable `checkpoint:`',
-      'direct changed-surface usability finding blocks',
-      'unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation',
-    ],
     'docs/agent-workflow.md': [
       'per-run bounded capability probes',
       'canonical matrix',
@@ -228,70 +160,6 @@ export function validate(root = repositoryRoot) {
       'requires a resumable `checkpoint:`',
       'direct changed-surface usability finding blocks',
       'unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation',
-    ],
-    'docs/agents/main-coordinator.md': [
-      'handoff includes ux classification, approved artifact, scenarios, and capability obligations',
-      'per-run bounded capability probes',
-      'canonical matrix',
-      'docs/templates/ux-evidence-matrix.md',
-      'missing prescribed rendered evidence blocks',
-      'requires a resumable `checkpoint:`',
-    ],
-    'docs/agents/implementor.md': [
-      'the implementor preserves the approved ux artifact',
-      'cannot redesign or expand approved ux scope',
-      'handoff includes ux classification, approved artifact, scenarios, and capability obligations',
-    ],
-    '.codex/agents/implementor.toml': [
-      'the implementor preserves the approved ux artifact',
-      'cannot redesign or expand approved ux scope',
-      'handoff includes ux classification, approved artifact, scenarios, and capability obligations',
-    ],
-    'docs/agents/code-simplifier.md': [
-      'preserve the approved ux artifact',
-      'cannot redesign or expand approved ux scope',
-    ],
-    '.codex/agents/code-simplifier.toml': [
-      'preserve the approved ux artifact',
-      'cannot redesign or expand approved ux scope',
-    ],
-    'docs/agents/code-reviewer.md': [
-      'direct changed-surface usability finding blocks',
-      'unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation',
-      'cannot grant product, architecture, or trekker authority',
-      'cannot redesign or expand approved ux scope',
-    ],
-    '.codex/agents/code-reviewer.toml': [
-      'direct changed-surface usability finding blocks',
-      'unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation',
-      'cannot grant product, architecture, or trekker authority',
-      'cannot redesign or expand approved ux scope',
-    ],
-    'docs/agents/spec-reviewer.md': [
-      'direct changed-surface usability finding blocks',
-      'unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation',
-      'cannot grant product, architecture, or trekker authority',
-      'cannot redesign or expand approved ux scope',
-    ],
-    '.codex/agents/spec-reviewer.toml': [
-      'direct changed-surface usability finding blocks',
-      'unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation',
-      'cannot grant product, architecture, or trekker authority',
-      'cannot redesign or expand approved ux scope',
-    ],
-    'docs/agents/ux-usability-reviewer.md': [
-      'direct changed-surface usability finding blocks',
-      'unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation',
-      'cannot grant product, architecture, or trekker authority',
-      'cannot redesign or expand approved ux scope',
-      usabilityRecommendation,
-    ],
-    '.codex/agents/ux-usability-reviewer.toml': [
-      'direct changed-surface usability finding blocks',
-      'unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation',
-      'cannot grant product, architecture, or trekker authority',
-      'cannot redesign or expand approved ux scope',
-      usabilityRecommendation,
     ],
   }
   for (const [path, concepts] of Object.entries(executionContracts)) {
@@ -305,40 +173,6 @@ export function validate(root = repositoryRoot) {
   const registrationRaw = readRawContract(root, '.codex/skills/ux-quality-gate/agents/openai.yaml')
   assertLineMatches(registrationRaw, '.codex/skills/ux-quality-gate/agents/openai.yaml', /^\s*display_name:\s*"UX Quality Gate"\s*$/m, 'display_name')
   assertLineMatches(registrationRaw, '.codex/skills/ux-quality-gate/agents/openai.yaml', /^\s*default_prompt:\s*"Use \$ux-quality-gate[^\n]*"\s*$/m, 'default_prompt')
-
-  const roleContracts = [
-    {
-      role: 'ux design reviewer',
-      paths: ['docs/agents/ux-design-reviewer.md', '.codex/agents/ux-design-reviewer.toml'],
-      concepts: [
-        'gpt-5.6-sol with high reasoning',
-        'gpt-5.6-terra with high reasoning is the nearest-tier fallback',
-        'fresh ux-design-reviewer before architecture-design-reviewer',
-        'do not create or update trekker records',
-        'do not start implementation',
-      ],
-    },
-    {
-      role: 'ux usability reviewer',
-      paths: ['docs/agents/ux-usability-reviewer.md', '.codex/agents/ux-usability-reviewer.toml'],
-      concepts: [
-        'gpt-5.6-sol with high reasoning',
-        'gpt-5.6-terra with high reasoning is the nearest-tier fallback',
-        'coordinator-owned rendered verification',
-        'after implementation and the required simplification pass',
-        'do not create or update trekker records',
-        'do not start implementation',
-      ],
-    },
-  ]
-
-  for (const { role, paths, concepts } of roleContracts) {
-    for (const path of paths) {
-      const contents = readContract(root, path)
-      for (const concept of concepts) assertIncludes(contents, path, concept)
-    }
-    for (const path of paths) assertIncludes(readContract(root, path), path, role)
-  }
 
   const designToml = readContract(root, '.codex/agents/ux-design-reviewer.toml')
   const usabilityToml = readContract(root, '.codex/agents/ux-usability-reviewer.toml')

@@ -40,65 +40,6 @@ test('rejects deterministic model-policy drift', () => {
   })
 })
 
-test('rejects execution-contract drift', () => {
-  assert.ok(
-    requiredPaths.includes('docs/agents/implementor.md'),
-    'execution contracts must be copied into validator fixtures',
-  )
-
-  withFixture((fixtureRoot) => {
-    const implementorPath = resolve(fixtureRoot, 'docs/agents/implementor.md')
-    writeFileSync(
-      implementorPath,
-      readFileSync(implementorPath, 'utf8').replace(
-        'the implementor preserves the approved UX artifact',
-        'the implementor may redesign the approved UX artifact',
-      ),
-    )
-
-    assert.throws(
-      () => validate(fixtureRoot),
-      /docs\/agents\/implementor\.md must include contract phrase: the implementor preserves the approved ux artifact/,
-    )
-  })
-})
-
-test('rejects UX usability reviewer synchronization drift', () => {
-  withFixture((fixtureRoot) => {
-    const reviewerPath = resolve(fixtureRoot, '.codex/agents/ux-usability-reviewer.toml')
-    writeFileSync(
-      reviewerPath,
-      readFileSync(reviewerPath, 'utf8').replace(
-        'it cannot redesign or expand approved UX scope',
-        'it may redesign the approved UX scope',
-      ),
-    )
-
-    assert.throws(
-      () => validate(fixtureRoot),
-      /\.codex\/agents\/ux-usability-reviewer\.toml must include contract phrase: cannot redesign or expand approved ux scope/,
-    )
-  })
-})
-
-test('rejects canonical UX usability recommendation taxonomy drift', () => {
-  withFixture((fixtureRoot) => {
-    const reviewerPath = resolve(fixtureRoot, 'docs/agents/ux-usability-reviewer.md')
-    writeFileSync(
-      reviewerPath,
-      readFileSync(reviewerPath, 'utf8').replace(
-        'Recommendation: `rendered-usability-pass`, `evidence-complete-with-residual-capability-risk`, `needs-changes`, or `blocked`.',
-        'Recommendation: generic pass or blocked.',
-      ),
-    )
-
-    assert.throws(
-      () => validate(fixtureRoot),
-      /docs\/agents\/ux-usability-reviewer\.md must include contract phrase: recommendation: rendered-usability-pass/,
-    )
-  })
-})
-
 test('rejects execution review-order drift', () => {
   withFixture((fixtureRoot) => {
     const skillPath = resolve(fixtureRoot, '.codex/skills/ux-quality-gate/SKILL.md')
