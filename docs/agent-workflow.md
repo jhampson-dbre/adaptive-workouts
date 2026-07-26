@@ -9,7 +9,11 @@ linked skill or role document only when its named condition applies.
 1. Recover the task, comments, history, dependencies, branch, and worktree state.
    Search Trekker first when no task id is known. Reuse current evidence instead of
    repeating searches.
-2. Confirm the requested outcome, accepted scope, and authorization boundary.
+2. Confirm the requested outcome, accepted scope, and authorization boundary. On a
+   resumed implementation task, the latest explicit authorization comment controls:
+   stop and ask when it says authorization was not granted; proceed only within the
+   scope of a later grant. Planning approval alone does not imply implementation
+   authorization.
 3. Work on one focused `codex/` branch and one coherent task at a time. Preserve
    unrelated changes.
 

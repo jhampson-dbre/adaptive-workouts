@@ -97,7 +97,14 @@ plan. Trekker wins if the two diverge.
 ## Handoff
 
 If implementation is authorized, continue with `docs/agent-workflow.md`. Otherwise,
-leave a concise handoff containing the approved outcome, durable references, next
-ready task, unresolved decision, and exact authorization needed. Stop for a material
-decision or unverifiable behavior; do not stop solely because a ceremonial phase has
-ended.
+add this comment to the first implementation task:
+
+```text
+Checkpoint: Implementation authorization not granted. Ask before starting.
+```
+
+Leave a concise handoff containing the approved outcome, durable references, next
+ready task, unresolved decision, and exact authorization needed. When authorization
+is later granted, add `Implementation authorization granted for <scope>.` to that
+task; name the full scope when the grant covers later tasks. Stop for a material
+decision or unverifiable behavior, not solely because a ceremonial phase has ended.
