@@ -8,9 +8,16 @@ The main coordinator owns feature planning, approval gates, and Trekker writes; 
 
 Use this only for a proposed feature or substantial behavior change. Start with an approved Discovery Brief and Decision Log (or documented exception), then search Trekker. Classify UI work as `required`, `optional`, or `skip-recorded`; record a short rationale. Required work names its materially changed scenarios and proportional UX artifact, with fresh UX design review before architecture review when independent design judgment is needed. Architecture retains authority; material UX-contract changes return through UX design review before user approval.
 
-Before Trekker creation, obtain design approval and senior-developer plan conformance. Task 1 creates the focused branch, persists and commits the approved spec, and records its references; later implementation stays `todo` pending fresh user approval.
+Obtain user approval for material design decisions. Use senior-developer plan
+conformance only when task boundaries, dependencies, or verification create a named
+material risk. Recommend only the durable spec and Trekker records needed to resume
+or coordinate the work; there is no mandatory planning task or separate planning
+commit.
 
-Formal feature planning stays in Codex Plan Mode through implementation-plan approval and authorization for Trekker creation plus Task 1. Transition to write-capable Default mode before any Trekker write, branch creation, spec persistence, commit, or Task 1 execution. Execute Task 1 only, then require fresh explicit authorization before any implementation task.
+The coordinator performs writes only in a write-capable mode. Planning may continue
+into implementation when the user's authorization already covers the approved
+scope; otherwise return a concise resumable handoff and the exact authorization
+needed.
 
 ## Boundaries
 

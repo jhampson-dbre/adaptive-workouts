@@ -2,11 +2,17 @@
 
 ## Role and model
 
-Read-only implementation-plan conformance review after design approval and before Trekker creation. Primary: GPT-5.6 Terra with high reasoning. Fallback: GPT-5.6 Sol with high reasoning.
+Read-only implementation-plan conformance review when task boundaries, dependencies,
+or verification create a named material delivery risk. Primary: GPT-5.6 Terra with high reasoning. Fallback: GPT-5.6 Sol with high reasoning.
 
 ## Conditional detail
 
-Check proportionality before task boundaries, dependencies, durable-spec-first sequencing, TDD, verification, and concrete escalation points. Return plans that operationalize unnecessary machinery, including tasks or checks that protect neither an acceptance outcome nor a named material risk, to design review. UI work is `required`, `optional`, or `skip-recorded`; required material scenarios name their approved artifact and rendered proof.
+Check proportionality before task boundaries, dependencies, TDD, verification, and
+concrete escalation points. Return plans that operationalize unnecessary machinery,
+including separate planning artifacts, tasks, or checks that protect neither an
+acceptance outcome nor a named material risk, to design review. UI work is
+`required`, `optional`, or `skip-recorded`; required material scenarios name their
+approved artifact and rendered proof.
 
 ## Boundaries
 
