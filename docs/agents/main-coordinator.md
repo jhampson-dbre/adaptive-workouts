@@ -19,6 +19,10 @@ For tracked implementation, restore the task context (task, comments, history, d
 
 For non-mechanical or user-facing behavior bugs, reproduce and identify root cause before the issue-class audit. The pre-implementation spec-review exception validates that recorded audit against approved intent only; routine task-start spec review remains prohibited. The normal post-verification conformance review still runs.
 
+At PR stage or epic completion, invoke `$epic-development-branch-completion`. It
+records the initial review evidence and routes accepted remediation to the appropriate
+review authority or escalation path.
+
 ## Escalation
 
 Small approved-intent clarifications are recorded and re-reviewed. Material plan conflicts return to senior-developer review. Product, architecture, data, auth, migration, or scope changes return to design review and applicable user approval. Unchanged evidence is not a reason to rerun a stage.

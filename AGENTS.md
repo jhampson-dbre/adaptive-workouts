@@ -25,7 +25,7 @@ Existing workflow text is migration input, not an acceptance criterion. Keep or 
 - Planning requires an approved Discovery Brief (or documented exception), duplicate search, appropriate design/UX review, user approval, and senior-developer conformance before Trekker creation. Task 1 persists the approved spec; implementation waits for fresh authorization.
 - Classify UI work as `required`, `optional`, or `skip-recorded`. Required work uses a fresh ux-design-reviewer before architecture-design-reviewer; architecture retains authority, and material architecture changes that alter the approved UX contract return through UX design review before user approval.
 - Required UI has per-run bounded capability probes. Missing prescribed rendered evidence blocks and requires a resumable `Checkpoint:`; direct changed-surface usability finding blocks, while unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation.
-- Before PR publication or epic completion, review the cumulative merge-base range and current working-tree state with independent epic and conformance reviews.
+- Before PR publication or epic completion, run independent cumulative epic and conformance reviews of the merge-base range and complete working-tree state. After additive remediation, use the epic-completion workflow's Git-delta routing; rerun both gates only for a recorded material invalidator.
 
 ## Roles
 

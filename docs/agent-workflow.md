@@ -227,7 +227,7 @@ Route findings by impact:
 - A small clarification consistent with approved intent: the coordinator updates the active Trekker task and records the decision, then re-runs the affected reviews on the changed final diff and evidence.
 - A material task-plan conflict: pause completion and return to senior-developer implementation-plan review before changing planning records.
 - A product, architecture, data, auth, migration, or scope change: return to architecture/design review and obtain the applicable user approval before updating the design or plan.
-- Any change after task or final-integration review requires a new review of the changed final diff; use the single allowed post-review simplifier rerun only when a substantive task fix materially reshapes complexity, then use code review plus task conformance for the changed task diff. After committing a substantive final-integration fix, rerun both final-integration gates.
+- Any change after task review requires a new review of the changed final diff; use the single allowed post-review simplifier rerun only when a substantive task fix materially reshapes complexity, then use code review plus task conformance for the changed task diff. Route final-integration fixes through `$epic-development-branch-completion`.
 
 ## 7. Plan New Features
 
@@ -392,29 +392,30 @@ completion boundary.
 At PR stage or epic completion, invoke `$epic-development-branch-completion`.
 It verifies per-task commit and Trekker `Summary:` boundaries, assembles cumulative
 and complete working-tree evidence, runs both final-integration gates, and guides the
-draft-PR handoff. The coordinator retains Trekker, approval, push, and PR ownership.
+draft-PR handoff. Those gates are the initial cumulative pass; the skill also routes
+any remediation closure. The coordinator retains Trekker, approval, push, and PR ownership.
 
 - Prefer a focused branch per task or small related task set.
 - Use the `codex/` branch prefix unless the user asks for another naming scheme.
 - Keep branch scope aligned with Trekker scope.
 - Create or switch to the focused branch before editing an epic or focused task set.
-- Before PR stage or epic completion, dispatch two independent final-integration
-  reviews: the epic reviewer for branch review and a fresh spec reviewer for epic
-  spec/conformance. Each receives the cumulative range from
+- Before PR stage or epic completion, dispatch the two independent cumulative
+  final-integration reviews for the initial pass: the epic reviewer for branch review
+  and a fresh spec reviewer for epic spec/conformance. Each receives the cumulative
+  range from
   `git merge-base <target> HEAD` through `HEAD`, plus `git status --short --branch`,
   `git diff`, and `git diff --cached`; no reviewer may assume that unstaged changes
   are the complete epic.
 - If either review requires a substantive final-integration fix, commit that intended
-  post-review work first. Rerun both reviews on the updated committed cumulative range
-  and current clean or fully reported working-tree evidence; only a further
-  substantive change begins another review loop.
-- For implementation branch or epic work, the default review handoff is a draft PR unless the user explicitly opts out. Before handing it back, complete both final-integration reviews, commit and push the intended changes, open the draft PR, and confirm required checks are visible. Fix CI-only failures that are in scope; otherwise document the failure and exact next step.
+  post-review work first, then use `$epic-development-branch-completion` to resolve
+  the remediation before publication.
+- For implementation branch or epic work, the default review handoff is a draft PR unless the user explicitly opts out. Before handing it back, complete the initial gates and any required scoped or cumulative remediation closures, commit and push the intended changes, open the draft PR, and confirm required checks are visible. Fix CI-only failures that are in scope; otherwise document the failure and exact next step.
 - Use `gh` for PR creation when the GitHub connector lacks PR-create permission. Request escalation up front for known sandbox-limited git or `gh` publish operations instead of repeating failed attempts.
 - For `gh pr create` or `gh pr edit`, write multiline Markdown into a temporary file and use `--body-file <path>`. Do not put escaped `\n` sequences in a command-line body argument: GitHub will render them literally. Remove the temporary file after the command succeeds.
 - Run the code reviewer before marking a non-trivial task complete.
-- Run both final-integration gates—the epic branch review and fresh epic
-  spec/conformance review—before publishing an epic or branch handoff, merging an
-  epic branch, closing an epic, or merging a high-risk PR.
+- Before publishing an epic or branch handoff, merging an epic branch, closing an epic,
+  or merging a high-risk PR, complete the initial gates and any remediation closure
+  required by `$epic-development-branch-completion`.
 - Do not merge or deploy unless the user asked for that action.
 
 ## 11. Review Checklist
