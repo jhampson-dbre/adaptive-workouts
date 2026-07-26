@@ -34,16 +34,43 @@ Dispatch both reviews from the same evidence packet:
 
 Supply each reviewer with the target branch, merge-base commit, cumulative diff,
 working-tree evidence, Trekker task evidence, approved intent, verification results,
-and draft-PR state when one exists. Neither review substitutes for the other.
+and draft-PR state when one exists. Record `reviewed_sha = HEAD` for their shared
+evidence packet. Neither review substitutes for the other.
 
 ## 3. Resolve final-integration findings
 
-- For a substantive finding, make the intended fix, run appropriate verification,
-  and commit the fix before repeating final integration.
-- Recompute the merge-base range and re-run **both** gates against the updated
-  committed range and current complete working-tree evidence.
-- Repeat only when a further substantive change is required. Escalate material plan
-  or product-scope conflicts through the repository's planning/design workflow.
+For an accepted finding, make the intended additive fix, run verification proportionate
+to its delta, commit it, and inspect `reviewed_sha..HEAD` plus the complete working
+tree. Record the current SHA, changed evidence, and routing decision.
+
+Use scoped closure only when `reviewed_sha` remains an ancestor; every new commit is
+accepted remediation; approved intent is unchanged; no security, data, auth, migration,
+deployment, architecture, or other high-risk boundary is introduced or materially
+expanded; prior evidence still applies and changed evidence is identified; and the
+working tree is clean or fully included in the handoff. Task count and branch size are
+not invalidators.
+
+- Dispatch only authorities whose concern changed: technical for implementation, tests,
+  build behavior, or technical evidence; conformance for approved behavior, acceptance
+  evidence, or intent interpretation; UX or a specialist for its changed named boundary.
+  Prefer the original reviewer; replace it only for unavailability, material conflict,
+  or a changed high-risk boundary requiring fresh independence.
+- Re-run both cumulative gates only for a recorded material invalidator: rewritten or
+  non-ancestor history; a material merge/conflict resolution; unrelated remediation
+  work; changed approved intent, architecture, scope, or acceptance criteria; a new or
+  expanded high-risk boundary; or missing, stale, contradictory, or untieable required
+  evidence.
+- Reuse successful verification only for the exact unchanged SHA with matching
+  environment/configuration. Changed SHAs get proportionate verification; reviewer
+  independence alone does not rerun CI. Reviewers request more verification only for a
+  named unresolved risk.
+- A passing scoped closure ends that authority. After two unsuccessful scoped rounds on
+  one remediation path, record a `Checkpoint:` and escalate; unchanged evidence does
+  not start another review or verification run.
+
+Supply scoped reviewers the original finding, `reviewed_sha..HEAD`, affected evidence,
+verification results, and current SHA. Escalate material plan or product-scope conflicts
+through the repository's planning/design workflow.
 
 ## 4. Publish the draft-PR handoff
 

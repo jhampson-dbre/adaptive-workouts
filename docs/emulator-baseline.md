@@ -107,7 +107,6 @@ If startup fails:
 npm run test:emulator-baseline
 npm run verify:baseline-production
 npm run ci:check
-node scripts/emulator/scenarios/validate-manifest.mjs
 node scripts/emulator/access-scenarios/validate-manifest.mjs
 ```
 
