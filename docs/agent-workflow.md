@@ -153,8 +153,8 @@ Use this dispatch matrix:
   documented. Repository or Trekker context may be inspected solely to ground
   discovery, but it does not replace the formal duplicate search; then
   follow the feature-planner protocol before creating Trekker items.
-- Feature design approval: run architecture-design-reviewer before presenting an epic design spec as ready for user approval, unless the feature is tiny and low-risk.
-- Planning conformance: after design approval and before presenting the implementation plan for Trekker-creation approval, run senior-developer-reviewer, unless the plan is tiny and low-risk.
+- Feature design approval: run architecture-design-reviewer before user approval when the design has a named material system-boundary, data, auth, migration, deployment, or failure risk; otherwise record the proportional skip rationale.
+- Planning conformance: after design approval, run senior-developer-reviewer when the implementation plan has meaningful task boundaries, dependencies, or verification risk; otherwise record the proportional skip rationale.
 - Documentation-only, copy-only, or tiny config changes: main agent may handle directly.
 - Every tracked implementation task: dispatch a fresh implementor. After it produces a green diff, invoke `$code-simplification` and dispatch a fresh code simplifier for non-trivial code changes. The coordinator then runs final targeted and proportionate broader verification before dispatching a fresh code reviewer and a fresh task-conformance spec reviewer. Do not reuse either reviewer across task boundaries, including tasks in the same epic.
 - For UI work classified `required`, the implementor preserves the approved artifact and cannot redesign or expand scope. After simplification, the coordinator performs per-run bounded capability probes and records task evidence using the canonical matrix template at `docs/templates/ux-evidence-matrix.md`, with build, viewport, state, actions, results, and limitations using synthetic or de-identified local data. Missing prescribed rendered evidence blocks task completion and requires a resumable `Checkpoint:`. Then dispatch the fresh ux-usability-reviewer, code reviewer, and task-conformance reviewer in parallel. A direct changed-surface usability finding blocks; unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation. No reviewer grants product, architecture, or Trekker authority or may redesign or expand approved UX scope.
@@ -257,12 +257,12 @@ Short version:
    Decision Log, unless a documented exception applies.
 2. Search Trekker for duplicates or related work as the formal planning gate.
 3. Brainstorm in Codex planning space only.
-4. Draft an epic-level design spec.
-5. Run architecture/design review, validate feedback, and incorporate it or record why it was rejected.
+4. Draft a proportionate design spec from the approved Minimality decision; do not expand the solution to justify an epic.
+5. For a named material architecture risk, run architecture/design review, validate feedback, and incorporate it or record why it was rejected; otherwise record the proportional skip rationale.
 6. Get user approval.
 7. Choose a durable spec file under `docs/specs/` for every approved feature plan.
 8. Convert the spec into a Trekker implementation plan: epic, tasks, subtasks, dependencies, and verification.
-9. Run planning conformance with the senior-developer implementation-plan reviewer, validate feedback, and incorporate it or record why it was rejected.
+9. For meaningful task, dependency, or verification risk, run senior-developer planning conformance, validate feedback, and incorporate it or record why it was rejected; otherwise record the proportional skip rationale.
 10. While still in Codex Plan Mode, get user approval of the implementation plan and authorization to create Trekker records and execute planning Task 1 only.
 11. Transition out of Codex Plan Mode into write-capable Default mode before any Trekker write, branch creation, spec persistence, commit, or Task 1 execution.
 12. In Default mode, create or update Trekker.

@@ -6,8 +6,8 @@ Read-only implementation-plan conformance review after design approval and befor
 
 ## Conditional detail
 
-Check task boundaries, dependencies, durable-spec-first sequencing, TDD, verification, and concrete escalation points. UI work is `required`, `optional`, or `skip-recorded`; required work names `docs/templates/ux-evidence-matrix.md` and later evidence obligations. Return material design concerns to design review.
+Check proportionality before task boundaries, dependencies, durable-spec-first sequencing, TDD, verification, and concrete escalation points. Return plans that operationalize unnecessary machinery, including tasks or checks that protect neither an acceptance outcome nor a named material risk, to design review. UI work is `required`, `optional`, or `skip-recorded`; required work names `docs/templates/ux-evidence-matrix.md` and later evidence obligations.
 
 ## Boundaries
 
-Do not create/update Trekker, start implementation, or change approved design. Stop at ready/needs-planning-pass/blocked without looping on unchanged plans.
+Do not create/update Trekker, start implementation, or silently change the approved outcome. Approval does not make the mechanism immune from simplification. Stop at ready/needs-planning-pass/blocked without looping on unchanged plans.

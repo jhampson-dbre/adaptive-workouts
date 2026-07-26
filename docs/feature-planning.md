@@ -85,7 +85,10 @@ Outcome:
 
 ## Phase 3. Design Spec
 
-Draft an epic-level design spec for user approval.
+Draft a proportionate design spec for user approval. Preserve the approved
+Discovery Brief's Minimality decision. Start with the existing or native path and
+add a mechanism only when it protects a named outcome or material risk; do not
+expand a feature to justify an epic-sized design.
 
 Recommended shape:
 
@@ -105,7 +108,12 @@ Acceptance criteria:
 Open questions:
 ```
 
-Treat this as the proposed Trekker epic. It may live only in the conversation until approved, but every approved feature plan must save the final spec under `docs/specs/YYYY-MM-DD-feature-name.md` or another agreed durable path during planning Task 1.
+State what the design deliberately does not build and what evidence would justify
+adding deferred complexity. Treat the spec as the proposed Trekker epic without
+expanding the solution to fill that tracking container. It may live only in the
+conversation until approved, but every approved feature plan must save the final spec under
+`docs/specs/YYYY-MM-DD-feature-name.md` or another agreed durable path during
+planning Task 1.
 
 For any design that creates, reads, writes, migrates, reuses, or changes persisted
 timing or duration data, add a `Persisted duration contract` table to the design
@@ -152,7 +160,7 @@ changes alter the approved UX contract, return through UX design review before u
 approval. Later evidence must re-probe capability on each future required run; do not
 cache waivers.
 
-Before telling the user the design is ready for approval, run the `architecture-design-reviewer` for all new feature epics. If the `feature-planner-advisor` is drafting the spec and can dispatch nested subagents, it should request this review itself; otherwise it must return a handoff packet for the main coordinator to dispatch. For very small, low-risk feature tweaks, the main agent may perform the same checklist inline, but must say why a subagent review was skipped.
+Before telling the user the design is ready for approval, run the `architecture-design-reviewer` for new feature epics with material system-boundary, data, auth, migration, deployment, or failure risk. The reviewer tests necessity as well as feasibility and may return a sound but overbuilt design. If the `feature-planner-advisor` is drafting the spec and can dispatch nested subagents, it should request this review itself; otherwise it must return a handoff packet for the main coordinator to dispatch. For low-risk designs without those implications, the main agent may perform the same proportionality check inline and record why specialist review was unnecessary.
 
 Give the reviewer:
 
@@ -266,7 +274,7 @@ Dependencies:
 
 ## Phase 6. Planning Conformance Review
 
-After the user approves the design and before telling the user the implementation plan is ready for Trekker creation approval, run planning conformance with the `senior-developer-reviewer` for all new feature epics. If the `feature-planner-advisor` is drafting the implementation plan and can dispatch nested subagents, it should request this review itself; otherwise it must return a handoff packet for the main coordinator to dispatch. For tiny, low-risk plans, the main agent may perform the same checklist inline, but must say why a subagent review was skipped.
+After the user approves the design and before telling the user the implementation plan is ready for Trekker creation approval, run planning conformance with the `senior-developer-reviewer` when the plan has meaningful task boundaries, dependencies, or verification risk. The reviewer may return an approved design to design review when its task plan operationalizes unnecessary machinery. If the `feature-planner-advisor` is drafting the implementation plan and can dispatch nested subagents, it should request this review itself; otherwise it must return a handoff packet for the main coordinator to dispatch. For a single straightforward delivery with proportionate verification, the main agent may perform the check inline and record why specialist review was unnecessary.
 
 Give the reviewer:
 
@@ -428,14 +436,15 @@ recommendation.
 Across the approval, record-creation, and Task 1 completion stages, confirm:
 
 - `$feature-discovery` was completed and its Discovery Brief was user-approved before formal planning, or the explicit opt-out/small-mechanical exception and rationale were recorded
+- the approved Minimality decision identifies the smallest sufficient outcome, existing/native path, justified added mechanisms, rejected simpler option, and deferred complexity
 - UI work was classified as `required`, `optional`, or `skip-recorded`; optional and skip-recorded decisions have durable rationale
 - required UI work has the proportional scenario-indexed artifact and a fresh UX design review before architecture review
 - duplicate search was done
 - user approved the design spec
-- architecture/design review was run, or skipped with a reason for tiny low-risk work
+- architecture/design review was run for a named material architecture risk, or its proportional skip rationale was recorded
 - reviewer feedback was validated and incorporated, or rejected with reasons
 - a durable spec path was chosen for the approved feature plan
-- planning conformance with the senior-developer implementation-plan reviewer was run, or skipped with a reason for tiny low-risk work
+- planning conformance was run for meaningful task/dependency/verification risk, or its proportional skip rationale was recorded
 - implementation-plan reviewer feedback was validated and incorporated, or rejected with reasons
 - user approved the implementation plan
 - the plan-approval grant is explicitly limited to Trekker creation and planning Task 1
