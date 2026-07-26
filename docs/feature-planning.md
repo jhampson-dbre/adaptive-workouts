@@ -10,7 +10,7 @@ collaborative discovery conversation, not Trekker work or implementation. Comple
 its Discovery Brief and Decision Log, then obtain the user's explicit approval to
 hand the brief to the `feature-planner-advisor` before starting this workflow. The
 coordinator may inspect repository or Trekker context needed to ground discovery;
-that exploratory lookup does not replace the formal duplicate-search gate below.
+a current, complete Trekker search may be reused during formal planning.
 
 Skip discovery only when the user explicitly opts out or the request is a small,
 fully specified mechanical task. State the exception and rationale in the planning
@@ -44,9 +44,9 @@ the user still controls design approval and Trekker record creation.
 
 ## Phase 1. Search And Frame
 
-After discovery approval, search Trekker before drafting anything durable. If
-repository or Trekker context was inspected to ground discovery, repeat this search
-as the formal planning gate:
+After discovery approval, confirm the duplicate-search evidence covers the approved
+scope. Reuse a current, complete discovery search; search or refresh Trekker only when
+that evidence is missing, incomplete, or stale:
 
 ```bash
 trekker search "distinctive-keyword"

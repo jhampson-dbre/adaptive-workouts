@@ -129,10 +129,10 @@ Use this dispatch matrix:
 - New feature planning: before entering Codex Plan Mode for formal feature planning, invoke
   `$feature-discovery` for every proposed feature, capability, workflow, or
   substantial behavior change. Require the user's approved Discovery Brief and
-  Decision Log before the formal duplicate-search gate or formal planning, unless
+  Decision Log before duplicate confirmation or formal planning, unless
   an explicit user opt-out or small, fully specified mechanical-task exception is
-  documented. Repository or Trekker context may be inspected solely to ground
-  discovery, but it does not replace the formal duplicate search; then
+  documented. Reuse a current, complete discovery search; refresh it only when
+  missing, incomplete, or stale for the approved scope. Then
   follow the feature-planner protocol before creating Trekker items.
 - Feature design approval: run architecture-design-reviewer before user approval when the design has a named material system-boundary, data, auth, migration, deployment, or failure risk; otherwise record the proportional skip rationale.
 - Planning conformance: after design approval, run senior-developer-reviewer when the implementation plan has meaningful task boundaries, dependencies, or verification risk; otherwise record the proportional skip rationale.
@@ -205,15 +205,15 @@ gates, and Trekker writes. Codex Plan Mode continues through implementation-plan
 approval and authorization for Trekker creation plus Task 1, then the coordinator
 must transition to write-capable Default mode before any Trekker or repository write.
 
-Before the formal duplicate-search gate or formal planning, invoke `$feature-discovery` for every
+Before duplicate confirmation or formal planning, invoke `$feature-discovery` for every
 proposed feature, capability, workflow, or substantial behavior change. Continue
 only after the user approves its Discovery Brief and Decision Log. The sole
 exceptions are an explicit user opt-out or a small, fully specified mechanical task;
 document the exception and rationale. If discovery classifies the request as a bug
 fix, refactor, or fully specified execution task, route it to the applicable
-workflow instead of the feature-planning workflow. Repository or Trekker context may be
-inspected solely to ground discovery; repeat the duplicate search after discovery
-as the formal planning gate.
+workflow instead of the feature-planning workflow. Reuse a current, complete
+discovery duplicate search; search or refresh Trekker only when that evidence is
+missing, incomplete, or stale for the approved scope.
 
 Short version:
 
