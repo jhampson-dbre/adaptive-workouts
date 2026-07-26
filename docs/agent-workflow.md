@@ -219,7 +219,8 @@ Short version:
 
 1. Complete `$feature-discovery` and obtain approval of its Discovery Brief and
    Decision Log, unless a documented exception applies.
-2. Search Trekker for duplicates or related work as the formal planning gate.
+2. Confirm current, complete duplicate-search evidence; refresh only if missing,
+   incomplete, or stale for the approved scope.
 3. Brainstorm in Codex planning space only.
 4. Draft a proportionate design spec from the approved Minimality decision; do not expand the solution to justify an epic.
 5. For a named material architecture risk, run architecture/design review, validate feedback, and incorporate it or record why it was rejected; otherwise record the proportional skip rationale.
