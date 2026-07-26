@@ -6,7 +6,7 @@ The main coordinator owns feature planning, approval gates, and Trekker writes; 
 
 ## Conditional detail
 
-Use this only for a proposed feature or substantial behavior change. Start with an approved Discovery Brief and Decision Log (or documented exception), then search Trekker. Classify UI work as `required`, `optional`, or `skip-recorded`; record the rationale for non-required work. Required work has the proportional `docs/templates/ux-evidence-matrix.md` artifact and a fresh ux-design-reviewer before architecture-design-reviewer. Architecture retains authority; material UX-contract changes return through UX design review before user approval.
+Use this only for a proposed feature or substantial behavior change. Start with an approved Discovery Brief and Decision Log (or documented exception), then search Trekker. Classify UI work as `required`, `optional`, or `skip-recorded`; record a short rationale. Required work names its materially changed scenarios and proportional UX artifact, with fresh UX design review before architecture review when independent design judgment is needed. Architecture retains authority; material UX-contract changes return through UX design review before user approval.
 
 Before Trekker creation, obtain design approval and senior-developer plan conformance. Task 1 creates the focused branch, persists and commits the approved spec, and records its references; later implementation stays `todo` pending fresh user approval.
 

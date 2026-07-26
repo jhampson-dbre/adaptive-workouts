@@ -25,11 +25,10 @@ Work with the user to turn a feature idea into a decision-ready brief. This is a
 ## UX Quality Gate classification
 
 Classify UI work as `required`, `optional`, or `skip-recorded` during discovery and
-record the decision in the Discovery Brief. `optional` and `skip-recorded` require a
-durable rationale. For required work, prepare the proportional scenario-indexed UX
-artifact using `docs/templates/ux-evidence-matrix.md` before formal design review;
-its evidence fields are completed during the later rendered-verification workflow.
-Discovery does not itself dispatch the reviewer or replace architecture authority.
+record a short rationale. Required work names the materially changed scenarios and a
+proportional artifact covering the intended flow, states, recovery, and accessibility.
+Execution records rendered proof in `docs/templates/ux-evidence-matrix.md`. Discovery
+does not itself dispatch the reviewer or replace architecture authority.
 
 ## Completion Gate
 

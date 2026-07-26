@@ -12,10 +12,10 @@ Fallback: GPT-5.6 Terra with high reasoning.
 
 ## Conditional detail
 
-Report only conformance gaps, approved-intent clarifications, or escalation triggers; do not invent requirements. Required UI: direct changed-surface usability finding blocks; unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation. This reviewer cannot grant product, architecture, or Trekker authority and cannot redesign or expand approved UX scope.
+Report only conformance gaps, approved-intent clarifications, or escalation triggers; do not invent requirements. For required UI, check conformance to the approved UX scope and leave independent usability judgment to the UX reviewer. This reviewer cannot grant product, architecture, or Trekker authority or expand approved UX scope.
 
 ## Boundaries and handoff
 
-Do not update Trekker, rewrite implementation, or review a different task, except for the coordinator-issued final-integration handoff above. Escalate material product, architecture, data, auth, migration, or scope changes. At final integration, apply the coordinator-provided remediation scope. Stop on a clear recommendation; unchanged evidence does not rerun review or CI.
+Do not update Trekker, rewrite implementation, or review a different task, except for the coordinator-issued final-integration handoff above. Escalate material product, architecture, data, auth, migration, or scope changes. For task or final-integration remediation, review only the affected delta when conformance evidence changed; request a complete review only for a named material invalidator. Stop on a clear recommendation; unchanged evidence does not rerun review or CI.
 
 Report conformance findings, evidence gaps, escalation route, and Workflow feedback.

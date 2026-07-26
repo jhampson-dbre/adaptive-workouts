@@ -74,35 +74,16 @@ Common context sources:
 
 ### Behavior-Bug Issue-Class Audit (Coordinator Gate)
 
-Before dispatching an implementor for a behavior-bug task, first reproduce the
-problem and identify its root cause. Then invoke the repository
-`$bugfix-issue-class-audit` skill while the coordinator still owns scope. Use it for
-every non-mechanical or user-facing behavior bug; for a genuinely mechanical bug,
-record why the audit is not needed. The skill directs a targeted same-class search:
-inspect repeated fields, shared components,
-helpers, state paths, validation rules, or contracts that could carry the same cause.
-This is pre-implementation bug triage/scoping, not Feature Planning and not
-implementor execution.
+Before editing a behavior bug, reproduce it, identify the root cause, and inspect
+plausible callers or same-cause usages. Continue directly when the result is one
+cohesive localized fix. Invoke `$bugfix-issue-class-audit` only when the search finds
+multiple affected surfaces, unclear approved scope, a cross-boundary change, or a
+meaningful current-task-versus-follow-up decision.
 
-Add an issue-class audit note to the active Trekker task before dispatch. Include the
-root cause; search method and results; candidates inspected; affected and unaffected
-surfaces with rationale; the proposed regression-test matrix; and a scope decision.
-For non-mechanical or user-facing bugs, use a read-only spec-review dispatch to
-validate this audit against approved task intent. It may report an unsupported scope
-decision or escalation trigger, but cannot invent or refine requirements. This narrow
-audit validation is the sole pre-implementation exception to the routine task-start
-spec-review prohibition; post-verification task conformance remains required.
-
-Put the approved complete file and behavior scope, audit result, and regression-test
-matrix in the implementor handoff. The implementor implements that scope and is not
-responsible for finding omitted siblings during coding. Expand the current task only
-when a same-class finding shares the confirmed root cause, fits approved product
-intent, and remains a cohesive, verifiable change. Record that expansion in Trekker
-before dispatch. Otherwise use a linked follow-up—for a different root cause,
-independent risk or ownership, a material scope/design decision, or loss of focused
-verification. Search for duplicates and obtain the required approval before creating
-or materially changing a follow-up, then record its linkage and rationale in the
-audit note.
+Record only the scope decision, focused regression check, and excluded or follow-up
+work needed by the implementor. Use a pre-implementation spec reviewer only when that
+decision may conflict with approved intent. Different causes, ownership areas, or
+material design decisions remain separate work.
 
 ## 5. Use TDD For Behavior Changes
 
@@ -156,13 +137,13 @@ Use this dispatch matrix:
 - Feature design approval: run architecture-design-reviewer before user approval when the design has a named material system-boundary, data, auth, migration, deployment, or failure risk; otherwise record the proportional skip rationale.
 - Planning conformance: after design approval, run senior-developer-reviewer when the implementation plan has meaningful task boundaries, dependencies, or verification risk; otherwise record the proportional skip rationale.
 - Documentation-only, copy-only, or tiny config changes: main agent may handle directly.
-- Every tracked implementation task: dispatch a fresh implementor. After it produces a green diff, invoke `$code-simplification` and dispatch a fresh code simplifier for non-trivial code changes. The coordinator then runs final targeted and proportionate broader verification before dispatching a fresh code reviewer and a fresh task-conformance spec reviewer. Do not reuse either reviewer across task boundaries, including tasks in the same epic.
-- For UI work classified `required`, the implementor preserves the approved artifact and cannot redesign or expand scope. After simplification, the coordinator performs per-run bounded capability probes and records task evidence using the canonical matrix template at `docs/templates/ux-evidence-matrix.md`, with build, viewport, state, actions, results, and limitations using synthetic or de-identified local data. Missing prescribed rendered evidence blocks task completion and requires a resumable `Checkpoint:`. Then dispatch the fresh ux-usability-reviewer, code reviewer, and task-conformance reviewer in parallel. A direct changed-surface usability finding blocks; unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation. No reviewer grants product, architecture, or Trekker authority or may redesign or expand approved UX scope.
+- Every tracked behavior task: dispatch a fresh implementor. After a green diff, run proportionate verification. Invoke `$code-simplification` only for a concrete complexity signal. Substantive behavior or risk changes receive fresh code and task-conformance review; the coordinator may verify mechanical or straightforward low-risk changes directly and record why specialist review was unnecessary.
+- For UI work classified `required`, preserve the approved artifact and record rendered evidence for each materially changed scenario in `docs/templates/ux-evidence-matrix.md` using synthetic or de-identified data. A direct changed-surface defect or missing required rendered evidence blocks completion. Record unavailable tooling and the best safe alternative without turning it into a separate gate. Dispatch a ux-usability-reviewer only when the changed interaction needs independent usability judgment; code and conformance review follow their normal risk triggers.
 - Behavior change or bug fix: use the fresh implementor role unless the change is purely mechanical.
-- Before a behavior-bug implementor dispatch, invoke `$bugfix-issue-class-audit` after reproduction and root-cause identification, then complete and document the coordinator-owned issue-class audit. For non-mechanical or user-facing bugs, dispatch a read-only spec reviewer to validate the approved-intent scope audit; this is not routine task-start requirements discovery and does not replace post-verification task conformance.
+- Before a behavior-bug implementor dispatch, reproduce the bug, identify its root cause, and inspect plausible same-cause usages. Invoke `$bugfix-issue-class-audit` only when material scope ambiguity remains; use a read-only pre-implementation spec reviewer only when the scope decision may conflict with approved intent.
 - Task-start spec-review dispatch is prohibited. Do not use the spec reviewer to refine routine task-start requirements or to invent requirements.
-- Task conformance: run the spec reviewer alongside code review only after targeted verification; provide the final diff, verification/TDD evidence, and approved Trekker intent. The reviewer may identify nonconformance but must not invent new requirements.
-- Code simplification: the coordinator owns timing, skip rationale, and explicit edit authorization. Every non-trivial green code diff requires a fresh code-simplifier dispatch, even when it may return no edits. Pre-dispatch skip is allowed only for documentation/copy-only work or tiny mechanical configuration changes. Default scope is code changed by the active task in the current session; repository-wide scope must be separately authorized. Simplifier edits enter the final diff and therefore precede final verification and fresh code/task-conformance reviews.
+- Task conformance: after targeted verification, use the spec reviewer for substantive, multi-part, ambiguous, or materially changed behavior. Provide the final diff, evidence, and approved intent; the reviewer may identify nonconformance but must not invent requirements.
+- Code simplification: dispatch only when coordinator inspection identifies a concrete avoidable cost in the active task diff. Name that signal and authorize only the affected files. A no-edit result is valid; repository-wide cleanup is separate work.
 - Final integration: before publishing an implementation branch or epic handoff,
   merge, PR approval, or epic closure, run the independent epic branch review with
   the epic reviewer and fresh epic spec/conformance review with the spec reviewer.
@@ -188,34 +169,17 @@ Workflow feedback, if any:
 
 Only one implementor or simplifier may edit a file set at a time. Reviewers may run in parallel and should remain read-only unless explicitly asked to patch.
 
-No meaningful simplification opportunity is a valid no-edit simplifier result, not a
-pre-dispatch skip. When a permitted documentation/copy-only or tiny mechanical
-configuration pre-dispatch skip applies, the coordinator records the specific
-rationale. After substantive review-driven fixes, rerun the simplifier only when
-those fixes materially reshape or reintroduce complexity.
-Allow at most one post-review simplifier rerun per task. Simplifier edits and review
-requests to re-verify do not trigger another pass. Every simplifier edit needs a
-before/after rationale, targeted verification, and proportionate broader verification;
-if exact behavior/API/schema/error/order/determinism preservation cannot be verified,
-do not make the edit.
-
-An implementor, code reviewer, or spec reviewer may receive a follow-up only when it
-remains the same Trekker task. The coordinator must label it as a same-task
-continuation and provide the changed scope, new evidence, and requested decision; it
-must not silently become a new task. After review-driven fixes, prefer a second fresh
-code reviewer. If that is not practical, the original reviewer may perform an
-explicitly labeled delta review limited to changes since its prior report. Use a fresh
-task-conformance spec reviewer for each task; a same-task follow-up is limited to an
-explicitly labeled approved-intent clarification and its revised final diff/evidence
-delta. Route a material plan conflict to senior-developer planning conformance, not
-back to the spec reviewer.
+A simplifier handoff names the observed complexity and the smallest relevant check.
+Run final verification after an edit. Route changed evidence only to the affected
+review authority; request a complete re-review only when a named material invalidator
+makes the prior conclusion stale. Unchanged evidence never triggers another pass.
 
 ### Conformance Escalation And Re-Review
 
 Keep the three conformance gates separate:
 
 - **Planning conformance** is the senior-developer review after design approval and before Trekker creation. Its input is the approved design and proposed Trekker plan; its output is plan corrections or an escalation.
-- **Task conformance** is the spec-reviewer check after targeted verification, alongside code review. Its input is the active Trekker task, final task diff, and verification evidence; its output is a conformance finding against approved intent, not a newly invented requirement.
+- **Task conformance** is the spec-reviewer check used after targeted verification when approved intent is substantive, multi-part, ambiguous, or materially affected. Its input is the active Trekker task, final task diff, and verification evidence; its output is a conformance finding against approved intent, not a newly invented requirement.
 - **Final integration** has two independent gates: the epic-reviewer's branch review
   and a fresh spec reviewer's epic spec/conformance review. Both inspect the committed
   cumulative range, complete working-tree evidence, Trekker evidence, and PR/branch
@@ -227,7 +191,7 @@ Route findings by impact:
 - A small clarification consistent with approved intent: the coordinator updates the active Trekker task and records the decision, then re-runs the affected reviews on the changed final diff and evidence.
 - A material task-plan conflict: pause completion and return to senior-developer implementation-plan review before changing planning records.
 - A product, architecture, data, auth, migration, or scope change: return to architecture/design review and obtain the applicable user approval before updating the design or plan.
-- Any change after task review requires a new review of the changed final diff; use the single allowed post-review simplifier rerun only when a substantive task fix materially reshapes complexity, then use code review plus task conformance for the changed task diff. Route final-integration fixes through `$epic-development-branch-completion`.
+- After a review fix, route only the changed delta and affected evidence to the relevant authority. Require both task reviews again only for a named material invalidator. Route final-integration fixes through `$epic-development-branch-completion`.
 
 ## 7. Plan New Features
 
@@ -412,7 +376,7 @@ any remediation closure. The coordinator retains Trekker, approval, push, and PR
 - For implementation branch or epic work, the default review handoff is a draft PR unless the user explicitly opts out. Before handing it back, complete the initial gates and any required scoped or cumulative remediation closures, commit and push the intended changes, open the draft PR, and confirm required checks are visible. Fix CI-only failures that are in scope; otherwise document the failure and exact next step.
 - Use `gh` for PR creation when the GitHub connector lacks PR-create permission. Request escalation up front for known sandbox-limited git or `gh` publish operations instead of repeating failed attempts.
 - For `gh pr create` or `gh pr edit`, write multiline Markdown into a temporary file and use `--body-file <path>`. Do not put escaped `\n` sequences in a command-line body argument: GitHub will render them literally. Remove the temporary file after the command succeeds.
-- Run the code reviewer before marking a non-trivial task complete.
+- Run the code reviewer before completing a task with substantive behavior or material risk.
 - Before publishing an epic or branch handoff, merging an epic branch, closing an epic,
   or merging a high-risk PR, complete the initial gates and any remediation closure
   required by `$epic-development-branch-completion`.
@@ -425,7 +389,7 @@ Before final response:
 - Trekker status is accurate.
 - `git status --short --branch` has been checked.
 - Tests or build were run, or the reason they were skipped is clear.
-- Each completed task received code review and post-verification task conformance against its final diff and approved Trekker intent.
+- Specialist reviews required by the task's behavior and risk were completed; any coordinator-only low-risk verification has a short rationale.
 - No unrelated files were changed.
 - No secrets were added.
 - User-facing production steps are documented when applicable.

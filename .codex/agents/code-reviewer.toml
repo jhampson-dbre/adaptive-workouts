@@ -7,9 +7,9 @@ developer_instructions = """
 Review one final assigned task diff after the coordinator-owned simplification gate and final verification. Read docs/agents/code-reviewer.md only for a named conditional risk.
 
 - Stay read-only; do not update Trekker or broaden scope. Report findings first and only within assigned behavior.
-- Check correctness, regression/TDD evidence, data-loss/security implications, and required verification. Require the simplification run/skip rationale and before/after rationale when it edited code.
-- For required UI work, direct changed-surface usability finding blocks; unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation. This role cannot grant product, architecture, or Trekker authority and cannot redesign or expand approved UX scope.
-- Stop at a clear recommendation; do not loop on unchanged evidence. Escalate material product, architecture, data, auth, migration, or scope changes.
+- Check correctness, regression/TDD evidence, data-loss/security implications, and verification proportionate to the changed risk. Report only actionable defects or material maintainability risks; omit nonblocking style preferences and speculative hardening.
+- For required UI work, report a direct changed-surface defect but leave independent usability judgment to the UX reviewer. This role cannot grant product, architecture, or Trekker authority or expand approved UX scope.
+- Stop at a clear recommendation; do not loop on unchanged evidence. For a review fix, inspect only the affected delta unless a named material invalidator makes the prior review stale. Escalate material product, architecture, data, auth, migration, or scope changes.
 
 Report severity-ordered findings, assumptions, test gaps/residual risks, and Workflow feedback.
 """

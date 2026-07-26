@@ -1,55 +1,30 @@
 ---
 name: bugfix-issue-class-audit
-description: Scope a behavior bug before an implementor is dispatched. Use after reproduction and root-cause identification for any non-mechanical or user-facing bug, and whenever a coordinator needs to search same-class usages, record affected and unaffected surfaces, decide current-task versus follow-up scope, and prepare the Trekker audit note and implementor handoff.
+description: Resolve material scope ambiguity after reproducing a bug, identifying its root cause, and inspecting plausible same-cause usages. Use when that inspection finds multiple affected surfaces, unclear approved scope, a cross-boundary change, or a meaningful current-task-versus-follow-up decision; skip the formal audit for a cohesive localized fix.
 ---
 
 # Bug-Fix Issue-Class Audit
 
-Use this coordinator-owned workflow after reproducing a behavior bug and identifying its root cause, before dispatching an implementor. It is bug triage and scope control, not feature planning, requirements discovery, or implementation.
+Use this coordinator-owned workflow for scope control, not routine bug paperwork.
+Always reproduce the bug, identify the root cause, and inspect plausible callers or
+same-cause usages. Continue directly when the result is one cohesive localized fix.
 
-## 1. Classify the bug
+When material ambiguity remains, decide whether affected surfaces share the confirmed
+cause, fit approved intent, and remain one focused verifiable change. Separate a
+different cause, ownership area, material design decision, or independently useful
+change into an approved follow-up.
 
-- Confirm the reproduction and root cause.
-- Treat a bug as **mechanical** only when the correction is localized and has no meaningful user-facing behavior or same-class ambiguity. Record why the audit is not needed.
-- For every non-mechanical or user-facing behavior bug, complete the audit below. When in doubt, audit.
-
-## 2. Search the issue class
-
-Search for all plausible instances of the confirmed cause: shared components, helpers, state paths, validation rules, API contracts, repeated fields, and tests. Use targeted repository searches and inspect each candidate rather than assuming search hits are affected.
-
-Make an evidence matrix:
-
-| Candidate | Evidence inspected | Affected? | Rationale | Test coverage |
-| --- | --- | --- | --- | --- |
-| `path or surface` | `search/result/test` | yes/no | `same cause or distinction` | `existing/needed` |
-
-## 3. Decide scope
-
-- Keep a finding in the current task only when it shares the confirmed root cause, fits approved product intent, and remains one cohesive, verifiable change.
-- For a different root cause, independent risk or ownership, material scope/design decision, or loss of focused verification, propose a linked follow-up instead. Search Trekker for duplicates and obtain the required user approval before creating or materially changing that record.
-- Record any current-task expansion in Trekker before implementation begins.
-
-## 4. Record the audit
-
-Prepare a coordinator-owned Trekker note before dispatching the implementor:
+Record only the decision needed for implementation:
 
 ```text
 Issue-class audit:
 - Reproduction and root cause:
-- Search method and results:
-- Candidates inspected:
-  - <surface>: affected/unaffected — rationale
-- Affected surfaces and approved complete behavior/file scope:
-- Unaffected surfaces and rationale:
-- Regression-test matrix:
-- Scope decision: current task expansion | no expansion | linked follow-up proposed
-- Follow-up/duplicate search (if applicable):
+- Same-cause search result:
+- Approved scope and focused regression check:
+- Excluded scope or follow-up, with reason:
 ```
 
-Only the coordinator writes Trekker records or changes task scope.
-
-## 5. Validate and hand off
-
-- For a non-mechanical or user-facing behavior bug, send the completed audit to a read-only spec reviewer. The reviewer validates root cause, search evidence, affected/unaffected rationale, regression matrix, and scope decision against approved intent; it must not invent requirements. This narrow validation is the sole pre-implementation exception to the routine task-start spec-review prohibition.
-- Put the approved complete behavior and file scope, audit result, and regression-test matrix in the implementor handoff. The implementor applies that scope and reports unexpected evidence; it does not rediscover sibling defects.
-- Still run the fresh post-verification task-conformance review after implementation. Audit validation never replaces it.
+Only the coordinator changes Trekker scope. Use a pre-implementation spec reviewer
+only when the scope decision may conflict with approved intent; otherwise hand the
+decision and focused regression check directly to the implementor. Unexpected
+same-cause evidence returns to the coordinator.

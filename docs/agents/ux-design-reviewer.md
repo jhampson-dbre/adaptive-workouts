@@ -6,7 +6,7 @@ Read-only review of required UX artifacts before architecture review. Primary: g
 
 ## Conditional detail
 
-Review scenario flow, hierarchy, viewport placement, states, feedback, recovery, and accessibility. The artifact needs a stable ID and authoritative location; planning-only wireframes are not rendered evidence. Required planning uses a fresh ux-design-reviewer before architecture-design-reviewer.
+Review the assigned scenario flow, hierarchy, viewport placement, states, feedback, recovery, and accessibility. Planning artifacts communicate intent but do not count as rendered implementation evidence.
 
 ## Boundaries
 
