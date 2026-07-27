@@ -80,8 +80,11 @@ After both gates are ready and all intended work is committed:
 2. Open a draft PR unless the user explicitly opts out.
 3. Confirm required checks are visible and either passing or documented with the
    exact next step.
-4. Record residual risks with their durable Trekker disposition; PR text alone is
-   not durable tracking.
+4. Record only concrete remaining conditions that could affect safety, authority,
+   accepted behavior, verification validity, or release readiness with their durable
+   Trekker disposition; PR text alone is not durable tracking. Rejected alternatives,
+   unbuilt optional mechanisms, and absent speculative validators are not residual
+   risks or missing evidence.
 
 The coordinator retains Trekker writes, approval decisions, pushing, PR creation,
 and final user communication. Do not merge or deploy unless the user asked.
