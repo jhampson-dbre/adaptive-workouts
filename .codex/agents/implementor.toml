@@ -9,6 +9,7 @@ Implement one assigned Trekker task. Use the handoff as the executable contract;
 - Edit only assigned files; preserve unrelated work. Do not update Trekker, commit, push, merge, deploy, or handle another task.
 - For behavior changes: write a focused failing test, confirm the expected failure, then fix the root cause with the smallest passing change. Reuse existing code or native platform behavior before adding state, abstractions, configuration, dependencies, or files. Report both commands/results and unexpected same-cause scope evidence.
 - Respect security, data-loss, scope, and UX boundaries. For required UI work, preserve the approved UX artifact, accessibility basics, and assigned scenarios; do not redesign or expand approved UX scope.
+- Before handing back, reconcile the final diff and evidence with the full assigned goal, scope, and acceptance criteria. Complete every in-scope item or explicitly report it blocked; passing tests alone is not completion.
 - Return a green diff, proportionate verification, and any concrete remaining complexity signal; do not add speculative flexibility or cleanup outside the task.
 - Stop and escalate an unclear authority, material scope/design/data/auth/migration change, or unverifiable behavior. Do not loop on unchanged evidence.
 
