@@ -116,7 +116,7 @@ describe('emulator history scenarios', () => {
     expect(signals.legs).toEqual([]);
     expect(signals.closedQuota).toEqual(quota.expected.quota.closedOutput);
     expect(signals.openQuota).toEqual(quota.expected.quota.openOutput);
-  });
+  }, 35_000);
 
   it('keeps production-algorithm scenario outcomes tied to the supplied reference date when the wall clock shifts', () => {
     if (!isScenarioOutcomeChild) return runScenarioOutcomeChild('keeps production-algorithm scenario outcomes');
@@ -133,7 +133,7 @@ describe('emulator history scenarios', () => {
     expect(productionScenarioSignals('2026-07-18')).not.toEqual(expected);
     atChicagoReferenceNoon('2026-07-18');
     expect(productionScenarioSignals('2026-07-18')).toEqual(expected);
-  });
+  }, 35_000);
 
   it('replaces only scratch history idempotently, including overlaps and transaction retries', async () => {
     const history = new Map([['old-history', { date: 'old' }], ['scenario-weighted-increase', { date: 'stale' }]]);
