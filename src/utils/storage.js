@@ -1,6 +1,10 @@
-import { doc, getDoc, setDoc, collection, getDocs, addDoc, query, orderBy } from 'firebase/firestore';
-import { db } from './firebase';
 import { normalizeCatalogExercise, normalizeWorkoutSettings } from './workoutSchema';
+
+const loadFirestore = () => import('./firestoreClient').then(({ loadFirestoreClient }) => loadFirestoreClient());
+
+function historyDocumentToEntry(historyDoc) {
+  return { ...historyDoc.data(), id: historyDoc.id };
+}
 
 const DEFAULT_CATALOG = [
     { id: '1', name: 'Barbell Curl', muscleGroup: 'Biceps', tier: 1, sets: 3 },
@@ -12,6 +16,7 @@ const DEFAULT_CATALOG = [
 ];
 
 export async function migrateLocalData(userId) {
+  const { db, doc, getDoc, setDoc, collection, addDoc } = await loadFirestore();
   const localHistoryStr = localStorage.getItem('adaptive-history');
   const localSettingsStr = localStorage.getItem('adaptive-settings');
   const localCatalogStr = localStorage.getItem('adaptive-catalog');
@@ -22,7 +27,7 @@ export async function migrateLocalData(userId) {
   if (!userDoc.exists()) {
     let settings;
     try { settings = localSettingsStr ? JSON.parse(localSettingsStr) : null; } catch { settings = null; }
-    settings = settings ?? { warmupTime: 10, staleThreshold: 5, legDayOfWeek: 'None' };
+    settings = normalizeWorkoutSettings(settings ?? { staleThreshold: 5, legDayOfWeek: 'None' });
     await setDoc(userDocRef, settings);
     
     let catalog;
@@ -50,6 +55,7 @@ export async function migrateLocalData(userId) {
 }
 
 export async function getSettings(userId) {
+  const { db, doc, getDoc } = await loadFirestore();
   const docRef = doc(db, 'users', userId);
   const docSnap = await getDoc(docRef);
   return normalizeWorkoutSettings(docSnap.exists()
@@ -58,28 +64,67 @@ export async function getSettings(userId) {
 }
 
 export async function saveSettings(userId, settings) {
+  const { db, doc, setDoc } = await loadFirestore();
   await setDoc(doc(db, 'users', userId), settings, { merge: true });
 }
 
-export async function getHistory(userId) {
+export async function getGenerationHistory(userId) {
+  const { db, collection, getDocs, query, orderBy, limit } = await loadFirestore();
   const colRef = collection(db, 'users', userId, 'history');
-  const historyQuery = query(colRef, orderBy('date', 'asc'));
+  const historyQuery = query(colRef, orderBy('date', 'desc'), limit(100));
   const snapshot = await getDocs(historyQuery);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  return snapshot.docs.map(historyDocumentToEntry);
+}
+
+export async function getHistoryPage(userId, { cursor = null, pageSize = 20 } = {}) {
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+    throw new RangeError('History page size must be an integer from 1 to 100.');
+  }
+  const { db, collection, getDocs, query, orderBy, limit, startAfter, documentId } = await loadFirestore();
+  const colRef = collection(db, 'users', userId, 'history');
+  const constraints = [
+    orderBy('date', 'desc'),
+    orderBy(documentId(), 'desc'),
+  ];
+  if (cursor) constraints.push(startAfter(cursor));
+  constraints.push(limit(pageSize + 1));
+  const snapshot = await getDocs(query(colRef, ...constraints));
+  const docs = snapshot.docs;
+  const displayedDocs = docs.slice(0, pageSize);
+  return {
+    items: displayedDocs.map(historyDocumentToEntry),
+    nextCursor: displayedDocs.at(-1) ?? null,
+    hasMore: docs.length > pageSize,
+  };
 }
 
 export async function saveWorkout(userId, workout) {
+  const { db, collection, addDoc } = await loadFirestore();
   const colRef = collection(db, 'users', userId, 'history');
   await addDoc(colRef, workout);
 }
 
+/** A8's production immutable-write path for completed workout history. */
+export async function saveImmutableWorkout(userId, workoutId, candidate) {
+  const { db, doc, setDoc } = await loadFirestore();
+  const historyRef = doc(db, 'users', userId, 'history', workoutId);
+  await setDoc(historyRef, candidate);
+}
+
+export async function readImmutableWorkoutFromServer(userId, workoutId) {
+  const { db, doc, getDocFromServer } = await loadFirestore();
+  return getDocFromServer(doc(db, 'users', userId, 'history', workoutId));
+}
+
 export async function getCatalog(userId) {
+  const { db, collection, getDocs } = await loadFirestore();
   const colRef = collection(db, 'users', userId, 'catalog');
   const snapshot = await getDocs(colRef);
   return snapshot.docs.map(doc => normalizeCatalogExercise({ ...doc.data(), id: doc.id }));
 }
 
 export async function saveCatalogItem(userId, item) {
+  const { db, doc, setDoc } = await loadFirestore();
   const itemRef = doc(db, 'users', userId, 'catalog', item.id);
   await setDoc(itemRef, item);
 }

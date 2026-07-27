@@ -39,6 +39,15 @@
   padding: 0.6rem 1rem;
 }
 
+.access-surface { box-sizing: border-box; max-width: 42rem; min-height: 100vh; margin: 0 auto; padding: 2rem 1.25rem; overflow-wrap: anywhere; }
+.access-surface h1:focus { outline: 2px solid var(--accent, #2563eb); outline-offset: 4px; }
+.access-identity { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .5rem 1rem; }
+.access-identity dd { margin: 0; overflow-wrap: anywhere; user-select: text; }
+.access-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.5rem; }
+.access-actions button { min-height: 44px; padding: .6rem 1rem; }
+.access-action-primary { background: var(--accent); border: 1px solid var(--accent); color: #000000; font-weight: 600; }
+.access-action-secondary { background: transparent; border: 1px solid var(--accent-border); color: var(--text-h); }
+
 .hero {
   position: relative;
 

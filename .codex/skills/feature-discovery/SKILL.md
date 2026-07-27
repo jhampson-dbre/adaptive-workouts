@@ -14,21 +14,21 @@ Work with the user to turn a feature idea into a decision-ready brief. This is a
 3. Ask one high-value question at a time. Prefer concrete choices when a decision has clear alternatives; do not interrogate the user about facts discoverable from the repository.
 4. Explore the feature through these lenses:
    - **Outcome:** user problem, success signal, and non-goals.
-   - **Alternatives:** at least one credible simpler, narrower, or different approach that could achieve the same purpose.
+   - **Minimality:** identify the smallest observable outcome and test existing behavior, policy, configuration, or native platform support before proposing new code or state.
+   - **Alternatives:** compare the preferred approach with at least one materially simpler end-to-end option. Prefer the simpler option unless it fails a named outcome or material risk.
    - **Experience:** primary workflow, confusing states, errors, accessibility, and recovery.
    - **System fit:** existing architecture, data, integrations, migration, privacy, performance, and operational constraints.
    - **Delivery:** scope slices, dependencies, failure modes, testability, and rollout risk.
-5. Surface material disagreements and tradeoffs rather than silently selecting an answer. Keep a running list of decisions, rejected alternatives with reasons, assumptions, and unresolved questions.
+5. Surface material disagreements and tradeoffs rather than silently selecting an answer. Challenge proposed persistent state, schemas, parsers, validators, agents, or gates; keep one only when it prevents a concrete failure that the simpler option cannot. Keep a running list of decisions, rejected alternatives with reasons, assumptions, and unresolved questions.
 6. Do not draft an epic, create Trekker records, dispatch formal design reviews, or start implementation during discovery.
 
 ## UX Quality Gate classification
 
 Classify UI work as `required`, `optional`, or `skip-recorded` during discovery and
-record the decision in the Discovery Brief. `optional` and `skip-recorded` require a
-durable rationale. For required work, prepare the proportional scenario-indexed UX
-artifact using `docs/templates/ux-evidence-matrix.md` before formal design review;
-its evidence fields are completed during the later rendered-verification workflow.
-Discovery does not itself dispatch the reviewer or replace architecture authority.
+record a short rationale. Required work names the materially changed scenarios and a
+proportional artifact covering the intended flow, states, recovery, and accessibility.
+Execution records rendered proof in `docs/templates/ux-evidence-matrix.md`. Discovery
+does not itself dispatch the reviewer or replace architecture authority.
 
 ## Completion Gate
 
@@ -36,6 +36,12 @@ Before proposing a handoff, confirm that the brief contains:
 
 - problem, audience, goals, and explicit non-goals;
 - preferred approach and meaningful alternatives considered;
+- a **Minimality** decision:
+  - smallest sufficient outcome;
+  - existing or native path considered;
+  - added mechanisms and the named risk each prevents;
+  - why the materially simpler option is insufficient;
+  - complexity deliberately deferred;
 - user-flow expectations and important edge cases;
 - relevant code/data/deployment constraints;
 - acceptance signals, risks, and unresolved assumptions.

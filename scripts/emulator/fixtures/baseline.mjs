@@ -1,5 +1,6 @@
 export const BASELINE_PROJECT_ID = 'demo-project';
 export const BASELINE_FIXTURE_REVISION = 'emulator-baseline-v1';
+export const BASELINE_AUTH_MARKER = 'emulator-baseline-auth-v2';
 export const BASELINE_PROFILE = 'canonical';
 export const BASELINE_USER_ID = 'emulator-baseline-user';
 export const BASELINE_EMAIL = 'peach.otter.880@example.com';
@@ -52,11 +53,13 @@ const baselineFixture = {
   revision: BASELINE_FIXTURE_REVISION,
   profile: BASELINE_PROFILE,
   auth: {
+    contractRevision: BASELINE_AUTH_MARKER,
     users: [{
       localId: BASELINE_USER_ID,
       email: BASELINE_EMAIL,
       displayName: 'Emulator Baseline User',
       emailVerified: true,
+      customClaims: { approved: true },
       providerUserInfo: [{
         providerId: BASELINE_PROVIDER_ID,
         rawId: BASELINE_PROVIDER_UID,

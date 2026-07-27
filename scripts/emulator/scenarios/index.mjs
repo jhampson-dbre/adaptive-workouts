@@ -80,12 +80,7 @@ export function buildScenario(name, referenceDate) {
 export const scenarioManifest = Object.freeze({
   revision: SCENARIO_REVISION, command: scenarioCommand,
   fixtureRevision: BASELINE_FIXTURE_REVISION, referenceClock: 'system-local calendar noon; output ISO', profile: 'scratch',
-  uxEvidence: { templateCommit: '8d2869a', templatePath: 'docs/templates/ux-evidence-matrix.md', classification: 'optional',
-    requiredFields: ['Scenario ID and name', 'Changed surface', 'Applicability', 'Per-run capability probe', 'capability_state', 'Unsupported metadata', 'Evidence kind', 'Outcome', 'Changed-surface routing', 'Evidence obligation', 'Disposition', 'Allowed recommendation', 'Build / commit', 'Fixture / data revision', 'Requested and actual viewport', 'Starting state', 'Action', 'Observed result', 'Evidence link and limitation'] },
   scenarios: Object.fromEntries(Object.entries(scenarioDefinitions).map(([id, definition]) => [id, { name: definition.name, expected: definition.expected,
-    applicability: 'optional', workflow: 'UX Quality Gate optional scenario evidence', viewports: ['375x812', '390x844', '1280x800'], states: ['scratch seeded history'],
     id, command: scenarioCommand, fixtureRevision: BASELINE_FIXTURE_REVISION,
-    profileRevision: SCENARIO_REVISION, referenceDateInput: '--reference-date YYYY-MM-DD', algorithmPrecondition: 'Validated scratch history is loaded before generation.',
-    visibleOutcome: definition.name, evidenceSetup: 'Start scratch emulator and load only synthetic scenario history.', evidenceAction: 'Generate the stated workout scenario.',
-    limitation: 'Rendered evidence is optional and must be re-probed per UX Quality Gate run.', residualRisk: 'Engine behavior can change with catalog or algorithm revisions.' }])),
+    referenceDateInput: '--reference-date YYYY-MM-DD' }])),
 });

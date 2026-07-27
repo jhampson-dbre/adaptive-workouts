@@ -1,7 +1,6 @@
 import { useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { generateWorkout, getDaysSinceLastLegDay, getDayOfWeek } from '../utils/engine';
-import { getSettings, getHistory, getCatalog } from '../utils/storage';
 
 const MUSCLE_GROUPS = ['Biceps', 'Shoulders', 'Back', 'Chest', 'Triceps', 'Core', 'Legs'];
 const HISTORY_UNAVAILABLE_MESSAGE = 'Workout history is unavailable. Retry before generating a workout.';
@@ -43,9 +42,10 @@ export default function Generator({
     setIsGenerating(true);
     setError(null);
     try {
+      const { getSettings, getGenerationHistory, getCatalog } = await import('../utils/storage');
       const [settingsResult, historyResult, catalogResult] = await Promise.allSettled([
         getSettings(user.uid),
-        getHistory(user.uid),
+        getGenerationHistory(user.uid),
         getCatalog(user.uid)
       ]);
       if (historyResult.status === 'rejected') throw new HistoryLoadError(historyResult.reason);
@@ -55,6 +55,15 @@ export default function Generator({
       const history = historyResult.value;
       const catalog = catalogResult.value;
       setCanRetryHistory(false);
+      const handoffGeneratedWorkout = generated => {
+        if (onGenerate) onGenerate(generated, {
+          phaseTargets: {
+            warmupSeconds: settings.warmupSeconds ?? generated.phaseTargets?.warmupSeconds ?? 0,
+            performanceSeconds: timeBudget * 60,
+            cooldownSeconds: settings.cooldownSeconds ?? generated.phaseTargets?.cooldownSeconds ?? 0,
+          },
+        });
+      };
       
       // Check if we have primary leg exercises
       const hasPrimaryLegs = catalog.some(ex => (
@@ -75,20 +84,20 @@ export default function Generator({
             const totalDays = Math.floor(daysSince);
             const doLegDay = window.confirm(`Leg Day is ${overdueDays} day${overdueDays === 1 ? '' : 's'} overdue! (${totalDays} days since last Leg workout).\n\nClick OK to do Leg Day today, or Cancel to skip to normal workout.`);
             const generated = generateWorkout(timeBudget, unrecoveredGroups, doLegDay, catalog, history, settings); // doLegDay=true means forceLegDay=true
-            if (onGenerate) onGenerate(generated);
+            handoffGeneratedWorkout(generated);
             return;
         }
         
         if (isEarly) {
             const doEarly = window.confirm(`Tomorrow is Leg Day. Want to do it a day early?`);
             const generated = generateWorkout(timeBudget, unrecoveredGroups, doEarly, catalog, history, settings);
-            if (onGenerate) onGenerate(generated);
+            handoffGeneratedWorkout(generated);
             return;
         }
       }
 
       const generated = generateWorkout(timeBudget, unrecoveredGroups, false, catalog, history, settings);
-      if (onGenerate) onGenerate(generated);
+      handoffGeneratedWorkout(generated);
     } catch (err) {
       console.error("Error generating workout:", err);
       if (err instanceof HistoryLoadError) {

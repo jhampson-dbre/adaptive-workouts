@@ -1,41 +1,35 @@
 ---
 name: ux-quality-gate
-description: Apply the approved, risk-proportional UX workflow to material UI work. Use for discovery, planning, and review decisions about interaction flow, hierarchy, viewport placement, state lifecycle, feedback, and recovery.
+description: Protect material UI outcomes with proportional design and rendered evidence. Use when interaction flow, hierarchy, viewport placement, state lifecycle, feedback, recovery, or accessibility is materially affected.
 ---
 
 # UX Quality Gate
 
-During discovery, classify UI work as `required`, `optional`, or `skip-recorded`. Required work needs a scenario-indexed UX artifact covering the screen's single job, action hierarchy and placement, compact wireframe, meaningful states, scroll/reach/interruption/recovery behavior, and transient-feedback ownership and retirement.
+During discovery, classify UI work as `required`, `optional`, or `skip-recorded` and
+record a short rationale. Required work keeps an approved scenario artifact covering
+the screen's job, action hierarchy, meaningful states, recovery, and accessibility.
+Use a fresh ux-design-reviewer before architecture review when that artifact needs
+independent design judgment.
 
-`optional` and `skip-recorded` are durable planning decisions. Required planning
-artifacts use `docs/templates/ux-evidence-matrix.md`; capability evidence is
-re-probed on every future required run and waivers are never cached. The matrix keeps
-applicability, per-run capability probe, `capability_state`, complete unsupported
-metadata, evidence kind, outcome, evidence obligation, disposition, changed-surface
-routing, and allowed recommendation separate. Request representative synthetic or
-de-identified screenshots when safe for independent reinspection; otherwise record
-an explicit text-only rationale. Never require sensitive, personal, or production
-evidence.
+After implementation, exercise each materially changed scenario in a rendered surface
+with synthetic or de-identified data. Record the build, viewport and starting state,
+actions, observed result, rendered evidence, and any material limitation in
+`docs/templates/ux-evidence-matrix.md`. Never require sensitive, personal, or
+production evidence.
 
-For required work, dispatch a fresh ux-design-reviewer before architecture-design-reviewer. The UX design reviewer assesses the approved UX artifact; architecture review retains authority for system boundaries, data, security, and feasibility. Material architecture changes that alter the UX contract return through UX design review before user approval.
+Static inspection may establish a defect but cannot prove usability. A direct
+changed-surface defect or missing rendered evidence for a required material scenario
+blocks completion. If the preferred harness is unavailable, record the safe method
+attempted, the limitation, and the best available alternative; unsupported tooling
+alone is not a defect when sufficient alternative evidence exists.
 
-After implementation and the required simplification pass, the coordinator performs
-per-run bounded capability probes and coordinator-owned rendered verification using
-synthetic or de-identified local data. Record the canonical matrix build, viewport,
-state, actions, observed result, and limitation for each approved scenario. Missing
-prescribed rendered evidence blocks task completion and requires a resumable
-`Checkpoint:`. Static inspection cannot produce a usability pass. Static or proxy
-evidence may prove a defect but cannot produce a rendered
-usability pass. Use `docs/templates/ux-evidence-matrix.md` as the canonical matrix.
-
-After rendered verification, the fresh ux-usability-reviewer, code reviewer, and
-task-conformance reviewer run in parallel. A direct changed-surface usability finding
-blocks. Unsupported-by-harness is nonblocking only with complete metadata, fallback,
-and evidence obligation. UX review is heuristic review, not human research,
-accessibility certification, security review, or authorization to redesign approved
-behavior; reviewers cannot grant product, architecture, or Trekker authority.
-They cannot redesign or expand approved UX scope.
+Use a ux-usability-reviewer when the changed interaction needs independent usability
+judgment. The reviewer stays within the approved UX scope and does not replace product,
+architecture, security, accessibility certification, or Trekker authority. Unchanged
+evidence does not trigger another review.
 
 ## CI Boundary
 
-The static validator checks paths, registration, synchronized concepts, model policy, ordering, and package/workflow wiring only. It must not invoke agents, skills, browsers, LLMs, or external network tooling.
+The static validator checks required files, model policy, the evidence record fields,
+and CI wiring. It does not enforce duplicated workflow prose or invoke agents,
+browsers, LLMs, or network tools.

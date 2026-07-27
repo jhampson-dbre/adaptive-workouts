@@ -2,6 +2,7 @@ import {
   isValidCatalogExercise,
 } from '../../src/utils/workoutSchema.js';
 import {
+  BASELINE_AUTH_MARKER,
   BASELINE_EMAIL,
   BASELINE_FIXTURE_REVISION,
   BASELINE_PROFILE,
@@ -20,6 +21,10 @@ const CANONICAL_SETTINGS = {
 const SUPPORTED_PROFILES = new Set(['canonical', 'scratch', 'test']);
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 
+const hasExactApprovedClaim = claims => isObject(claims)
+  && Object.keys(claims).length === 1
+  && claims.approved === true;
+
 const addExactError = (errors, value, expected, path) => {
   if (value !== expected) errors.push(`${path} must be ${JSON.stringify(expected)}; received ${JSON.stringify(value)}`);
 };
@@ -34,6 +39,7 @@ export function validateBaselineFixture(fixture, { expectedProfile = BASELINE_PR
     errors.push(`profile must be one of ${[...SUPPORTED_PROFILES].join(', ')}; received ${JSON.stringify(fixture.profile)}`);
   }
   addExactError(errors, fixture.profile, expectedProfile, 'profile');
+  addExactError(errors, fixture.auth?.contractRevision, BASELINE_AUTH_MARKER, 'auth.contractRevision');
 
   const users = fixture.auth?.users;
   if (!Array.isArray(users) || users.length !== 1) {
@@ -44,6 +50,9 @@ export function validateBaselineFixture(fixture, { expectedProfile = BASELINE_PR
     addExactError(errors, user?.email, BASELINE_EMAIL, 'auth.users[0].email');
     addExactError(errors, user?.displayName, 'Emulator Baseline User', 'auth.users[0].displayName');
     addExactError(errors, user?.emailVerified, true, 'auth.users[0].emailVerified');
+    if (!hasExactApprovedClaim(user?.customClaims)) {
+      errors.push(`auth.users[0].customClaims must equal { approved: true }; received ${JSON.stringify(user?.customClaims)}`);
+    }
     const providers = user?.providerUserInfo;
     if (!Array.isArray(providers) || providers.length !== 1) {
       errors.push(`auth.users[0].providerUserInfo must contain exactly one provider; received ${Array.isArray(providers) ? providers.length : typeof providers}`);

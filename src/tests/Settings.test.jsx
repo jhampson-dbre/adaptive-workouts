@@ -77,6 +77,77 @@ describe('Settings tracking configuration', () => {
     });
   });
 
+  it('edits canonical Warmup and Cooldown as whole minutes and saves seconds', async () => {
+    renderSettings([], { warmupSeconds: 600, cooldownSeconds: 300, defaultRestSeconds: 60 });
+    const warmup = await screen.findByLabelText('Warmup minutes');
+    const cooldown = screen.getByLabelText('Cooldown minutes');
+    expect(warmup.value).toBe('10');
+    expect(cooldown.value).toBe('5');
+    expect(warmup.classList.contains('phase-duration-input')).toBe(true);
+    expect(cooldown.classList.contains('phase-duration-input')).toBe(true);
+
+    fireEvent.change(warmup, { target: { value: '10.5' } });
+    fireEvent.blur(warmup);
+    expect(await screen.findByText(/warmup must be a whole number from 0 through 60 minutes/i)).toBeTruthy();
+    expect(warmup.getAttribute('aria-describedby')).toBe('warmup-error');
+
+    fireEvent.change(warmup, { target: { value: '0' } });
+    fireEvent.blur(warmup);
+    fireEvent.change(cooldown, { target: { value: '60' } });
+    fireEvent.blur(cooldown);
+    await waitFor(() => expect(storage.saveSettings).toHaveBeenCalledWith('user-1', { warmupSeconds: 0 }));
+    await waitFor(() => expect(storage.saveSettings).toHaveBeenCalledWith('user-1', { cooldownSeconds: 3600 }));
+  });
+
+  it('rejects blank Warmup and Cooldown values without saving zero', async () => {
+    renderSettings([], { warmupSeconds: 600, cooldownSeconds: 300 });
+    const warmup = await screen.findByLabelText('Warmup minutes');
+    const cooldown = screen.getByLabelText('Cooldown minutes');
+
+    fireEvent.change(warmup, { target: { value: '' } });
+    fireEvent.blur(warmup);
+    expect(await screen.findByText(/warmup must be a whole number from 0 through 60 minutes/i)).toBeTruthy();
+    expect(warmup.getAttribute('aria-invalid')).toBe('true');
+    expect(warmup.getAttribute('aria-describedby')).toBe('warmup-error');
+    expect(storage.saveSettings).not.toHaveBeenCalled();
+
+    fireEvent.change(cooldown, { target: { value: '' } });
+    fireEvent.blur(cooldown);
+    expect(await screen.findByText(/cooldown must be a whole number from 0 through 60 minutes/i)).toBeTruthy();
+    expect(cooldown.getAttribute('aria-invalid')).toBe('true');
+    expect(cooldown.getAttribute('aria-describedby')).toBe('cooldown-error');
+    expect(storage.saveSettings).not.toHaveBeenCalled();
+  });
+
+  it('reports failed phase saves and retires each associated error after a successful retry', async () => {
+    storage.saveSettings
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce();
+    renderSettings([], { warmupSeconds: 600, cooldownSeconds: 300 });
+    const warmup = await screen.findByLabelText('Warmup minutes');
+    const cooldown = screen.getByLabelText('Cooldown minutes');
+
+    fireEvent.change(warmup, { target: { value: '15' } });
+    fireEvent.blur(warmup);
+    expect(await screen.findByText(/could not save warmup/i)).toBeTruthy();
+    expect(warmup.getAttribute('aria-invalid')).toBe('true');
+    expect(warmup.getAttribute('aria-describedby')).toBe('warmup-error');
+    fireEvent.blur(warmup);
+    await waitFor(() => expect(screen.queryByText(/could not save warmup/i)).toBeNull());
+    expect(warmup.getAttribute('aria-invalid')).toBeNull();
+
+    fireEvent.change(cooldown, { target: { value: '10' } });
+    fireEvent.blur(cooldown);
+    expect(await screen.findByText(/could not save cooldown/i)).toBeTruthy();
+    expect(cooldown.getAttribute('aria-invalid')).toBe('true');
+    expect(cooldown.getAttribute('aria-describedby')).toBe('cooldown-error');
+    fireEvent.blur(cooldown);
+    await waitFor(() => expect(screen.queryByText(/could not save cooldown/i)).toBeNull());
+    expect(cooldown.getAttribute('aria-invalid')).toBeNull();
+  });
+
   it('saves optional per-exercise rest overrides and clearing restores inheritance', async () => {
     renderSettings([{ ...exercise, trackingMode: 'simple', restSeconds: 120 }]);
     await screen.findByRole('button', { name: 'Edit' });

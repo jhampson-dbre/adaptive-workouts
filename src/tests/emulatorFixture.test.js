@@ -21,6 +21,12 @@ describe('canonical emulator fixture', () => {
     expectInvalid(fixture => { fixture.auth.users[0].providerUserInfo[0].providerId = 'password'; }, 'providerId');
   });
 
+  it('requires the strict approved claim and separate v2 auth provenance marker', () => {
+    expectInvalid(fixture => { fixture.auth.users[0].customClaims = { approved: false }; }, 'customClaims');
+    expectInvalid(fixture => { fixture.auth.users[0].customClaims = { approved: true, role: 'coach' }; }, 'customClaims');
+    expectInvalid(fixture => { fixture.auth.contractRevision = 'emulator-baseline-auth-v1'; }, 'auth.contractRevision');
+  });
+
   it('rejects an unsupported revision or noncanonical profile', () => {
     expectInvalid(fixture => { fixture.firestore.user.emulatorFixtureRevision = 'old'; }, 'emulatorFixtureRevision');
     expectInvalid(fixture => { fixture.firestore.user.emulatorProfile = 'scratch'; }, 'emulatorProfile');

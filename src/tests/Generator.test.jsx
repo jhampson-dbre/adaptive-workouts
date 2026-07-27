@@ -15,7 +15,7 @@ describe('Generator Component', () => {
         window.confirm = vi.fn();
         
         storage.getSettings.mockResolvedValue({ legDayOfWeek: 'Friday' });
-        storage.getHistory.mockResolvedValue([]);
+        storage.getGenerationHistory.mockResolvedValue([]);
         storage.getCatalog.mockResolvedValue([
             { id: 'leg1', name: 'Squat', muscleGroup: 'Legs', tier: 3, sets: 3, isActive: true }
         ]);
@@ -55,6 +55,18 @@ describe('Generator Component', () => {
         });
     });
 
+    it('forwards the engine phase target snapshot without changing the array-based handoff', async () => {
+        storage.getCatalog.mockResolvedValue([]);
+        const generated = [];
+        Object.defineProperty(generated, 'phaseTargets', { value: Object.freeze({ warmupSeconds: 600, performanceSeconds: 1800, cooldownSeconds: 300 }) });
+        engine.generateWorkout.mockReturnValue(generated);
+        const onGenerate = vi.fn();
+        renderWithAuth(<Generator timeBudget={30} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
+
+        fireEvent.click(screen.getByText('Generate Plan'));
+        await waitFor(() => expect(onGenerate).toHaveBeenCalledWith(generated, { phaseTargets: { warmupSeconds: 600, performanceSeconds: 1800, cooldownSeconds: 300 } }));
+    });
+
     it('prompts if leg day is overdue', async () => {
         engine.getDaysSinceLastLegDay.mockReturnValue(8);
         engine.getDayOfWeek.mockReturnValue('Monday'); // Not Friday
@@ -75,6 +87,7 @@ describe('Generator Component', () => {
         await waitFor(() => {
             expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('overdue'));
             expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], true, expect.any(Array), expect.any(Array), expect.any(Object)); // doLegDay=true
+            expect(onGenerate).toHaveBeenCalledWith([], { phaseTargets: { warmupSeconds: 0, performanceSeconds: 2700, cooldownSeconds: 0 } });
         });
     });
 
@@ -102,6 +115,7 @@ describe('Generator Component', () => {
         await waitFor(() => {
             expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('early'));
             expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], true, expect.any(Array), expect.any(Array), expect.any(Object)); // doEarly=true
+            expect(onGenerate).toHaveBeenCalledWith([], { phaseTargets: { warmupSeconds: 0, performanceSeconds: 2700, cooldownSeconds: 0 } });
         });
     });
 
@@ -131,7 +145,7 @@ describe('Generator Component', () => {
 
     it('blocks generation on history failure and retries without an empty-history fallback', async () => {
         storage.getCatalog.mockResolvedValue([]);
-        storage.getHistory.mockRejectedValueOnce(new Error('offline'));
+        storage.getGenerationHistory.mockRejectedValueOnce(new Error('offline'));
         const onGenerate = vi.fn();
 
         renderWithAuth(<Generator
@@ -149,7 +163,7 @@ describe('Generator Component', () => {
         expect(onGenerate).not.toHaveBeenCalled();
 
         let resolveHistory;
-        storage.getHistory.mockReturnValueOnce(new Promise(resolve => { resolveHistory = resolve; }));
+        storage.getGenerationHistory.mockReturnValueOnce(new Promise(resolve => { resolveHistory = resolve; }));
         fireEvent.click(retry);
         expect(screen.getByRole('button', { name: 'Retrying...' }).disabled).toBe(true);
         resolveHistory([]);

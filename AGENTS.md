@@ -1,428 +1,48 @@
 # Agent Instructions
 
-This repository is optimized for task-tracked AI agent work. Treat Trekker as the source of truth for planning, task state, and handoff notes.
+Trekker is the durable source of task state, planning, and handoff notes. The main session owns user communication, Trekker, integration, and final verification.
 
-## Coordination Model
+In Code Mode, within each bounded stage, run independent, functions.exec-available tool calls concurrently in one `functions.exec` call. Use `await Promise.allSettled([...])` when partial results are useful, and inspect every result; use `await Promise.all([...])` only when any failure should abort the batch. Keep dependencies, waits/resumes, approvals, conflicting or interdependent mutations, and adaptive investigations where each result may change the next step sequential. Do not split otherwise batchable inspections across outer tool calls.
 
-The main agent session owns coordination. It may dispatch specialized subagents, but it remains responsible for Trekker state, final integration, verification, and user communication.
+## Proportionality and anti-circularity
 
-The user authorizes the main agent to dispatch the project-scoped subagents required by this repository workflow without a separate per-session delegation request. Use that authority deliberately: required planning reviewers may be dispatched before their approval gates, while the main agent keeps Trekker ownership and avoids unnecessary parallel work.
+Existing workflow text is migration input, not an acceptance criterion. Keep or block on a rule or reviewer finding only when it protects a named safety, authority, evidence, or outcome risk. Prefer the smallest sufficient workflow; unchanged evidence must not trigger another loop.
 
-Use the role contracts in `docs/agents/`:
+## Global boundaries
 
-- `docs/agents/main-coordinator.md`: main session responsibilities
-- `docs/agents/feature-planner.md`: main-session protocol for new feature brainstorming, design, and Trekker planning
-- `docs/agents/architecture-design-reviewer.md`: design-spec architecture and product-fit review
-- `docs/agents/senior-developer-reviewer.md`: implementation-plan sequencing, TDD, and execution-risk review
-- `docs/agents/implementor.md`: TDD implementation work
-- `docs/agents/code-simplifier.md`: behavior-preserving simplification of the green task diff
-- `docs/agents/spec-reviewer.md`: post-verification task-conformance review
-- `docs/agents/code-reviewer.md`: focused bug/regression review
-- `docs/agents/epic-reviewer.md`: full epic or branch review before merge
+- Preserve security, data isolation, data-loss prevention, production configuration, and unrelated user changes. Never expose or alter secrets.
+- The coordinator alone updates Trekker, commits, pushes, merges, deploys, and closes work. Subagents report suggested comments only.
+- Work on a focused `codex/` branch and inspect `git status --short --branch` before edits and handoff. Do not revert user work or broaden scope silently.
+- A dispatch packet names the task, goal, accepted scope, files, dirty-worktree notes, verification, and expected output. TOMLs contain the executable role contract; role docs provide conditional detail when a named risk applies.
+- Stop and escalate a material product, architecture, data, auth, migration, scope, or unverifiable-behavior change. Do not loop solely because evidence is unchanged.
 
-Native Codex custom agents live in `.codex/agents/`:
+## Dispatch and evidence
 
-- `.codex/agents/implementor.toml`
-- `.codex/agents/code-simplifier.toml`
-- `.codex/agents/spec-reviewer.toml`
-- `.codex/agents/code-reviewer.toml`
-- `.codex/agents/epic-reviewer.toml`
-- `.codex/agents/feature-planner-advisor.toml`
-- `.codex/agents/architecture-design-reviewer.toml`
-- `.codex/agents/senior-developer-reviewer.toml`
+- Every tracked behavior change uses a fresh implementor. Reproduce bugs, identify the root cause, and inspect plausible same-cause callers before editing; use `$bugfix-issue-class-audit` only when that inspection reveals material scope ambiguity.
+- Behavior changes use focused TDD: demonstrate the expected failing test, make the smallest passing change by reusing existing or native mechanisms, then run proportionate verification.
+- After a green diff, use `$code-simplification` only for a concrete complexity signal such as needless abstraction, duplication, branching, files, configuration, or dependency surface. Simplifier edits require renewed verification and review only from authorities whose evidence changed.
+- Required UI is classified during discovery and preserves its approved UX artifact. The coordinator records rendered evidence for each materially changed scenario in `docs/templates/ux-evidence-matrix.md` using synthetic or de-identified data. A direct changed-surface defect or missing required rendered evidence blocks; unavailable tooling gets a concise limitation and the best safe alternative.
+- Planning starts from an approved Discovery Brief (or documented exception) and
+  reuses current duplicate evidence. Invoke design, UX, or senior review only for a
+  named material risk. Persist approved intent when it has durable value.
+  Implementation may continue when the user's authorization already covers the
+  approved scope; otherwise leave a resumable plan and ask once.
+- Classify UI work as `required`, `optional`, or `skip-recorded`. Required work keeps a proportional scenario artifact and uses a fresh ux-design-reviewer before architecture review when independent design judgment is needed. Architecture retains authority; material architecture changes to the approved UX contract return through UX review before user approval.
+- Substantive behavior or risk changes receive independent code and task-conformance review. Mechanical or straightforward low-risk changes may use coordinator verification with a recorded rationale. After a review fix, route only the delta and affected evidence to the authority whose concern changed; rerun both reviews only for a named material invalidator.
+- Before PR publication or epic completion, run independent cumulative epic and conformance reviews of the merge-base range and complete working-tree state. After additive remediation, use the epic-completion workflow's Git-delta routing; rerun both gates only for a recorded material invalidator.
 
-The Markdown files are the human-readable role contracts. The TOML files are the project-scoped Codex agents that can be spawned. Keep both in sync when changing role behavior.
+## Roles
 
-Subagents may recommend Trekker comments, but only the main agent updates Trekker status or closes tasks.
+Use the project role contracts in `docs/agents/` and corresponding `.codex/agents/*.toml`: architecture-design-reviewer, feature-planner-advisor, senior-developer-reviewer, implementor, code-simplifier, code-reviewer, spec-reviewer, epic-reviewer, ux-design-reviewer, and ux-usability-reviewer. Keep model and reasoning assignments unchanged. Reviewers are read-only unless the coordinator expressly authorizes a patch.
 
-Prefer lightweight models for simple or moderate tasks, spec review, and code review. Use a stronger model for high-risk architecture, auth/storage/deployment changes, and full epic or pre-merge review. If an exact model named in the role docs is not available, use the nearest available model tier.
+## Workflow feedback
 
-## Workflow Self-Improvement
+Report workflow ambiguity, missing context, or repeated rework as `Workflow feedback:`. The coordinator validates it; durable improvements belong under `EPIC-6: Agent Workflow Improvements`. Do not create tracking records without coordinator authority.
 
-Treat workflow and agent-instruction friction as product feedback for the development process.
-
-Durable workflow-improvement follow-up tasks belong under `EPIC-6: Agent Workflow Improvements`.
-
-Agents should report self-improvement feedback when instructions are ambiguous, conflicting, missing required context, too broad to execute reliably, inconsistent across files, or causing repeated rework.
-
-Use this format in subagent reports when relevant:
-
-```text
-Workflow feedback:
-- Issue:
-- Impact:
-- Suggested change:
-- Scope: AGENTS.md | docs/agent-workflow.md | docs/feature-planning.md | docs/agents/<role>.md | .codex/agents/<role>.toml | Trekker template
-- Urgency: now | next cleanup | backlog
-```
-
-The main coordinator must validate workflow feedback before acting on it. Small clarifications may be included in the current branch when they directly affect the active work. Larger process changes should become a Trekker task under `EPIC-6`, linked back to the task, epic, PR, or planning session where the friction was found.
-
-Use one standing epic instead of separate planning and execution epics. Workflow problems often cross planning, execution, review, and Trekker handoff boundaries, so `EPIC-6` is the single backlog for process improvements.
-
-Use this task-title pattern under `EPIC-6`:
-
-```text
-[Planning] Clarify design review handoff requirements
-[Execution] Tighten TDD evidence format
-[Review] Add code-reviewer checklist for Firestore rules
-[Trekker] Improve dependency creation guidance
-```
-
-Use this task-description shape:
-
-```text
-Observed during:
-Problem:
-Impact:
-Suggested change:
-Files likely affected:
-Acceptance criteria:
-- The ambiguity is resolved in AGENTS.md, docs, and .codex agents as needed.
-- Markdown role docs and TOML prompts remain in sync.
-- A future agent can follow the revised workflow without extra chat context.
-```
-
-Do not let subagents edit their own role contracts unless the main coordinator explicitly asks for a patch.
-
-## Subagent Dispatch Matrix
-
-Use subagents deliberately:
-
-- New feature planning: after discovery approval, the main agent enters actual Codex Plan Mode and follows the feature-planner protocol before creating Trekker items.
-- Feature design review: classify UI work as `required`, `optional`, or `skip-recorded` during discovery. Required work has a proportional scenario-indexed artifact using `docs/templates/ux-evidence-matrix.md` and a fresh ux-design-reviewer before architecture-design-reviewer; optional and skip-recorded decisions require durable rationale. Architecture retains authority for system boundaries, data, security, and feasibility. Material architecture changes that alter the approved UX contract return through UX design review before user approval.
-- Planning conformance: after the user approves the design and before presenting Trekker task/subtask creation for approval, use the senior-developer-reviewer to review the proposed Trekker plan.
-- Documentation-only, copy-only, or tiny config changes: main agent may handle directly.
-- Every tracked implementation task: dispatch a fresh implementor. After the implementor produces a green diff, invoke `$code-simplification` and dispatch a fresh code simplifier for non-trivial code changes. The coordinator then runs final targeted and proportionate broader verification before dispatching a fresh code reviewer and a fresh task-conformance spec reviewer; do not reuse either reviewer across task boundaries, even within the same epic.
-- For UI work classified `required`, the implementor preserves the approved artifact and cannot redesign or expand scope. After simplification, the coordinator performs per-run bounded capability probes and records task evidence using the canonical matrix template at `docs/templates/ux-evidence-matrix.md`, with build, viewport, state, actions, results, and limitations using synthetic or de-identified local data. Missing prescribed rendered evidence blocks task completion and requires a resumable `Checkpoint:`. Then dispatch the fresh ux-usability-reviewer, code reviewer, and task-conformance reviewer in parallel. A direct changed-surface usability finding blocks; unsupported-by-harness is nonblocking only with complete metadata, fallback, and evidence obligation. No reviewer grants product, architecture, or Trekker authority or may redesign or expand approved UX scope.
-- Any behavior change or bug fix: use the fresh implementor role unless the change is truly mechanical.
-- Before dispatching an implementor for a behavior-bug task, reproduce the problem and identify its root cause, then use the repository `$bugfix-issue-class-audit` skill for every non-mechanical or user-facing behavior bug. A genuinely mechanical localized correction does not require the full audit when the coordinator documents why. For non-mechanical or user-facing bugs, a read-only spec reviewer validates the audit only; this narrow pre-implementation check is not routine task-start requirements discovery and does not replace the post-verification task-conformance review.
-- Task-start spec-review dispatch is prohibited. Do not use the spec reviewer to invent, refine, or gate routine task-start requirements.
-- Task conformance: run the post-verification spec reviewer alongside code review against the final diff, targeted verification evidence, and the Trekker task's approved intent; it checks conformance and does not invent new requirements.
-- Final integration: before publishing an implementation branch or epic handoff,
-  merge, PR approval, or epic closure, run the independent epic branch review with
-  the epic reviewer and fresh epic spec/conformance review with the spec reviewer.
-  Invoke `$epic-development-branch-completion` to coordinate this PR-stage or
-  epic-completion handoff.
-
-Parallel reviewers are allowed. Only one implementor may edit a given file set at a time. Reviewers are read-only unless the main agent explicitly asks them to prepare a patch.
-
-The code-simplification gate is coordinator-owned. Its default scope is only code
-modified by the active task in the current session, and the handoff must explicitly
-authorize every editable file. Repository-wide simplification requires separate,
-explicit authorization. Every non-trivial green code diff requires a fresh
-code-simplifier dispatch, even when it may return no edits. Pre-dispatch skip is allowed
-only for documentation/copy-only work or tiny mechanical configuration changes. No
-meaningful simplification opportunity is a valid no-edit simplifier result, not a
-pre-dispatch skip. Simplifier edits become part of the final task diff and require
-final verification plus fresh code and task-conformance reviews. After substantive
-review-driven fixes, rerun simplification only when those fixes materially reshape or
-reintroduce complexity, and at most once after review per task. Simplifier edits and
-reviewer requests to re-verify do not by themselves start another simplification loop.
-
-An agent may receive a follow-up only for the same Trekker task when the coordinator
-labels it as a same-task continuation and supplies the changed scope, new evidence,
-and the decision needed. A follow-up must not silently expand into another task. For
-post-review fixes in the same task, prefer a second fresh code reviewer; when that is
-not practical, the original reviewer may perform an explicitly labeled delta review
-of only the changes since its prior report. A task-conformance spec reviewer follows
-the same boundary: use a fresh reviewer for each task, while a same-task follow-up is
-limited to an explicitly labeled approved-intent clarification and its revised final
-diff/evidence delta. A material plan conflict must go to senior-developer planning
-conformance, not back to the spec reviewer.
-
-Conformance escalation and re-review are explicit:
-
-- For a small clarification that preserves approved intent, the coordinator updates the active Trekker task, records the decision, and sends the final changed diff and evidence through the affected task reviews again.
-- For a material conflict with the approved task plan, stop task completion and return the plan to the senior-developer implementation-plan reviewer before changing Trekker planning records.
-- For a product, architecture, data, auth, migration, or scope change, return to architecture/design review and obtain the applicable user approval before changing the design or plan.
-- Any fix or clarification that changes the final task diff requires renewed code review and task-conformance review of that changed final diff; after committing a substantive final-integration change, rerun both the epic branch review and fresh epic spec/conformance review.
-- A substantive review-driven task fix gets the single allowed post-review simplification rerun only when complexity was materially reintroduced or reshaped. Whether run or skipped, record the rationale; then verify and review the changed final diff again.
-
-## Subagent Handoff Packet
-
-When dispatching a subagent, the main agent must provide:
-
-- role to use
-- model tier to use
-- Trekker task or epic id
-- task goal and restored Trekker context
-- acceptance criteria
-- files in scope
-- files out of scope
-- current branch and dirty worktree notes
-- expected verification commands
-- expected output format
-
-Subagents must report files changed or reviewed, tests run, findings, risks, any suggested Trekker comment text, and `Workflow feedback:` when the workflow or role instructions made the task harder to execute reliably.
-
-## Required Workflow
-
-Before starting implementation:
-
-1. Run `trekker ready` or inspect the task the user names.
-2. Restore task context:
-   - `trekker task show TREK-ID`
-   - `trekker comment list TREK-ID`
-   - `trekker history --entity TREK-ID`
-   - `trekker dep list TREK-ID`
-3. Create or switch to the focused `codex/` branch for the task or epic before any
-   edits; confirm the branch and unrelated dirty files with `git status --short --branch`.
-4. Mark the selected task `in_progress` before changing files.
-5. Read the relevant code and tests before editing.
-
-### Behavior-Bug Issue-Class Audit (Before Implementor Dispatch)
-
-This coordinator-owned gate applies after reproduction and root-cause identification,
-but before an implementor is dispatched. Invoke the repository
-`$bugfix-issue-class-audit` skill for every non-mechanical or user-facing behavior
-bug; document why a genuinely mechanical bug does not need it. It is bug triage and
-scoping, not Feature Planning and not implementor execution. The coordinator must run a targeted search
-for same-class usages (for example, the shared component, helper, state path,
-validation rule, API contract, or repeated field) and add an audit note to the active
-Trekker task. The note records the root cause, search method and results, every
-candidate inspected, affected and unaffected surfaces with rationale, and the scope
-decision.
-
-For a non-mechanical or user-facing behavior bug, dispatch a read-only spec reviewer
-to validate the audit against the already approved task intent. That reviewer may
-identify an unsupported scope decision or escalation trigger, but must not invent or
-refine requirements. This is the limited issue-class-audit exception to the
-task-start spec-review prohibition; dispatch the normal fresh task-conformance
-reviewer again after implementation verification.
-
-Include the approved complete behavior and file scope, the audit result, and the
-required regression-test matrix in the implementor handoff. Implementors apply that
-scope; they are not responsible for discovering omitted sibling defects while coding.
-Expand the current task only when a finding shares the confirmed root cause, remains
-within approved product intent, and can be implemented and verified as one cohesive
-change. Record the expanded scope in Trekker before dispatch. Use a linked follow-up
-when the finding has a different root cause, independent risk or ownership, requires
-a material scope/design decision, or would prevent focused verification. Search for a
-duplicate and obtain the required user approval before creating or materially changing
-that follow-up; record the linkage and rationale in the audit note.
-
-For behavior changes, use TDD:
-
-1. Write or update a failing test that captures the expected behavior.
-2. Run the targeted test and confirm it fails for the expected reason.
-3. Implement the smallest change that passes.
-4. Run the targeted test again.
-5. Broaden verification when the change touches shared logic, UI flow, storage, auth, deployment, or PWA behavior.
-
-Before pausing:
-
-1. Add a `Checkpoint:` comment to the active Trekker task.
-2. Include what was verified, what changed, and the exact next step.
-3. Include any validated workflow feedback or link to a follow-up Trekker task.
-
-Before marking complete:
-
-1. Run the smallest meaningful verification for the change.
-2. Inspect the task diff and run `git status --short --branch`; confirm only intended
-   task files changed.
-3. Commit all intended task work with a scoped commit before marking the task
-   `completed` or selecting the next task. Record the resulting commit hash in the
-   task's `Summary:` comment.
-4. Add a `Summary:` comment to the Trekker task.
-5. Include TDD evidence for behavior changes: failing test, implementation, passing verification. If TDD was skipped, explain why.
-6. Mark the task `completed`.
-7. Run `trekker ready` and report the next ready task.
-8. If workflow friction was discovered, either document why no change is needed or create/link a follow-up Trekker task.
-
-When the active task belongs to an epic, continue with the next ready, in-scope
-task in that epic unless a user decision, external blocker, meaningful scope
-expansion, explicit pause/stop request, or authorized-work boundary requires a
-handoff. The new-feature planning boundary below is such an authorized-work
-boundary: after planning Task 1, do not continue to Task 2 without fresh explicit
-user approval. Do not switch to an unrelated ready task merely because it appears
-in `trekker ready`.
-
-Before final handoff for non-trivial tracked, PR-bound, or epic work, run an
-after-action workflow audit: confirm no required step needed a user reminder, the
-repository handoff endpoint was reached, known sandbox/permission fallbacks were
-used rather than retried blindly, reviewer feedback did not expose scope or
-bookkeeping drift, and Trekker matches reality. Inventory every residual or
-nonblocking handoff risk (including deferred verification, reviewer notes, and PR
-body caveats), search for a duplicate, then give each one a durable Trekker
-disposition: link an existing task, create or extend an appropriate backlog task, or
-record an intentional-not-tracked exception in the active task's `Summary:` (or
-`Checkpoint:` when pausing) with the duplicate-search result and concise rationale.
-Creating or materially changing a backlog item still requires the user approval that
-applies to Trekker writes; until that approval exists, leave the active task
-checkpointed with the proposed item and rationale. Treat a user-reminded workflow
-miss as `Workflow feedback:` and validate it for `EPIC-6`; state in the final
-response whether no follow-up was found or name the Trekker item created or updated.
-
-Do not mark work complete without a `Summary:` comment.
-
-## Tracking Rules
-
-- Search before creating tasks: use one distinctive keyword at a time, such as `trekker search "auth"` or `trekker search "migration"`.
-- Serialize Trekker writes (create, update, dependency, and comment operations). Run reads in parallel only when they are independent and known safe; on a transient `database is locked` error, wait briefly and retry the failed command sequentially.
-- Prefer extending existing tasks over creating duplicates.
-- Keep one active implementation task when practical.
-- If a task is partly done, leave it `in_progress` with a `Checkpoint:` comment.
-- If work is blocked by outside setup or user action, document the blocker clearly in Trekker.
-- Do not use ad hoc notes, chat summaries, or local todo files as the durable system of record.
-
-## New Feature Planning
-
-Use `docs/feature-planning.md` for new feature work.
-
-Codex planning is a temporary scratchpad for brainstorming and shaping the feature. Trekker is the durable source of truth after the user approves the plan.
-
-Feature planning is a main-session workflow, not a hidden delegated workflow. In
-this repository, "Feature Planning Mode" means the main coordinator is actually in
-Codex Plan Mode through implementation-plan approval and the user's authorization
-for Trekker creation and Task 1. The coordinator must then transition to write-
-capable Default mode before any Trekker write, branch creation, spec persistence,
-commit, or Task 1 execution. The main agent may ask the feature-planner-advisor for
-an advisory draft, but the main agent owns the planning conversation, approval
-gates, review integration, and Trekker creation.
-
-Before entering Codex Plan Mode for formal feature planning, invoke the repository
-`$feature-discovery` skill for every proposed feature, capability, workflow, or
-substantial behavior change. Discovery is a collaborative, pre-planning
-conversation: it produces a user-approved Discovery Brief and Decision Log before
-the formal duplicate-search gate, feature-planner-advisor, design review, or
-Trekker planning begins. The coordinator may inspect repository or Trekker context
-needed to ground discovery; that exploratory lookup does not replace the formal
-duplicate search after discovery. Skip it
-only when the user explicitly opts out or the request is a small, fully specified
-mechanical task; record the applicable exception and rationale. If discovery shows
-the request is actually a bug fix, refactor, or fully specified execution task,
-route it to that workflow instead of forcing feature planning.
-
-Planning flow:
-
-1. Complete `$feature-discovery` and obtain user approval of its Discovery Brief,
-   unless a documented exception applies.
-2. Search Trekker for duplicates or related work as the formal planning gate (even
-   if exploratory Trekker context was inspected to ground discovery).
-3. Brainstorm and identify open questions without creating Trekker items.
-4. Classify UI work as `required`, `optional`, or `skip-recorded`. For required work, create the proportional scenario-indexed UX artifact using `docs/templates/ux-evidence-matrix.md`; optional and skip-recorded decisions require durable rationale.
-   Re-probe capability on every future required run; do not cache waivers.
-5. Draft an epic-level design spec.
-6. For required work, run a fresh ux-design-reviewer before architecture-design-reviewer. Architecture retains authority for system boundaries, data, security, and feasibility.
-7. Run architecture/design review, validate the feedback, and either incorporate it or record why it was not accepted. Material architecture changes that alter the approved UX contract return through UX design review before user approval.
-8. Present the revised design spec to the user for approval.
-9. Choose the durable spec path under `docs/specs/`; every approved feature plan
-   will save its spec there during planning Task 1.
-10. Convert the approved design into an implementation plan: epic, tasks, subtasks, dependencies, and verification. Task 1 must create or switch to the focused `codex/` epic feature branch, save and commit the approved spec, and record the branch name, spec path, and planning commit hash on the epic.
-11. Run planning conformance with the senior-developer implementation-plan reviewer, validate the feedback, and either incorporate it or record why it was not accepted.
-12. While still in Codex Plan Mode, ask the user to approve the implementation plan and authorize Trekker creation plus planning Task 1 only.
-13. After approval, transition out of Codex Plan Mode into write-capable Default mode before any Trekker write, branch creation, spec persistence, commit, or Task 1 execution.
-14. In Default mode, create Trekker epic/task/subtask records and dependencies.
-15. In Default mode, execute only Task 1. Complete it with its scoped planning commit and `Summary:`, and record the branch/spec/planning-commit references on the epic. Task 1 completion is the explicit end of the overall discovery, design, and planning handoff, although Codex Plan Mode ended after approval in step 12.
-16. Validate and capture planning-funnel workflow feedback under `EPIC-6`, or explicitly record why it is deferred.
-17. Leave Task 2 and every later implementation task `todo`, leave the epic open, and hand off from Trekker. Ask for a fresh explicit user approval to continue before starting or marking Task 2 (or any implementation task) `in_progress`.
-18. Mirror only the current session in `update_plan` after Trekker is correct.
-
-Do not create Trekker epics, tasks, or subtasks from brainstorming unless the user has approved the design and implementation plan.
-Approval of the implementation plan plus authorization for Trekker creation and
-planning Task 1 does not authorize feature implementation. Without the separate
-continuation approval, the branch, committed spec, epic references, task statuses,
-and Task 1 `Summary:` must make the handoff fully resumable without chat context.
-
-## Repo Safety
-
-- Do not revert user changes unless the user explicitly asks.
-- Treat untracked files as user-owned unless you created them in the current task.
-- Run `git status --short --branch` before edits and before the final response.
-- Keep edits scoped to the active task.
-- Avoid unrelated refactors, formatting churn, dependency churn, and generated output unless required.
-- Never commit secrets. Production Firebase values belong in Vercel environment variables or local ignored env files.
-
-## Branch And PR Cadence
-
-At PR stage or epic completion, invoke `$epic-development-branch-completion`. It
-checks per-task commit and `Summary:` boundaries, prepares cumulative and complete
-working-tree evidence, runs the two final-integration gates, and guides the draft-PR
-handoff while the coordinator retains Trekker, push, PR, and approval ownership.
-
-- Prefer a focused branch per task or small related task set.
-- Use the `codex/` branch prefix unless the user asks for another naming scheme.
-- Keep branch scope aligned with Trekker scope.
-- Open a PR when the task or task set is ready for review.
-- Run the code reviewer before marking a non-trivial task complete.
-- Before PR stage or epic completion, run two independent final-integration gates: an
-  epic branch review and an epic spec/conformance review. Both reviewers inspect the
-  cumulative `git merge-base <target> HEAD` range through `HEAD`, not only unstaged
-  changes, and separately receive `git status --short --branch`, `git diff`, and
-  `git diff --cached` so staged and unstaged integration work is both visible.
-- If a final-integration finding requires a substantive change, commit the intended
-  post-review fix first. Then re-run both final-integration reviews against the
-  updated committed range and current clean or fully reported working-tree evidence;
-  begin another loop only when a further substantive change is required.
-- For implementation branch or epic work, the default review handoff is a draft PR unless the user explicitly opts out: complete both final-integration reviews, commit and push intended changes, open the draft PR, and confirm required checks are visible, passing, or documented with exact next steps. Prefer `gh` when the GitHub connector cannot create PRs, and request escalation for known sandbox-limited git or `gh` publish operations.
-- When creating or editing a PR with `gh`, write a multiline Markdown body to a temporary file and pass it with `--body-file`; never pass a shell-escaped string containing literal `\n`. Remove the temporary file after the command succeeds.
-
-## Review Expectations
-
-Every task should get a quick spec review and code review before completion:
-
-- Does the implementation satisfy the Trekker task and any referenced spec?
-- Are edge cases handled for the changed behavior?
-- For behavior-bug tasks, does the final diff and regression-test matrix cover every affected surface in the approved issue-class audit, with no unexplained divergence?
-- Are failures visible enough to troubleshoot?
-- Did the right tests run?
-- Is there any production setup or deployment checklist item still open?
-
-If a user asks for a review, lead with findings ordered by severity, using file and line references when applicable.
-
-For non-trivial tasks, use the specialized role docs:
-
-- Implementor for TDD implementation.
-- Code review and task conformance after targeted verification, against the final diff and approved Trekker intent.
-- Both final-integration gates—epic branch review and fresh epic spec/conformance
-  review—before merging, closing an epic, or publishing an implementation handoff.
-
-Routine task-start spec review is prohibited. Escalate a material requirements or
-design conflict through the conformance rules instead of using the spec reviewer to
-invent requirements.
-
-## Project Commands
+## Project commands
 
 - Install: `npm install`
-- Dev server: `npm run dev`
-- Build: `npm run build`
 - Tests: `npm test -- --run`
+- Build: `npm run build`
 - Lint: `npm run lint`
-- Firebase emulators: `npm run emulators`
-
-For narrow changes, run targeted tests when available. For deployment or shared behavior, run build plus relevant tests.
-
-## App Context
-
-This is a React/Vite adaptive workout app using Firebase Auth, Firestore, Vercel, and PWA support.
-
-Important files:
-
-- `src/App.jsx`: auth gate and main view routing
-- `src/components/Login.jsx`: Google sign-in UI
-- `src/components/Generator.jsx`: workout generation flow
-- `src/components/Settings.jsx`: settings and catalog editing
-- `src/components/WorkoutView.jsx`: workout history and saving
-- `src/utils/engine.js`: workout generation logic
-- `src/utils/storage.js`: Firestore-backed storage and migration helpers
-- `src/utils/firebase.js`: Firebase initialization and emulator wiring
-- `firestore.rules`: production Firestore user isolation rules
-- `vite.config.js`: Vite and PWA configuration
-- `.env.example`: required production Firebase env vars
-
-See also:
-
-- `docs/agent-workflow.md`
-- `docs/feature-planning.md`
-- `docs/project-context.md`
-- `docs/agents/main-coordinator.md`
-- `docs/agents/feature-planner.md`
-- `docs/agents/architecture-design-reviewer.md`
-- `docs/agents/senior-developer-reviewer.md`
-- `docs/agents/implementor.md`
-- `docs/agents/code-simplifier.md`
-- `docs/agents/spec-reviewer.md`
-- `docs/agents/code-reviewer.md`
-- `docs/agents/epic-reviewer.md`
-- `.codex/agents/`
+- Firebase rules: `npm run ci:rules`

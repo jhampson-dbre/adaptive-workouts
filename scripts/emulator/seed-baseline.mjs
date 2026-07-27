@@ -56,6 +56,7 @@ export async function seedBaseline({ projectId = BASELINE_PROJECT_ID, hosts, pro
       email: sourceUser.email,
       displayName: sourceUser.displayName,
       emailVerified: sourceUser.emailVerified,
+      customClaims: sourceUser.customClaims,
       providerData: sourceUser.providerUserInfo.map(provider => ({
         uid: provider.rawId,
         providerId: provider.providerId,
@@ -101,6 +102,9 @@ export async function verifyBaseline({
       displayName: expectedAuthUser.displayName,
       emailVerified: expectedAuthUser.emailVerified,
     }, `Auth user ${BASELINE_USER_ID}`);
+    if (JSON.stringify(user.customClaims) !== JSON.stringify(expectedAuthUser.customClaims)) {
+      throw new Error(`Auth user ${BASELINE_USER_ID}.customClaims mismatch: expected ${JSON.stringify(expectedAuthUser.customClaims)}, received ${JSON.stringify(user.customClaims)}`);
+    }
     if (user.providerData.length !== 1) throw new Error(`Auth user must contain exactly one provider; received ${user.providerData.length}`);
     const provider = user.providerData.find(item => item.providerId === BASELINE_PROVIDER_ID);
     if (!provider || provider.uid !== BASELINE_PROVIDER_UID

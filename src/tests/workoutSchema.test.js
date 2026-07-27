@@ -14,6 +14,7 @@ import {
   isValidV2WorkoutEnvelope,
   isValidV3ExerciseOccurrence,
   isValidV3WorkoutDocument,
+  isValidV4WorkoutDocument,
   normalizeCatalogExercise,
   normalizeWorkoutSettings,
   wasPerformed,
@@ -133,14 +134,115 @@ const validV3Workout = {
   exercises: [v3WeightedExercise, v3BodyweightExercise, v3SimpleExercise],
 };
 
+const validV4Workout = {
+  ...buildCompletedV3WorkoutDocument(validV3Workout),
+  schemaVersion: 4,
+  phaseDurations: {
+    warmup: { plannedSeconds: 600, actualSeconds: 0 },
+    performance: { plannedSeconds: 1800, actualSeconds: 125 },
+    cooldown: { plannedSeconds: 300, actualSeconds: 0 },
+  },
+  actualDurationSeconds: 125,
+};
+
 describe('workout schema', () => {
-  it('normalizes missing and invalid default rest values without changing valid settings', () => {
-    expect(normalizeWorkoutSettings({ staleThreshold: 4 })).toEqual({ staleThreshold: 4, defaultRestSeconds: 60 });
-    expect(normalizeWorkoutSettings({ defaultRestSeconds: 4 })).toEqual({ defaultRestSeconds: 60 });
-    expect(normalizeWorkoutSettings({ defaultRestSeconds: 601 })).toEqual({ defaultRestSeconds: 60 });
-    expect(normalizeWorkoutSettings({ defaultRestSeconds: 60.5 })).toEqual({ defaultRestSeconds: 60 });
-    expect(normalizeWorkoutSettings({ defaultRestSeconds: 90 })).toEqual({ defaultRestSeconds: 90 });
+  it('classifies wholly valid v4 documents, including zero phase durations', () => {
+    expect(isValidV4WorkoutDocument(validV4Workout)).toBe(true);
+    expect(classifyWorkoutDocument(validV4Workout)).toBe('valid-v4');
+    expect(isValidV4WorkoutDocument({ ...validV4Workout, id: 'firestore-path-id' })).toBe(true);
+    expect(isValidV4WorkoutDocument({
+      ...validV4Workout,
+      actualDurationSeconds: 0,
+      phaseDurations: {
+        warmup: { plannedSeconds: 0, actualSeconds: 0 },
+        performance: { plannedSeconds: 0, actualSeconds: 0 },
+        cooldown: { plannedSeconds: 0, actualSeconds: 0 },
+      },
+    })).toBe(true);
   });
+
+  it.each([
+    [{ ...validV4Workout, phaseDurations: {} }],
+    [{ ...validV4Workout, phaseDurations: { ...validV4Workout.phaseDurations, extra: {} } }],
+    [{ ...validV4Workout, phaseDurations: { ...validV4Workout.phaseDurations, warmup: { plannedSeconds: -1, actualSeconds: 0 } } }],
+    [{ ...validV4Workout, phaseDurations: { ...validV4Workout.phaseDurations, warmup: { plannedSeconds: 1.5, actualSeconds: 0 } } }],
+    [{ ...validV4Workout, actualDurationSeconds: 126 }],
+    [{ ...validV4Workout, exercises: [{ ...v3SimpleExercise, setRecords: v3SimpleExercise.setRecords.map(record => ({ ...record, completed: false, workDurationSeconds: null })) }] }],
+    [{ ...validV4Workout, exercises: [{ ...v3WeightedExercise, occurrenceId: 'bench:0' }, { ...v3WeightedExercise, occurrenceId: 'bench:0' }] }],
+    [{ ...validV4Workout, exercises: [{ ...v3WeightedExercise, setRecords: [{ ...v3WeightedExercise.setRecords[0], plannedRestSeconds: null }, v3WeightedExercise.setRecords[1]] }] }],
+    [{ ...validV4Workout, activePhase: 'warmup' }],
+    [{ ...validV4Workout, exercises: [{ ...v3WeightedExercise, _activeRest: { startedAt: 1 } }] }],
+  ])('rejects malformed v4 saved DTOs as a whole', workout => {
+    expect(isValidV4WorkoutDocument(workout)).toBe(false);
+    expect(classifyWorkoutDocument(workout)).toBe('malformed-versioned');
+  });
+
+  it('admits performed v4 occurrences only from a wholly valid document', () => {
+    expect(wasPerformed(validV4Workout, v3WeightedExercise)).toBe(true);
+    expect(wasPerformed({ ...validV4Workout, actualDurationSeconds: 999 }, v3WeightedExercise)).toBe(false);
+  });
+
+  it.each([
+    ['exercise bookkeeping', workout => ({
+      ...workout,
+      exercises: workout.exercises.map((exercise, index) => (
+        index === 0 ? { ...exercise, expanded: true, activeRestAttemptId: 'attempt-1' } : exercise
+      )),
+    })],
+    ['set timer and input state', workout => ({
+      ...workout,
+      exercises: workout.exercises.map((exercise, exerciseIndex) => exerciseIndex === 0 ? ({
+        ...exercise,
+        setRecords: exercise.setRecords.map((record, recordIndex) => recordIndex === 0
+          ? { ...record, workStartedAt: 100, restStartedAt: 200, inputDirty: true }
+          : record),
+      }) : exercise),
+    })],
+    ['recommendation bookkeeping', workout => ({
+      ...workout,
+      exercises: workout.exercises.map((exercise, exerciseIndex) => exerciseIndex === 0 ? ({
+        ...exercise,
+        setRecords: exercise.setRecords.map((record, recordIndex) => recordIndex === 0 ? ({
+          ...record,
+          recommendationReason: { ...record.recommendationReason, transientExplanationState: true },
+        }) : record),
+      }) : exercise),
+    })],
+  ])('rejects unknown nested v4 %s', (_label, mutate) => {
+    const malformed = mutate(validV4Workout);
+    expect(isValidV4WorkoutDocument(malformed)).toBe(false);
+    expect(classifyWorkoutDocument(malformed)).toBe('malformed-versioned');
+  });
+  it('normalizes missing and invalid default rest values without changing valid settings', () => {
+    expect(normalizeWorkoutSettings({ staleThreshold: 4 })).toMatchObject({ staleThreshold: 4, defaultRestSeconds: 60 });
+    expect(normalizeWorkoutSettings({ defaultRestSeconds: 4 })).toMatchObject({ defaultRestSeconds: 60 });
+    expect(normalizeWorkoutSettings({ defaultRestSeconds: 601 })).toMatchObject({ defaultRestSeconds: 60 });
+    expect(normalizeWorkoutSettings({ defaultRestSeconds: 60.5 })).toMatchObject({ defaultRestSeconds: 60 });
+    expect(normalizeWorkoutSettings({ defaultRestSeconds: 90 })).toMatchObject({ defaultRestSeconds: 90 });
+  });
+
+  it('normalizes canonical phase settings with legacy Warmup fallback and defaults', () => {
+    expect(normalizeWorkoutSettings({ warmupSeconds: 0, cooldownSeconds: 3600 }))
+      .toMatchObject({ warmupSeconds: 0, cooldownSeconds: 3600, defaultRestSeconds: 60 });
+    expect(normalizeWorkoutSettings({ warmupSeconds: 600, warmupTime: 45, cooldownSeconds: 300 }))
+      .toMatchObject({ warmupSeconds: 600, cooldownSeconds: 300 });
+    expect(normalizeWorkoutSettings({ warmupTime: 10 }))
+      .toMatchObject({ warmupSeconds: 600, cooldownSeconds: 300 });
+    expect(normalizeWorkoutSettings({ warmupSeconds: 61, warmupTime: 20 }))
+      .toMatchObject({ warmupSeconds: 600 });
+    expect(normalizeWorkoutSettings({ warmupTime: 10.5 }))
+      .toMatchObject({ warmupSeconds: 600 });
+    expect(normalizeWorkoutSettings({ staleThreshold: 4 }))
+      .toMatchObject({ warmupSeconds: 600, cooldownSeconds: 300, staleThreshold: 4 });
+  });
+
+  it.each([60.5, Number.POSITIVE_INFINITY, 61, -60, 3660])(
+    'rejects invalid canonical phase durations without rounding: %p',
+    value => {
+      expect(normalizeWorkoutSettings({ warmupSeconds: value, cooldownSeconds: value }))
+        .toMatchObject({ warmupSeconds: 600, cooldownSeconds: 300 });
+    },
+  );
 
   it('accepts optional valid catalog rest and rejects invalid explicit overrides', () => {
     expect(isValidCatalogExercise({ ...weightedExercise, restSeconds: 5 })).toBe(true);

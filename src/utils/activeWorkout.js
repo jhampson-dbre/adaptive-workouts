@@ -1,8 +1,21 @@
 import { calculateBackoffRecommendation } from './progression';
-import { calculateElapsedSeconds } from './workoutTiming';
+import {
+  calculateElapsedSeconds,
+  closePhaseLedger,
+  createPhaseLedger,
+  getPhaseLedgerSeconds,
+  transitionPhaseLedger,
+} from './workoutTiming';
 
 const WEIGHTED_FIELDS = new Set(['actualWeight', 'actualReps']);
 const BODYWEIGHT_FIELDS = new Set(['fullReps', 'assistedReps', 'eccentricReps']);
+const GENERATED_MUTATIONS = new Set([
+  'toggleSimpleExercise', 'toggleTrackedSet', 'editWeightedActual', 'editBodyweightActual',
+]);
+const PERFORMANCE_MUTATIONS = new Set([
+  'startSet', 'cancelSet', 'confirmSet', 'undoSet', 'editWeightedActual', 'editBodyweightActual',
+]);
+const SET_MUTATIONS = new Set([...GENERATED_MUTATIONS, ...PERFORMANCE_MUTATIONS]);
 
 function isValidActual(field, value) {
   const parsed = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
@@ -44,6 +57,10 @@ function isTimestamp(value) {
   return Number.isFinite(value);
 }
 
+function isPhaseTimestamp(value) {
+  return Number.isInteger(value);
+}
+
 function timerId(kind, sequence) {
   return `${kind}-${sequence}`;
 }
@@ -82,6 +99,67 @@ function deepFreeze(value) {
     if (nested && typeof nested === 'object' && !Object.isFrozen(nested)) deepFreeze(nested);
   }
   return value;
+}
+
+function hasCompletedWork(exercises) {
+  return exercises.some(exercise => exercise.setRecords?.some(record => record.completed));
+}
+
+function allSetsCompleted(exercises) {
+  const records = exercises.flatMap(exercise => exercise.setRecords ?? []);
+  return records.length > 0 && records.every(record => record.completed);
+}
+
+function isFinalOutstandingSet(exercises, exerciseIndex, setIndex) {
+  return exercises.every((exercise, currentExerciseIndex) => exercise.setRecords?.every((record, currentSetIndex) => (
+    record.completed || (currentExerciseIndex === exerciseIndex && currentSetIndex === setIndex)
+  )));
+}
+
+function resolveActiveTiming(state, timestamp) {
+  return {
+    ...state,
+    activeWorkTimer: null,
+    exercises: state.exercises.map(exercise => ({
+      ...exercise,
+      setRecords: exercise.setRecords?.map(record => {
+        if (!record._activeRest) return record;
+        const { _activeRest, ...rest } = record;
+        return {
+          ...rest,
+          actualRestSeconds: calculateElapsedSeconds(_activeRest.startedAt, timestamp),
+        };
+      }),
+    })),
+  };
+}
+
+function phaseTransition(state, phase, timestamp) {
+  const phaseLedger = transitionPhaseLedger(state.phaseLedger, phase, timestamp);
+  if (phaseLedger === state.phaseLedger) return state;
+  return { ...state, phase, phaseLedger };
+}
+
+function canMutateInPhase(state, action) {
+  if (!state._phaseTimingEnabled) return true;
+  if (!SET_MUTATIONS.has(action.type)) return true;
+  if (state.phase === 'generated') return GENERATED_MUTATIONS.has(action.type);
+  if (state.phase === 'warmup') return action.type === 'startSet';
+  if (state.phase === 'performance') return PERFORMANCE_MUTATIONS.has(action.type);
+  if (state.phase !== 'cooldown' || action.type !== 'undoSet' || !isPhaseTimestamp(action.timestamp)) {
+    return false;
+  }
+  return state._cooldownUndoTarget?.exerciseIndex === action.exerciseIndex
+    && state._cooldownUndoTarget?.setIndex === action.setIndex;
+}
+
+function freezePhaseCandidate(ledger, finishRequestedAtEpochMs) {
+  const phaseActualSeconds = { ...ledger.closedSeconds };
+  return deepFreeze({
+    phaseActualSeconds,
+    actualDurationSeconds: Object.values(phaseActualSeconds).reduce((total, seconds) => total + seconds, 0),
+    finishRequestedAtEpochMs,
+  });
 }
 
 function recomputeImmediateNext(exercise, sourceIndex) {
@@ -127,7 +205,7 @@ function relockImmediateNext(exercise, sourceIndex) {
   return { ...exercise, setRecords };
 }
 
-export function initializeActiveWorkout(exercises) {
+export function initializeActiveWorkout(exercises, { phaseTimingEnabled = false } = {}) {
   if (!Array.isArray(exercises)) throw new TypeError('Workout exercises must be an array');
   const cloned = structuredClone(exercises);
   for (const exercise of cloned) {
@@ -160,27 +238,97 @@ export function initializeActiveWorkout(exercises) {
     workoutStartedAt: null,
     activeWorkTimer: null,
     _nextTimerId: 1,
+    phase: 'generated',
+    phaseLedger: null,
+    phaseCandidate: null,
+    _cooldownUndoTarget: null,
+    _phaseTimingEnabled: phaseTimingEnabled,
   };
 }
 
 export function activeWorkoutReducer(state, action) {
   if (action.type === 'startWorkout') {
-    if (state.workoutStartedAt !== null || !isTimestamp(action.timestamp)) return state;
-    return { ...state, workoutStartedAt: action.timestamp };
+    if (!state._phaseTimingEnabled) {
+      if (state.workoutStartedAt !== null || !isTimestamp(action.timestamp)) return state;
+      return { ...state, workoutStartedAt: action.timestamp };
+    }
+    if (state.phase !== 'generated' || state.workoutStartedAt !== null || !isPhaseTimestamp(action.timestamp)) {
+      return state;
+    }
+    return {
+      ...state,
+      workoutStartedAt: action.timestamp,
+      phase: 'warmup',
+      phaseLedger: createPhaseLedger('warmup', action.timestamp),
+    };
   }
+
+  if (action.type === 'confirmEarlyFinish') {
+    if (state.phase !== 'performance' || state.activeWorkTimer || !isPhaseTimestamp(action.timestamp)) return state;
+    if (!hasCompletedWork(state.exercises)) {
+      return {
+        ...state,
+        workoutStartedAt: null,
+        phase: 'cancelled',
+        phaseLedger: null,
+        phaseCandidate: null,
+        activeWorkTimer: null,
+        _cooldownUndoTarget: null,
+      };
+    }
+    const acceptedAt = Math.max(state.phaseLedger.lastAcceptedEpochMs, action.timestamp);
+    return {
+      ...phaseTransition(resolveActiveTiming(state, acceptedAt), 'cooldown', action.timestamp),
+      _cooldownUndoTarget: null,
+    };
+  }
+
+  if (action.type === 'resumeWorkout') {
+    return state.phase === 'cooldown' && isPhaseTimestamp(action.timestamp)
+      ? { ...phaseTransition(state, 'performance', action.timestamp), _cooldownUndoTarget: null }
+      : state;
+  }
+
+  if (action.type === 'finishWorkout') {
+    if (state.phase !== 'cooldown' || !state.phaseLedger || !isPhaseTimestamp(action.timestamp)) return state;
+    const phaseLedger = closePhaseLedger(state.phaseLedger, action.timestamp);
+    return {
+      ...state,
+      phase: 'review',
+      phaseLedger,
+      phaseCandidate: freezePhaseCandidate(phaseLedger, action.timestamp),
+    };
+  }
+
+  if (action.type === 'reviewBack') {
+    if (state.phase !== 'review' || !state.phaseLedger || !isPhaseTimestamp(action.timestamp)) return state;
+    const acceptedAt = Math.max(state.phaseLedger.lastAcceptedEpochMs, action.timestamp);
+    const phaseLedger = {
+      ...state.phaseLedger,
+      openPhase: 'cooldown',
+      openedAtEpochMs: acceptedAt,
+      lastAcceptedEpochMs: acceptedAt,
+    };
+    return { ...state, phase: 'cooldown', phaseLedger, phaseCandidate: null };
+  }
+
+  if (!canMutateInPhase(state, action)) return state;
 
   const exercise = state.exercises[action.exerciseIndex];
   if (!exercise) return state;
 
   if (action.type === 'startSet') {
-    if (state.workoutStartedAt === null || state.activeWorkTimer || !isTimestamp(action.timestamp)) {
+    if (state.workoutStartedAt === null
+      || state.activeWorkTimer
+      || !isTimestamp(action.timestamp)
+      || (state._phaseTimingEnabled && state.phase === 'warmup' && !isPhaseTimestamp(action.timestamp))) {
       return state;
     }
     const record = exercise.setRecords?.[action.setIndex];
     if (!record || getSetStatus(exercise, action.setIndex) !== 'ready') return state;
     const withClosedRest = closePriorRest(state, action.exerciseIndex, action.setIndex, action.timestamp);
     const sequence = withClosedRest._nextTimerId;
-    return {
+    const updated = {
       ...withClosedRest,
       activeWorkTimer: {
         id: timerId('work', sequence),
@@ -191,6 +339,9 @@ export function activeWorkoutReducer(state, action) {
       },
       _nextTimerId: sequence + 1,
     };
+    return updated.phase === 'warmup'
+      ? phaseTransition(updated, 'performance', action.timestamp)
+      : updated;
   }
 
   if (action.type === 'cancelSet') {
@@ -211,7 +362,10 @@ export function activeWorkoutReducer(state, action) {
       || !record
       || record.completed
       || action.setIndex !== confirmedPrefixLength(exercise.setRecords)
-      || !canConfirmSet(exercise, record)) {
+      || !canConfirmSet(exercise, record)
+      || (state._phaseTimingEnabled
+        && isFinalOutstandingSet(state.exercises, action.exerciseIndex, action.setIndex)
+        && !isPhaseTimestamp(action.timestamp))) {
       return state;
     }
 
@@ -242,10 +396,17 @@ export function activeWorkoutReducer(state, action) {
         completed: true,
       });
     }
-    return {
+    const result = {
       ...updated,
       activeWorkTimer: null,
       _nextTimerId: isFinal ? sequence : sequence + 1,
+    };
+    if (!result._phaseTimingEnabled
+      || result.phase !== 'performance'
+      || !allSetsCompleted(result.exercises)) return result;
+    return {
+      ...phaseTransition(result, 'cooldown', action.timestamp),
+      _cooldownUndoTarget: { exerciseIndex: action.exerciseIndex, setIndex: action.setIndex },
     };
   }
 
@@ -281,7 +442,9 @@ export function activeWorkoutReducer(state, action) {
         completed: updated.exercises[action.exerciseIndex].setRecords.some(item => item.completed),
       });
     }
-    return updated;
+    return updated.phase === 'cooldown'
+      ? { ...phaseTransition(updated, 'performance', action.timestamp), _cooldownUndoTarget: null }
+      : updated;
   }
 
   if (action.type === 'toggleSimpleExercise') {
@@ -350,6 +513,10 @@ export function activeWorkoutReducer(state, action) {
   }
 
   return state;
+}
+
+export function getPhaseElapsedSeconds(state, phase, timestamp) {
+  return getPhaseLedgerSeconds(state.phaseLedger, phase, timestamp);
 }
 
 export function resolveFinishCandidate(state, timestamp) {

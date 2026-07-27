@@ -95,7 +95,26 @@ function v3Workout({
   return { id, schemaVersion: 3, status, date, actualDurationSeconds: 1800, exercises };
 }
 
+function v4Workout(options = {}) {
+  const base = v3Workout(options);
+  return {
+    ...base,
+    schemaVersion: 4,
+    phaseDurations: {
+      warmup: { plannedSeconds: 600, actualSeconds: 0 },
+      performance: { plannedSeconds: 1800, actualSeconds: 1800 },
+      cooldown: { plannedSeconds: 300, actualSeconds: 0 },
+    },
+  };
+}
+
 describe('next-session weighted progression', () => {
+  it('uses valid v4 snapshots as anchors and ignores malformed v4 snapshots', () => {
+    expect(getNextSessionRecommendation(currentExercise, [v4Workout({ id: 'v4', exercises: [v3Occurrence({ actualWeight: 110 })] })]))
+      .toMatchObject({ sourceWorkoutId: 'v4', recommendedWeight: 120 });
+    expect(getNextSessionRecommendation(currentExercise, [{ ...v4Workout({ id: 'bad', exercises: [v3Occurrence({ actualWeight: 110 })] }), actualDurationSeconds: 1 }]))
+      .toMatchObject({ decision: 'starting', sourceWorkoutId: null });
+  });
   it('requires successfully loaded history to be an array', () => {
     expect(() => getNextSessionRecommendation(currentExercise, null)).toThrow(/history.*array/i);
     expect(() => getNextSessionRecommendation(currentExercise, {})).toThrow(/history.*array/i);

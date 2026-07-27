@@ -4,7 +4,6 @@ import { spawnSync } from 'node:child_process';
 import { buildScenario, scenarioDefinitions } from '../../scripts/emulator/scenarios/index.mjs';
 import { scenarioManifest } from '../../scripts/emulator/scenarios/manifest.mjs';
 import { mapScenarioFailure, replaceScenarioHistory } from '../../scripts/emulator/scenarios/load.mjs';
-import { assertManifestCompatibility } from '../../scripts/emulator/scenarios/validate-manifest.mjs';
 import { isValidV3WorkoutDocument } from '../utils/workoutSchema';
 import { getNextSessionRecommendation } from '../utils/progression';
 import { generateWorkout } from '../utils/engine';
@@ -169,12 +168,7 @@ describe('emulator history scenarios', () => {
     expect([...history.entries()]).toEqual(original);
   });
 
-  it('keeps the self-contained manifest compatible with the pinned canonical template', () => {
+  it('exposes stable scenario metadata', () => {
     expect(scenarioManifest.fixtureRevision).toBe('emulator-baseline-v1');
-    expect(assertManifestCompatibility({ gitShow: () => scenarioManifest.uxEvidence.requiredFields.map(field => `| ${field} |`).join('\n') })).toBe(true);
-    expect(() => assertManifestCompatibility({
-      manifest: { ...scenarioManifest, revision: 'unknown-revision' },
-      gitShow: () => scenarioManifest.uxEvidence.requiredFields.map(field => `| ${field} |`).join('\n'),
-    })).toThrow(/unknown manifest revision/i);
   });
 });

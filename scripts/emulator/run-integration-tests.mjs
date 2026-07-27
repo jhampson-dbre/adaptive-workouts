@@ -13,11 +13,11 @@ const configPath = path.resolve('firebase.emulator-test.json');
 const projectId = 'demo-project';
 const totalStartedAt = Date.now();
 
-const runFocusedIntegration = async hosts => {
+const runFocusedIntegration = async (hosts, testFile, label) => {
   const child = spawnOwnedProcess(process.execPath, [
     path.resolve('node_modules/vitest/vitest.mjs'),
     'run',
-    'src/tests/emulatorBaseline.integration.test.js',
+    testFile,
     '--fileParallelism=false',
     '--testTimeout=30000',
     '--hookTimeout=30000',
@@ -32,7 +32,7 @@ const runFocusedIntegration = async hosts => {
     stdio: 'inherit',
   });
   await waitForOwnedChild(child, {
-    label: 'Focused emulator integration',
+    label,
     timeoutMs: 60_000,
   });
 };
@@ -121,8 +121,10 @@ export async function runIntegrationTests() {
       seedProfile: 'test',
     });
     console.log(`[integration] canonical startup/seed/verification passed in ${Date.now() - canonicalStartedAt}ms`);
-    await runFocusedIntegration(canonicalStack.hosts);
-    console.log(`[integration] fixed identity, rules-backed reads, and canonical reset passed in ${Date.now() - canonicalStartedAt}ms`);
+    await runFocusedIntegration(canonicalStack.hosts, 'src/tests/emulatorBaseline.integration.test.js', 'Baseline emulator integration');
+    await runFocusedIntegration(canonicalStack.hosts, 'src/tests/immutableWorkoutSave.integration.test.js', 'Immutable-save integration');
+    await runFocusedIntegration(canonicalStack.hosts, 'src/tests/firestore.rules.test.js', 'Firestore rules suite');
+    console.log(`[integration] baseline, immutable-save, and rules suites passed in ${Date.now() - canonicalStartedAt}ms`);
     await canonicalStack.stop();
     canonicalStack = undefined;
 

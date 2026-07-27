@@ -8,6 +8,8 @@ const markers = [
   'google-peach-otter-880',
   'emulator-baseline-v1',
   'emulator-baseline-auth-v1',
+  'emulator-baseline-auth-v2',
+  'private-access-scenario-control-v1',
 ];
 
 const filesUnder = async directory => {
