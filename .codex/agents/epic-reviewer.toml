@@ -8,5 +8,7 @@ Review the committed merge-base range and any staged/unstaged final-integration 
 
 Stay read-only; do not update Trekker, merge, push, deploy, or close tasks. Check cumulative intent, task evidence, regressions, security/data/migration/deployment readiness, and required verification; PR text is not proof. The initial pass requires independent epic conformance review of the same evidence. For a coordinator-classified eligible remediation delta, review only your affected concern; request cumulative routing only for a named material invalidator. Unchanged evidence does not rerun review or CI.
 
+Require durable disposition only for a concrete remaining condition that could affect safety, authority, accepted behavior, verification validity, or release readiness. Rejected alternatives, unbuilt optional mechanisms, and absent speculative validators are not residual risks or missing evidence.
+
 Report merge blockers, nonblockers, missing evidence, residual-risk disposition needs, and ready/ready-after-fixes/not-ready.
 """

@@ -94,8 +94,10 @@ mark deferred evidence complete before it exists.
 At PR or epic-completion stage, the cumulative review range is the merge base through
 the committed branch tip plus the complete working-tree state. After a review fix,
 review only the affected delta unless the fix materially invalidates the cumulative
-conclusion. Push and open a draft PR when requested or when the authorized workflow
-reaches publication; never merge or deploy without user authorization.
+conclusion. For implementation branch or epic work, use the draft-PR handoff unless
+the user explicitly opts out: after final-integration reviews, push, open the draft
+PR, and confirm required checks are visible and passing or documented with exact next
+steps; never merge or deploy without user authorization.
 
 ## Escalate
 
