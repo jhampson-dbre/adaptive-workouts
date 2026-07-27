@@ -1,4 +1,4 @@
-# Resolve Interface System
+# Nudge Interface System
 
 **Status:** Approved planning amendment; implementation not started
 
@@ -12,16 +12,27 @@
 
 **Seven-task redesign approved:** 2026-07-26
 
+**Nudge identity pivot approved:** 2026-07-26
+
 ## Purpose
 
 Give Adaptive Workouts its first coherent product identity and interface system without
 changing the workout engine, stored data, authentication, recovery semantics, or current
 navigation model.
 
-The working identity is **Resolve**: a training journal fused with a precision
-instrument. Calm record-keeping should govern planning, history, settings, and review.
-Active training should become more immediate without becoming loud, game-like, or
-dashboard-heavy.
+The working name is **Nudge**. Its working descriptor is **adaptive strength training
+partner**:
+
+> An adaptive strength training partner that remembers what the user has done, decides
+> what is worth doing next, and turns the time available into a focused workout.
+
+The central promise is:
+
+> **Whenever the user has time to train, a relevant workout is already ready.**
+
+This identity expresses current behavior only. It does not authorize new recommendations,
+coaching logic, readiness claims, state, routes, navigation, or data. The current
+implementation remains authoritative.
 
 This document replaces the original B2–B13 execution sequence. The original charter's
 identity principles and behavior protections remain useful evidence; its mandatory
@@ -44,26 +55,111 @@ task still requires explicit authorization before it starts.
 - Neither a third-party design skill nor a repository-specific design skill has been
   shown to improve this product yet. Their value must be demonstrated by the pilots.
 
+## Product relationship
+
+Nudge is not a passive workout log, an authoritative coach, or a recovery system. It is
+an attentive training partner: it remembers previous sessions, notices exercises that
+have been out of rotation, recommends loads, and builds around the time available using
+the product's existing behavior.
+
+Its defining posture is:
+
+> **I've been paying attention, and I've already done the planning.**
+
+Recommendations remain recommendations. The user retains agency, and the product must
+never create guilt, fake urgency, or pressure.
+
+## Journal × Instrument × Training Partner
+
+1. **Journal provides memory and continuity.** History, progression, and prior decisions
+   are chronological, structured, and easy to understand without notebook decoration.
+2. **Instrument provides precision and trust.** Loads, repetitions, timers, progression
+   states, and explanations are primary visual material. Typography, alignment, spacing,
+   and motion make the system feel dependable.
+3. **Training Partner provides warmth, initiative, and presence.** The product uses
+   grounded observations and collaborative suggestions rather than commands. Warmth
+   comes from attention, never simulated intimacy.
+
+## Emotional rhythm
+
+- **Prepare and reflect:** calm, attentive, and information-rich for planning, history,
+  settings, exercise selection, progression explanations, and post-workout review.
+- **Train together:** focused, present, and energetic for workout generation, active
+  sets, rest periods, and completion.
+
+Energy increases because the user is actively training, not because Nudge is pressuring
+them to train harder.
+
+## Voice principles
+
+Nudge is observant, practical, reliable, quietly confident, serious but approachable,
+encouraging without exaggeration, accommodating of real life, and slightly nerdy.
+Language should favor grounded observations and clear suggestions, such as:
+
+- “You completed the target last time. Let's move this one up.”
+- “We can fit three exercises into 20 minutes.”
+- “This hasn't been trained in 12 days, so I brought it back.”
+- “Hold at 65 lb for another session.”
+
+Avoid generic hype, guilt, streak pressure, fake urgency, and artificial intimacy. Nudge
+may use first-person language for actual system preparation or initiative, such as
+“I've got one ready,” but must not pretend to have feelings, needs, or physical
+experiences.
+
 ## Identity principles
 
-1. **Calm confidence.** The product should feel deliberate and trustworthy.
-2. **Record before dashboard.** Preserve chronology, context, and truth; do not invent
-   analytics or coaching claims.
-3. **Instrument during effort.** Active work emphasizes the next action, current set,
-   phase, rest, and recovery status.
-4. **One hierarchy per state.** The primary action and current state must be obvious.
-5. **Information earns prominence.** Density follows decisions the user must make.
-6. **State is explicit.** Loading, empty, offline, failure, recovery, conflict, pending,
-   and completion states are designed outcomes.
-7. **Accessibility is structural.** Semantics, focus, keyboard use, target size,
-   contrast, reflow, reduced motion, and non-color cues are part of the design.
-8. **A small system, not a component catalog.** Add only tokens and patterns proven
-   useful on real screens.
+1. **Training fits real life.** Workouts adapt to available time and training history.
+2. **The partner carries the planning burden.** Remove decisions whenever current
+   behavior has enough evidence to make a useful recommendation.
+3. **Serious does not mean intimidating.** Expertise appears through dependable
+   decisions and clear explanations.
+4. **Calm by default, energized through participation.**
+5. **Precision creates trust.**
+6. **Warmth comes from attention, not artificial intimacy.**
+7. **Recommendations remain recommendations.** The user retains agency.
+8. **Flexibility is not failure.** Short workouts and irregular schedules are normal.
+9. **Progress is earned and explained.**
+10. **The user remains the protagonist.**
+11. **One hierarchy per state.** The primary action and current state are obvious.
+12. **State is explicit.** Loading, empty, offline, failure, recovery, conflict, pending,
+    and completion states are designed outcomes.
+13. **Accessibility is structural.** Semantics, focus, keyboard use, target size,
+    contrast, reflow, reduced motion, and non-color cues are part of the design.
+14. **A small system, not a component catalog.** Add only tokens and patterns proven
+    useful on real screens.
+
+## Visual direction
+
+- Precise numerals, structured spacing, progression lines, and meaningful calibration
+  marks form the visual vocabulary.
+- Energy comes from contrast, scale, language, and measured motion, not neon or
+  spectacle.
+- Typography stays upright and disciplined.
+- Warm paper, graphite, ink, and oxidized-metal tones may influence the palette without
+  literal skeuomorphism.
+- Motion makes values advance and states resolve with control.
+- Data must always communicate something real.
+
+## Experience standard
+
+The defining moment is simple: the user has time to train, opens Nudge, finds a relevant
+workout already prepared with appropriate exercises and loads, and begins without
+planning. The experience succeeds when the user thinks:
+
+> **I had time to train, and I immediately knew what to do.**
 
 ## Explicit anti-patterns
 
-- Generic wellness gradients, glass panels, neon dashboards, and decorative metrics.
-- Gamification, streak pressure, faux scientific precision, or invented recommendations.
+- Generic wellness gradients, floating cards, glass panels, neon dashboards, and
+  decorative metrics.
+- Streak pressure, punishment for missed days, trophy-heavy gamification, generic praise,
+  faux scientific precision, or invented recommendations.
+- Unsupported recovery or readiness claims.
+- Guilt, fake urgency, pressure to exert harder, simulated intimacy, or authoritative
+  coaching language that removes agency.
+- Excessive configuration that returns planning work to the user.
+- Racing italics, exaggerated athletic fonts, black-and-red bodybuilding branding,
+  glows, chrome, flames, lightning, speed stripes, and decorative barbell imagery.
 - Every section becoming a card.
 - Tiny labels, weak contrast, motion-dependent meaning, or color-only state.
 - A new Journal route or broader navigation redesign.
@@ -74,7 +170,7 @@ task still requires explicit authorization before it starts.
 
 ## Goals
 
-- Select one of three genuinely different but directly comparable Resolve concepts.
+- Select one of three genuinely different but directly comparable Nudge concepts.
 - Compare frontend-design and Impeccable as translation aids against the same selected
   concept and neutral inputs.
 - Extract accepted decisions into repository-owned `DESIGN.md`.
@@ -89,7 +185,10 @@ task still requires explicit authorization before it starts.
 - New workout-generation, timing, history, recovery, storage, authentication, or
   authorization behavior.
 - New analytics, recommendations, progression calculations, or data migrations.
+- New coaching logic, recovery or readiness claims, or implied intelligence unsupported
+  by current behavior.
 - A new root Journal destination.
+- A product-wide internal package or technical identifier rename.
 - A design-tool supply-chain framework.
 - A mandatory project skill or design-review agent.
 - A speculative component library or token taxonomy.
@@ -139,15 +238,37 @@ UI work is **required** for the epic. Evidence stays proportional:
 
 ## Seven-task delivery plan
 
-### TREK-227 — Generate and select three Resolve concepts
+### TREK-227 — Generate and select three Nudge concepts
 
-Create three genuinely different concepts using identical real content, states, and
+Create three genuinely different Nudge concepts using identical real content, states, and
 viewports. At minimum show Plan/readiness, active exercise, concurrent rest or
 transition, Review, and history or recovery. Compare them side by side with accessible
 descriptions.
 
-The user selects one direction and records why it best fits Resolve, its hierarchy,
-Record/Perform rhythm, exertion, dense data, distinctiveness, and accepted tradeoffs.
+Codex prepares one shared content/state brief, three concept-specific prompts, and a
+filename manifest. The user generates the images in ordinary ChatGPT web Chat, not
+ChatGPT Work, Codex, or the API:
+
+1. Start a fresh ordinary ChatGPT web chat for each concept.
+2. Paste the supplied prompt unchanged and generate one contact sheet.
+3. Do not request variants or refinements before comparison.
+4. Download the original result as `nudge-concept-a.png`, `nudge-concept-b.png`, or
+   `nudge-concept-c.png`, following the manifest.
+5. Attach all three originals back to the Codex task. If one omits a required state or is
+   unusable, return it before spending another generation so Codex can provide the
+   smallest repair prompt.
+
+Codex verifies prompt/output provenance, saves the exact prompts and images under
+`docs/reports/nudge-concepts/`, and creates
+`docs/reports/nudge-concept-selection.md` with accessible descriptions and the
+side-by-side comparison.
+
+The user selects one direction and records why it best fits Journal × Instrument ×
+Training Partner, its hierarchy, prepare/reflect and train-together rhythm, exertion,
+dense data, distinctiveness, user agency, and accepted tradeoffs.
+Codex records the selection, rationale, accepted tradeoffs, and canonical prompt/image
+paths in the selection document and a TREK-227 completion comment. TREK-229 and later
+tasks use that durable selection as their source artifact rather than regenerating it.
 No downstream task starts without this recorded selection.
 
 ### TREK-229 — Run the design-translation bake-off and establish `DESIGN.md`
@@ -165,28 +286,29 @@ A fresh UX design review validates the material scenarios. Architecture review v
 the production contract and feasibility. The user approves the provisional UX contract
 and tool-or-neither decision before production work.
 
-### TREK-233 — Build Resolve foundations and pilot Plan → Perform → Review
+### TREK-233 — Build Nudge foundations and pilot Plan → Perform → Review
 
-Apply the accepted system to the existing shell and the Plan, active workout, concurrent
-rest/transition, cooldown, Review, and completion path. Reuse current components, state,
-and semantic markup. Add only the tokens and shared patterns this slice requires.
+Apply the accepted Nudge system to the existing shell and the Plan, active workout,
+concurrent rest/transition, cooldown, Review, and completion path. Express attentive
+preparation and recommendations only through current behavior. Reuse current components,
+state, and semantic markup. Add only the tokens and shared patterns this slice requires.
 
-Preserve navigation, timing, persistence, feedback, and focus behavior. Integrate the
-current sign-out and shell contract from TREK-245 before this task completes. Manually
-invoke the provisional tool when useful and log concrete defects, accepted revisions,
-bypasses, and no-value passes.
+Preserve user agency, navigation, timing, persistence, feedback, and focus behavior.
+Integrate the current sign-out and shell contract from TREK-245 before this task
+completes. Manually invoke the provisional tool when useful and log concrete defects,
+accepted revisions, bypasses, and no-value passes.
 
 Verify targeted shell, Plan, Generator, WorkoutView, timing, and affected lazy-loading
 behavior. Render the affected states at representative mobile, landscape, and desktop
 sizes, including keyboard/focus, 200% reflow, reduced motion, contrast, target size, and
 fallback fonts where applicable. Run a fresh rendered usability critique.
 
-### TREK-235 — Generalize Resolve to history and decide workflow retention
+### TREK-235 — Generalize Nudge to history and decide workflow retention
 
 Apply the system to the existing `WorkoutHistory` disclosure inside `WorkoutView`.
 Do not create a Journal root route or alter navigation. Preserve pagination, schema
 truth, malformed records, empty/loading/error/offline states, progression explanations,
-and dense disclosure behavior.
+and dense disclosure behavior. Express memory through truthful existing history only.
 
 Use this as the second production pilot. Update `DESIGN.md` only with reusable decisions
 that survive both pilots. Record the observed value and cost of frontend-design,
@@ -201,31 +323,36 @@ Verify targeted history, schema, progression, and WorkoutView behavior. Render d
 mobile, desktop, and 200% reflow states including keyboard traversal and
 loading/error/malformed content, followed by a fresh usability critique.
 
-### TREK-234 — Apply Resolve to recovery and uncertainty states
+### TREK-234 — Apply Nudge to recovery and uncertainty states
 
 Apply the accepted system to recovery, takeover, conflict, lock or storage failure,
 invalid or stale sessions, account mismatch, discard, retry, save uncertainty, and
-reconciliation. Do not reinterpret their state machines.
+reconciliation. Do not reinterpret their state machines or make unsupported readiness
+claims. Keep user agency and recovery choices explicit.
 
 Run targeted recovery, coordinator, reconciliation, storage, and affected WorkoutView
 tests. Render the affected lifecycle states and verify focus, action clarity, feedback,
 and feedback retirement.
 
-### TREK-236 — Apply Resolve to Settings and catalog
+### TREK-236 — Apply Nudge to Settings and catalog
 
-Apply the calm Record expression to Settings and catalog management while preserving
-validation, inherited and overridden values, dirty edits, destructive actions,
-replacement behavior, and save semantics.
+Apply Nudge's calm Journal × Instrument expression to Settings and catalog management
+while preserving validation, inherited and overridden values, dirty edits, destructive
+actions, replacement behavior, and save semantics. Do not return planning burden through
+excessive configuration.
 
 Run targeted Settings, storage, and affected shell/lazy-navigation tests. Render normal,
 invalid, dirty, destructive, and failure states at representative mobile and desktop
 sizes and 200% reflow.
 
-### TREK-237 — Validate and integrate Resolve across production surfaces
+### TREK-237 — Validate and integrate Nudge across production surfaces
 
-Resolve cross-surface inconsistencies without expanding product scope. Complete the
-single cumulative evidence matrix, confirm the current shell state including TREK-245,
-and verify that experiments and unused tooling are absent.
+Correct cross-surface inconsistencies without expanding product scope. Confirm Nudge
+communicates memory, preparation, and recommendations only through existing behavior,
+preserves user agency, and avoids guilt, fake urgency, simulated intimacy, unsupported
+readiness claims, and authoritative coaching language. Complete the single cumulative
+evidence matrix, confirm the current shell state including TREK-245, and verify that
+experiments and unused tooling are absent.
 
 Run `npm run ci:check`, bounded responsive/offline/PWA/font preview checks, and emulator
 or access checks only when the changed surface requires them. Run the required cumulative
@@ -256,11 +383,13 @@ tasks above and should be closed as superseded with successor references.
 
 ## Epic acceptance
 
-- One selected Resolve direction is traceable to three comparable concepts.
+- One selected Nudge direction is traceable to three comparable concepts.
 - `DESIGN.md` contains the accepted product-specific system and no tool-specific ritual
   without demonstrated value.
 - Plan, Perform, Review, history, recovery, Settings, and shell states feel coherent
   while their behavior remains unchanged.
+- Journal × Instrument × Training Partner is evident through truthful current behavior;
+  Nudge adds no unsupported intelligence, pressure, or simulated intimacy.
 - History remains an existing disclosure, not a new root route.
 - Accessibility and responsive behavior are demonstrated on changed material scenarios.
 - Experimental implementations and unused design tooling are absent.
@@ -275,6 +404,13 @@ tasks above and should be closed as superseded with successor references.
   Coach × Instrument energy, Record/Perform rhythm, and protected behavior contracts.
 - 2026-07-26: The user approved replacing the B2–B13 waterfall with the seven-task
   design-translation and production-pilot plan in this document.
+- 2026-07-26: The user replaced Resolve with the working name Nudge and approved
+  Journal × Instrument × Training Partner as the presentation identity. The pivot retains
+  all current functionality and guides future direction without authorizing future
+  behavior.
+- 2026-07-26: The user chose ordinary ChatGPT web Chat for the three concept generations
+  to preserve Codex quota. Codex owns the controlled prompts, artifact intake, comparison,
+  durable selection record, and downstream handoff.
 - The retained external techniques are temporary comparison inputs. The repository owns
   the selected visual decisions through `DESIGN.md`.
 - The default disposition is no persistent third-party tool and no custom design
