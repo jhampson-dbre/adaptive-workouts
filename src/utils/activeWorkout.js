@@ -162,32 +162,34 @@ function freezePhaseCandidate(ledger, finishRequestedAtEpochMs) {
   });
 }
 
-function recomputeImmediateNext(exercise, sourceIndex) {
-  const nextIndex = sourceIndex + 1;
-  if (nextIndex >= exercise.setRecords.length) return exercise;
-
-  const source = exercise.setRecords[sourceIndex];
-  const recommendation = calculateBackoffRecommendation({
-    actualWeight: source.actualWeight,
-    actualReps: source.actualReps,
-    floorReps: exercise.floorReps,
-    weightStep: exercise.weightStep,
-    sessionTopTarget: exercise.setRecords[0].targetWeight,
-    priorAssignedTargetWeights: exercise.setRecords.slice(0, nextIndex).map(record => record.targetWeight),
-  });
-  const current = exercise.setRecords[nextIndex];
-  if (current.completed) return exercise;
-  const dirty = current._activeDirty || { actualWeight: false, actualReps: false };
-  const next = {
-    ...current,
-    targetWeight: recommendation.recommendedWeight,
-    actualWeight: dirty.actualWeight ? current.actualWeight : recommendation.recommendedWeight,
-    actualReps: dirty.actualReps ? current.actualReps : current.targetReps,
-    recommendationReason: recommendation,
-  };
-  const setRecords = exercise.setRecords.slice();
-  setRecords[nextIndex] = next;
-  return { ...exercise, setRecords };
+function recomputeFollowingSets(exercise, sourceIndex) {
+  let updated = exercise;
+  for (let index = sourceIndex; index < updated.setRecords.length - 1; index += 1) {
+    const source = updated.setRecords[index];
+    if (!canConfirmWeightedSet(source)) break;
+    const nextIndex = index + 1;
+    const recommendation = calculateBackoffRecommendation({
+      actualWeight: source.actualWeight,
+      actualReps: source.actualReps,
+      floorReps: updated.floorReps,
+      weightStep: updated.weightStep,
+      sessionTopTarget: updated.setRecords[0].targetWeight,
+      priorAssignedTargetWeights: updated.setRecords.slice(0, nextIndex).map(record => record.targetWeight),
+    });
+    const current = updated.setRecords[nextIndex];
+    const dirty = current._activeDirty || { actualWeight: false, actualReps: false };
+    const setRecords = updated.setRecords.slice();
+    setRecords[nextIndex] = {
+      ...current,
+      targetWeight: recommendation.recommendedWeight,
+      actualWeight: current.completed || dirty.actualWeight ? current.actualWeight : recommendation.recommendedWeight,
+      actualReps: current.completed || dirty.actualReps ? current.actualReps : current.targetReps,
+      recommendationReason: recommendation,
+    };
+    updated = { ...updated, setRecords };
+    if (!current.completed) break;
+  }
+  return updated;
 }
 
 function relockImmediateNext(exercise, sourceIndex) {
@@ -387,7 +389,7 @@ export function activeWorkoutReducer(state, action) {
       updated = replaceExercise(
         updated,
         action.exerciseIndex,
-        recomputeImmediateNext(updated.exercises[action.exerciseIndex], action.setIndex),
+        recomputeFollowingSets(updated.exercises[action.exerciseIndex], action.setIndex),
       );
     }
     if (exercise.trackingMode === 'simple') {
@@ -470,7 +472,7 @@ export function activeWorkoutReducer(state, action) {
     setRecords[action.setIndex] = { ...record, completed: canConfirm };
     let updated = { ...exercise, setRecords };
     if (canConfirm && exercise.trackingMode === 'weighted') {
-      updated = recomputeImmediateNext(updated, action.setIndex);
+      updated = recomputeFollowingSets(updated, action.setIndex);
     } else if (canUnconfirm && exercise.trackingMode === 'weighted') {
       updated = relockImmediateNext(updated, action.setIndex);
     }
@@ -489,12 +491,11 @@ export function activeWorkoutReducer(state, action) {
       _activeDirty: { ...current._activeDirty, [action.field]: true },
     }));
     const updatedExercise = updatedState.exercises[action.exerciseIndex];
-    const prefixLength = confirmedPrefixLength(updatedExercise.setRecords);
-    if (record.completed && value !== '' && action.setIndex === prefixLength - 1) {
+    if (record.completed && value !== '') {
       updatedState = replaceExercise(
         updatedState,
         action.exerciseIndex,
-        recomputeImmediateNext(updatedExercise, action.setIndex),
+        recomputeFollowingSets(updatedExercise, action.setIndex),
       );
     }
     return updatedState;
