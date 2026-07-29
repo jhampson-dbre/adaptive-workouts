@@ -92,15 +92,13 @@ describe('active workout state', () => {
     expect(state.exercises[0].setRecords[2].targetWeight).toBe(100);
   });
 
-  it('keeps confirmed targets immutable and ignores earlier edits once a later set is confirmed', () => {
+  it('refreshes confirmed targets after an earlier completed-set edit', () => {
     let state = initializeActiveWorkout([weighted()]);
     state = reduce(state, toggle(0, 0));
     state = reduce(state, toggle(0, 1));
-    const confirmedTarget = state.exercises[0].setRecords[1].targetWeight;
-    const downstreamTarget = state.exercises[0].setRecords[2].targetWeight;
     state = reduce(state, editWeight(0, 0, 'actualReps', 0));
-    expect(state.exercises[0].setRecords[1].targetWeight).toBe(confirmedTarget);
-    expect(state.exercises[0].setRecords[2].targetWeight).toBe(downstreamTarget);
+    expect(state.exercises[0].setRecords[1].targetWeight).toBe(85);
+    expect(state.exercises[0].setRecords[2].targetWeight).toBe(85);
   });
 
   it('syncs untouched prefills but preserves dirty overrides through unconfirm and recompute', () => {

@@ -152,7 +152,7 @@ test('keeps loaded cards through an older-page failure and retries without dupli
   expect(screen.getAllByRole('article')).toHaveLength(1);
   expect(screen.getByText('Couldn’t load older workouts.')).toBeDefined();
   expect(screen.getAllByRole('alert')).toHaveLength(1);
-  expect(document.activeElement).toBe(retry);
+  await waitFor(() => expect(document.activeElement).toBe(retry));
   fireEvent.click(retry);
   expect(screen.getByRole('button', { name: 'Retrying older workouts…' }).disabled).toBe(true);
   expect(screen.getAllByRole('article')).toHaveLength(1);
