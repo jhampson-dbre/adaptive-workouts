@@ -1,6 +1,6 @@
 ---
 name: epic-development-branch-completion
-description: Finish an epic development branch for draft-PR review or epic completion. Use at PR stage, before publishing an implementation branch or epic handoff, before merge approval, or before closing an epic to verify task commit boundaries, run both final-integration review gates on the cumulative branch range, address findings, and prepare the push/PR/check-status handoff.
+description: Finish an epic development branch for draft-PR review or epic completion. Use at PR stage, before publishing an implementation branch or epic handoff, before merge approval, or before closing an epic to verify task commit boundaries, select the eligible single-task fast path or both cumulative final-integration review gates, address findings, and prepare the push/PR/check-status handoff.
 ---
 
 # Epic Development-Branch Completion
@@ -23,7 +23,19 @@ reviewers to push, merge, create a PR, or update Trekker.
    completion and that its Trekker `Summary:` contains the task commit hash and
    required verification evidence. Reconcile any mismatch before final review.
 
-## 2. Run independent final-integration gates
+## 2. Select final-integration routing
+
+Use the unchanged, clean single-task fast path only when one task contains all intended
+changes; its reviewed or coordinator-verified HEAD is unchanged; the worktree is clean;
+approved intent is unchanged; and there is no concrete cross-task, merge/conflict,
+release, or high-risk integration concern. Reuse the task Summary and whichever
+task-level review authorities were proportionately applicable; publication does not
+create missing review authorities.
+
+Otherwise, including multi-task branches or any named material invalidator, use the
+independent cumulative gates below.
+
+## 3. Run independent final-integration gates
 
 Dispatch both reviews from the same evidence packet:
 
@@ -37,7 +49,7 @@ working-tree evidence, Trekker task evidence, approved intent, verification resu
 and draft-PR state when one exists. Record `reviewed_sha = HEAD` for their shared
 evidence packet. Neither review substitutes for the other.
 
-## 3. Resolve final-integration findings
+## 4. Resolve final-integration findings
 
 For an accepted finding, make the intended additive fix, run verification proportionate
 to its delta, commit it, and inspect `reviewed_sha..HEAD` plus the complete working
@@ -72,9 +84,9 @@ Supply scoped reviewers the original finding, `reviewed_sha..HEAD`, affected evi
 verification results, and current SHA. Escalate material plan or product-scope conflicts
 through the repository's planning/design workflow.
 
-## 4. Publish the draft-PR handoff
+## 5. Publish the draft-PR handoff
 
-After both gates are ready and all intended work is committed:
+After the selected routing is ready and all intended work is committed:
 
 1. Push the branch.
 2. Open a draft PR unless the user explicitly opts out.
