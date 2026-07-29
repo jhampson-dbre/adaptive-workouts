@@ -214,6 +214,21 @@ describe('active workout recovery', () => {
     const state = weightedWorkout(); mutate(state); expect(disposition(draftFor(state))).toBe('resumable');
   });
 
+  it('keeps recovery valid after editing a prior completed weighted set', () => {
+    const state = weightedWorkout();
+    for (const record of state.exercises[0].setRecords.slice(0, 2)) {
+      Object.assign(record, { completed: true, workDurationSeconds: 1, actualRestSeconds: 1 });
+    }
+    const updated = activeWorkoutReducer(state, {
+      type: 'editWeightedActual', exerciseIndex: 0, setIndex: 0, field: 'actualReps', value: 4,
+    });
+    const records = updated.exercises[0].setRecords;
+
+    expect(records[1]).toMatchObject({ actualWeight: 100, actualReps: 8, targetWeight: 90, recommendationReason: { reasonCode: 'BACKOFF_BELOW_FLOOR', sourceActualReps: 4, recommendedWeight: 90 } });
+    expect(records[2]).toMatchObject({ targetWeight: 90, recommendationReason: { reasonCode: 'BACKOFF_FLOOR_MET', sourceActualReps: 8, priorTargetCeiling: 90, recommendedWeight: 90 } });
+    expect(disposition(draftFor(updated))).toBe('resumable');
+  });
+
   it.each([
     ['wrong reason literal', reason => { reason.reasonCode = 'BACKOFF_BELOW_FLOOR'; }],
     ['floor mismatch', reason => { reason.floorReps = 7; }],
