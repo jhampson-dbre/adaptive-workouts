@@ -1,6 +1,6 @@
 # Nudge Interface System
 
-**Status:** Approved planning amendment; implementation not started
+**Status:** Approved planning amendment; fresh production design not started
 
 **Epic:** EPIC-13
 
@@ -34,6 +34,20 @@ This identity expresses current behavior only. It does not authorize new recomme
 coaching logic, readiness claims, state, routes, navigation, or data. The current
 implementation remains authoritative.
 
+## Fresh-design directive
+
+Production design starts from the product's existing behavior and boundaries, not from
+the concept-generation or translation-bake-off artifacts. Those artifacts are retained
+only as historical evidence. Future EPIC-13 tasks must not require, prompt with, or
+evaluate against their mockups, palettes, tokens, layout patterns, named visual
+directions, or tool-generated rationales.
+
+The redesign is intentionally unconstrained within the product boundary. It may establish
+any coherent visual and interaction direction for Nudge provided it does not add product
+features, gamification, routes, navigation, stored data, recommendations, coaching logic,
+readiness claims, or other unsupported behavior. Accessibility and the preserved product
+contracts remain requirements because they protect outcomes rather than aesthetics.
+
 This document replaces the original B2–B13 execution sequence. The original charter's
 identity principles and behavior protections remain useful evidence; its mandatory
 prototype, three-root navigation, custom-skill, and separate validation/integration
@@ -52,8 +66,8 @@ task still requires explicit authorization before it starts.
   `WorkoutView`; it is not a root destination.
 - Existing timing, recovery, coordination, immutable-save, storage, and access work
   defines behavior that presentation changes must preserve.
-- Neither a third-party design skill nor a repository-specific design skill has been
-  shown to improve this product yet. Their value must be demonstrated by the pilots.
+- The translation bake-off is complete. No third-party design workflow, hook, generated
+  product context, or experimental implementation is retained.
 
 ## Product relationship
 
@@ -68,6 +82,12 @@ Its defining posture is:
 
 Recommendations remain recommendations. The user retains agency, and the product must
 never create guilt, fake urgency, or pressure.
+
+## Historical identity exploration — non-binding
+
+The following identity, rhythm, voice, and visual-direction sections record earlier
+discovery. They are not acceptance criteria or prompts for production design and are
+superseded by the fresh-design directive above.
 
 ## Journal × Instrument × Training Partner
 
@@ -148,36 +168,27 @@ planning. The experience succeeds when the user thinks:
 
 > **I had time to train, and I immediately knew what to do.**
 
-## Explicit anti-patterns
+## Explicit anti-goals
 
-- Generic wellness gradients, floating cards, glass panels, neon dashboards, and
-  decorative metrics.
 - Streak pressure, punishment for missed days, trophy-heavy gamification, generic praise,
   faux scientific precision, or invented recommendations.
 - Unsupported recovery or readiness claims.
 - Guilt, fake urgency, pressure to exert harder, simulated intimacy, or authoritative
   coaching language that removes agency.
 - Excessive configuration that returns planning work to the user.
-- Racing italics, exaggerated athletic fonts, black-and-red bodybuilding branding,
-  glows, chrome, flames, lightning, speed stripes, and decorative barbell imagery.
-- Every section becoming a card.
 - Tiny labels, weak contrast, motion-dependent meaning, or color-only state.
 - A new Journal route or broader navigation redesign.
 - A parallel prototype application or permanent experimental route.
-- Persisting Impeccable, frontend-design, hooks, a custom skill, or a reviewer agent
-  before observed evidence justifies the overhead.
+- Persisting Impeccable, frontend-design, hooks, generated product context, or either
+  disposable implementation from the bake-off.
 - Changing product behavior while restyling it.
 
 ## Goals
 
-- Select one of three genuinely different but directly comparable Nudge concepts.
-- Compare frontend-design and Impeccable as translation aids against the same selected
-  concept and neutral inputs.
-- Extract accepted decisions into repository-owned `DESIGN.md`.
-- Pilot the provisional workflow on two representative production slices.
-- Decide from observed defects and effort whether to retain, narrow, or discard the
-  third-party workflow.
-- Apply the accepted system to the remaining material surfaces.
+- Retain the completed concept and bake-off evidence as a historical decision record.
+- Design Nudge afresh from current product behavior and boundaries.
+- Establish coherence through the production surfaces themselves rather than by
+  reproducing an experimental mockup or pre-extracted token system.
 - Validate the cumulative product once and publish a reviewable draft PR.
 
 ## Non-goals
@@ -189,10 +200,10 @@ planning. The experience succeeds when the user thinks:
   by current behavior.
 - A new root Journal destination.
 - A product-wide internal package or technical identifier rename.
-- A design-tool supply-chain framework.
-- A mandatory project skill or design-review agent.
+- A design-tool supply-chain framework or retained third-party design workflow.
+- A mandatory project skill, design-review agent, or pre-production token extraction.
 - A speculative component library or token taxonomy.
-- Keeping experimental implementations after their decisions have been extracted.
+- Using the historical concept or bake-off artifacts as production design requirements.
 
 ## Preserved product contracts
 
@@ -267,57 +278,51 @@ The user selects one direction and records why it best fits Journal × Instrumen
 Training Partner, its hierarchy, prepare/reflect and train-together rhythm, exertion,
 dense data, distinctiveness, user agency, and accepted tradeoffs.
 Codex records the selection, rationale, accepted tradeoffs, and canonical prompt/image
-paths in the selection document and a TREK-227 completion comment. TREK-229 and later
-tasks use that durable selection as their source artifact rather than regenerating it.
-No downstream task starts without this recorded selection.
+paths in the selection document and a TREK-227 completion comment. TREK-229 used that
+selection as its sealed experiment input. Later production tasks retain it as historical
+evidence only and must not use it as design direction.
 
-### TREK-229 — Run the design-translation bake-off and establish `DESIGN.md`
+### TREK-229 — Run and record the design-translation bake-off
 
 Give frontend-design and Impeccable the same selected concept, neutral input, content,
 states, and mobile/desktop targets. Run them in isolation with no hooks. Each produces
 its own design context, token proposal, and the same rendered slice.
 
-Compare the results, preferably without tool labels during the first assessment. Record
-defects, strengths, revisions required, and process cost. Select a provisional workflow
-or select neither. Extract only accepted product-specific decisions into repository-owned
-`DESIGN.md`, then discard both experimental implementations.
+Compare the results, preferably without tool labels during the first assessment, and
+record defects, strengths, revisions required, and process cost. The user selected
+Candidate 3 as the bake-off winner. Retain the collected evidence and discard the
+experimental implementations, hooks, and generated product context.
 
-A fresh UX design review validates the material scenarios. Architecture review validates
-the production contract and feasibility. The user approves the provisional UX contract
-and tool-or-neither decision before production work.
+Do not extract a production design system or use the winning candidate as a production
+reference. The selection closes the experiment and does not constrain the fresh redesign.
 
 ### TREK-233 — Build Nudge foundations and pilot Plan → Perform → Review
 
-Apply the accepted Nudge system to the existing shell and the Plan, active workout,
-concurrent rest/transition, cooldown, Review, and completion path. Express attentive
-preparation and recommendations only through current behavior. Reuse current components,
-state, and semantic markup. Add only the tokens and shared patterns this slice requires.
+Design Nudge afresh through the existing shell and the Plan, active workout, concurrent
+rest/transition, cooldown, Review, and completion path. Start from current behavior and
+the preserved product contracts without using the concept or bake-off artifacts as
+visual references. Reuse current state and semantic markup where they remain appropriate;
+add only the implementation needed by the approved production design.
 
 Preserve user agency, navigation, timing, persistence, feedback, and focus behavior.
 Integrate the current sign-out and shell contract from TREK-245 before this task
-completes. Manually invoke the provisional tool when useful and log concrete defects,
-accepted revisions, bypasses, and no-value passes.
+completes.
 
 Verify targeted shell, Plan, Generator, WorkoutView, timing, and affected lazy-loading
 behavior. Render the affected states at representative mobile, landscape, and desktop
 sizes, including keyboard/focus, 200% reflow, reduced motion, contrast, target size, and
 fallback fonts where applicable. Run a fresh rendered usability critique.
 
-### TREK-235 — Generalize Nudge to history and decide workflow retention
+### TREK-235 — Extend the fresh Nudge design to history
 
 Apply the system to the existing `WorkoutHistory` disclosure inside `WorkoutView`.
 Do not create a Journal root route or alter navigation. Preserve pagination, schema
 truth, malformed records, empty/loading/error/offline states, progression explanations,
 and dense disclosure behavior. Express memory through truthful existing history only.
 
-Use this as the second production pilot. Update `DESIGN.md` only with reusable decisions
-that survive both pilots. Record the observed value and cost of frontend-design,
-Impeccable, and coordinator judgment.
-
-The user then decides to retain a tool, narrow its use, or retain neither. Persistent
-third-party tooling, hooks, or a custom design skill/reviewer agent requires separate
-authorization supported by concrete pilot evidence. Without that authorization, later
-tasks use `DESIGN.md` directly.
+Extend the production design established through the real application without consulting
+the historical concept or bake-off artifacts. Add shared decisions only when the working
+screens demonstrate that they are needed.
 
 Verify targeted history, schema, progression, and WorkoutView behavior. Render dense
 mobile, desktop, and 200% reflow states including keyboard traversal and
@@ -325,7 +330,7 @@ loading/error/malformed content, followed by a fresh usability critique.
 
 ### TREK-234 — Apply Nudge to recovery and uncertainty states
 
-Apply the accepted system to recovery, takeover, conflict, lock or storage failure,
+Extend the production design to recovery, takeover, conflict, lock or storage failure,
 invalid or stale sessions, account mismatch, discard, retry, save uncertainty, and
 reconciliation. Do not reinterpret their state machines or make unsupported readiness
 claims. Keep user agency and recovery choices explicit.
@@ -336,9 +341,9 @@ and feedback retirement.
 
 ### TREK-236 — Apply Nudge to Settings and catalog
 
-Apply Nudge's calm Journal × Instrument expression to Settings and catalog management
-while preserving validation, inherited and overridden values, dirty edits, destructive
-actions, replacement behavior, and save semantics. Do not return planning burden through
+Extend the production design to Settings and catalog management while preserving
+validation, inherited and overridden values, dirty edits, destructive actions,
+replacement behavior, and save semantics. Do not return planning burden through
 excessive configuration.
 
 Run targeted Settings, storage, and affected shell/lazy-navigation tests. Render normal,
@@ -367,34 +372,30 @@ TREK-226 (completed historical charter)
   → TREK-227
   → user selects a concept
   → TREK-229
-  → user approves the provisional UX contract and tool-or-neither decision
+  → user records the bake-off winner and authorizes a fresh redesign
   → TREK-233
   → TREK-235
-  → user decides workflow retention; any persistent/custom tooling needs authorization
   → TREK-234 and TREK-236
   → TREK-237
 ```
 
 TREK-245 protects shell/auth behavior and gates TREK-233, not concept exploration.
-TREK-234 and TREK-236 may run independently after the TREK-235 decision gate.
+TREK-234 and TREK-236 may run independently after TREK-235.
 
 The former TREK-228, TREK-230, TREK-231, TREK-232, and TREK-238 are absorbed into the
 tasks above and should be closed as superseded with successor references.
 
 ## Epic acceptance
 
-- One selected Nudge direction is traceable to three comparable concepts.
-- `DESIGN.md` contains the accepted product-specific system and no tool-specific ritual
-  without demonstrated value.
+- The concept and bake-off selections remain traceable as historical evidence.
 - Plan, Perform, Review, history, recovery, Settings, and shell states feel coherent
   while their behavior remains unchanged.
-- Journal × Instrument × Training Partner is evident through truthful current behavior;
-  Nudge adds no unsupported intelligence, pressure, or simulated intimacy.
+- Nudge adds no unsupported intelligence, pressure, simulated intimacy, features, or
+  gamification.
 - History remains an existing disclosure, not a new root route.
 - Accessibility and responsive behavior are demonstrated on changed material scenarios.
 - Experimental implementations and unused design tooling are absent.
-- Any retained third-party or custom design infrastructure has separate, evidence-backed
-  user authorization.
+- No concept or bake-off artifact is treated as a production design requirement.
 - Cumulative verification and both final integration reviews pass or have explicit,
   owned follow-up before the draft PR is handed off.
 
@@ -411,7 +412,10 @@ tasks above and should be closed as superseded with successor references.
 - 2026-07-26: The user chose ordinary ChatGPT web Chat for the three concept generations
   to preserve Codex quota. Codex owns the controlled prompts, artifact intake, comparison,
   durable selection record, and downstream handoff.
-- The retained external techniques are temporary comparison inputs. The repository owns
-  the selected visual decisions through `DESIGN.md`.
-- The default disposition is no persistent third-party tool and no custom design
-  skill/reviewer agent unless two production pilots reveal a concrete recurring need.
+- 2026-07-29: The user selected Candidate 3 (Impeccable) as the bake-off winner, declined
+  token or visual-principle extraction, and directed production design to start fresh
+  without concept or bake-off references. The winner is a historical experiment result,
+  not a production visual contract. Product boundaries and anti-goals remain binding;
+  positive aesthetic direction does not.
+- No third-party workflow, hook, generated product context, experimental implementation,
+  or custom design reviewer is retained.

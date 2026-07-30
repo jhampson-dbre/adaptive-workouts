@@ -2,6 +2,12 @@
 
 **Trekker:** TREK-227
 **Status:** Selected — A-r3 Warm Training Partner
+
+> **Downstream disposition (2026-07-29):** This concept selection is retained as
+> historical experiment evidence only. Candidate 3 later won the translation bake-off,
+> but production design will start fresh. Future EPIC-13 tasks must not use this concept,
+> its mockup, prompt, tonal reference, or the bake-off outputs as production design
+> direction or acceptance criteria.
 **Round 1 generated with:** GPT-5.6 Sol, medium reasoning
 **Round 2 generated with:** GPT-5.6 Sol, medium reasoning; user-confirmed
 **Shared prompt state:** Identical across concepts
