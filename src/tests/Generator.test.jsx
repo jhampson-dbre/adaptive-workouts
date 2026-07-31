@@ -9,6 +9,25 @@ vi.mock('../utils/storage');
 vi.mock('../utils/engine');
 
 describe('Generator Component', () => {
+    it('keeps the Plan action ahead of optional recovery choices', () => {
+        render(
+            <AuthContext.Provider value={{ uid: 'test-user' }}>
+                <Generator
+                    timeBudget={45}
+                    setTimeBudget={vi.fn()}
+                    unrecoveredGroups={[]}
+                    setUnrecoveredGroups={vi.fn()}
+                    onGenerate={vi.fn()}
+                />
+            </AuthContext.Provider>
+        );
+
+        expect(screen.getByRole('navigation', { name: 'Workout progress' })).toBeTruthy();
+        expect(screen.getByRole('heading', { name: 'How much time do you have?' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Plan my workout' })).toBeTruthy();
+        expect(screen.getByText('Anything to work around?').closest('details').open).toBe(false);
+    });
+
     afterEach(() => cleanup());
     beforeEach(() => {
         vi.clearAllMocks();
@@ -45,7 +64,7 @@ describe('Generator Component', () => {
             onGenerate={onGenerate} 
         />);
 
-        const btn = screen.getByText('Generate Plan');
+        const btn = screen.getByText('Plan my workout');
         fireEvent.click(btn);
         
         await waitFor(() => {
@@ -63,14 +82,13 @@ describe('Generator Component', () => {
         const onGenerate = vi.fn();
         renderWithAuth(<Generator timeBudget={30} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
 
-        fireEvent.click(screen.getByText('Generate Plan'));
+        fireEvent.click(screen.getByText('Plan my workout'));
         await waitFor(() => expect(onGenerate).toHaveBeenCalledWith(generated, { phaseTargets: { warmupSeconds: 600, performanceSeconds: 1800, cooldownSeconds: 300 } }));
     });
 
-    it('prompts if leg day is overdue', async () => {
+    it('offers a neutral inline leg-day choice when legs are due', async () => {
         engine.getDaysSinceLastLegDay.mockReturnValue(8);
         engine.getDayOfWeek.mockReturnValue('Monday'); // Not Friday
-        window.confirm.mockReturnValue(true);
 
         const onGenerate = vi.fn();
         
@@ -82,23 +100,25 @@ describe('Generator Component', () => {
             onGenerate={onGenerate} 
         />);
 
-        fireEvent.click(screen.getByText('Generate Plan'));
+        fireEvent.click(screen.getByText('Plan my workout'));
         
+        await waitFor(() => expect(screen.getByRole('region', { name: 'Leg day choice' })).toBeTruthy());
+        expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Include legs in today\'s workout?' }));
+        expect(window.confirm).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button', { name: 'Include legs today' }));
         await waitFor(() => {
-            expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('overdue'));
             expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], true, expect.any(Array), expect.any(Array), expect.any(Object)); // doLegDay=true
             expect(onGenerate).toHaveBeenCalledWith([], { phaseTargets: { warmupSeconds: 0, performanceSeconds: 2700, cooldownSeconds: 0 } });
         });
     });
 
-    it('prompts if leg day is tomorrow', async () => {
+    it('keeps the normal schedule when the inline leg-day choice is declined', async () => {
         engine.getDaysSinceLastLegDay.mockReturnValue(5);
         // Today is Thursday, tomorrow is Friday
         engine.getDayOfWeek.mockImplementation((date) => {
             if (date.getDate() === new Date().getDate()) return 'Thursday';
             return 'Friday';
         });
-        window.confirm.mockReturnValue(true);
 
         const onGenerate = vi.fn();
         
@@ -110,35 +130,12 @@ describe('Generator Component', () => {
             onGenerate={onGenerate} 
         />);
 
-        fireEvent.click(screen.getByText('Generate Plan'));
+        fireEvent.click(screen.getByText('Plan my workout'));
         
+        await waitFor(() => expect(screen.getByRole('region', { name: 'Leg day choice' })).toBeTruthy());
+        fireEvent.click(screen.getByRole('button', { name: 'Keep current plan' }));
         await waitFor(() => {
-            expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('early'));
-            expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], true, expect.any(Array), expect.any(Array), expect.any(Object)); // doEarly=true
-            expect(onGenerate).toHaveBeenCalledWith([], { phaseTargets: { warmupSeconds: 0, performanceSeconds: 2700, cooldownSeconds: 0 } });
-        });
-    });
-
-    it('uses normal generation when the early-leg-day prompt is dismissed', async () => {
-        engine.getDaysSinceLastLegDay.mockReturnValue(5);
-        engine.getDayOfWeek.mockImplementation((date) => {
-            if (date.getDate() === new Date().getDate()) return 'Thursday';
-            return 'Friday';
-        });
-        window.confirm.mockReturnValue(false);
-
-        renderWithAuth(<Generator
-            timeBudget={45}
-            setTimeBudget={vi.fn()}
-            unrecoveredGroups={[]}
-            setUnrecoveredGroups={vi.fn()}
-            onGenerate={vi.fn()}
-        />);
-
-        fireEvent.click(screen.getByText('Generate Plan'));
-
-        await waitFor(() => {
-            expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('early'));
+            expect(window.confirm).not.toHaveBeenCalled();
             expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], false, expect.any(Array), expect.any(Array), expect.any(Object));
         });
     });
@@ -155,7 +152,7 @@ describe('Generator Component', () => {
             setUnrecoveredGroups={vi.fn()}
             onGenerate={onGenerate}
         />);
-        fireEvent.click(screen.getByText('Generate Plan'));
+        fireEvent.click(screen.getByText('Plan my workout'));
 
         const retry = await screen.findByRole('button', { name: 'Retry' });
         expect(screen.getByText(/workout history is unavailable/i)).not.toBeNull();
@@ -184,7 +181,7 @@ describe('Generator Component', () => {
             setUnrecoveredGroups={vi.fn()}
             onGenerate={vi.fn()}
         />);
-        fireEvent.click(screen.getByText('Generate Plan'));
+        fireEvent.click(screen.getByText('Plan my workout'));
 
         expect(await screen.findByText(/failed to generate workout/i)).not.toBeNull();
         expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
@@ -203,7 +200,7 @@ describe('Generator Component', () => {
             setUnrecoveredGroups={vi.fn()}
             onGenerate={vi.fn()}
         />);
-        fireEvent.click(screen.getByText('Generate Plan'));
+        fireEvent.click(screen.getByText('Plan my workout'));
 
         expect(await screen.findByText(/Bad Press.*bad-press.*Manage Catalog.*Settings/i)).not.toBeNull();
     });
@@ -223,7 +220,7 @@ describe('Generator Component', () => {
             setUnrecoveredGroups={vi.fn()}
             onGenerate={vi.fn()}
         />);
-        fireEvent.click(screen.getByText('Generate Plan'));
+        fireEvent.click(screen.getByText('Plan my workout'));
 
         await waitFor(() => expect(engine.generateWorkout).toHaveBeenCalled());
         expect(window.confirm).not.toHaveBeenCalled();

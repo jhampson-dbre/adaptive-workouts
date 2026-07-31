@@ -1,0 +1,119 @@
+{
+  "title": "Choose Nudge's visual world",
+  "question": "Airport wayfinding is the clearest fit for effortless orientation. Keep it, take an alternate, steer it, or re-roll.",
+  "options": [
+    {
+      "id": "airport-wayfinding",
+      "label": "The Next Decision",
+      "kicker": "CLEAREST FIT",
+      "lineage": "international airport wayfinding systems",
+      "thesis": "Nudge becomes a calm chain of decision points: what is happening, what comes next, and where agency lives.",
+      "palette": [
+        "#f4c900",
+        "#141414",
+        "#ffffff",
+        "#d8d8d0"
+      ],
+      "materials": [
+        "enamel sign panels",
+        "high-contrast vinyl lettering",
+        "inset pictograms"
+      ],
+      "viewport": "A phone-first route view gives the current exercise monumental scale, the next action one yellow band, and alternatives a quiet edge position.",
+      "risk": "Too literal a terminal treatment could feel institutional or urgent.",
+      "case": "Wins on both audience identification and product clarity: one unmistakable next decision removes planning without removing agency.",
+      "sketch": ".impeccable/sketches/nudge-airport-wayfinding.png",
+      "hero": "https://impeccable.style/worlds/cards/wayfinding-cartography-signage-terminal-yellow-wayfinding-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/wayfinding-cartography-signage-terminal-yellow-wayfinding.webp"
+    },
+    {
+      "id": "kitchen-pass",
+      "label": "The Training Pass",
+      "kicker": "THE ROLL",
+      "lineage": "restaurant pass and kitchen ticket rail",
+      "thesis": "The workout is prepared for the user, with one active ticket and a visible sequence that can be changed without replanning.",
+      "palette": [
+        "#eee8d9",
+        "#252525",
+        "#b23a2b",
+        "#7b8f83"
+      ],
+      "materials": [
+        "receipt stock",
+        "stainless ticket rail",
+        "grease-pencil marks"
+      ],
+      "viewport": "The active movement sits on the pass at full scale while upcoming work queues as compact tickets and completed work leaves the rail.",
+      "risk": "Service-line pressure and order timing can conflict with Nudge's refusal of fake urgency.",
+      "case": "Excellent sequence clarity, but its workplace-pressure associations identify less cleanly with a trainee seeking calm agency.",
+      "sketch": ".impeccable/sketches/nudge-kitchen-pass.png"
+    },
+    {
+      "id": "split-flap",
+      "label": "The Live Board",
+      "lineage": "rail concourse split-flap departure boards",
+      "thesis": "A live workout board keeps every phase and exercise scannable while changes settle visibly into place.",
+      "palette": [
+        "#111111",
+        "#f4f1e8",
+        "#e0a82e",
+        "#8f3b36"
+      ],
+      "materials": [
+        "matte flap faces",
+        "brushed steel frame",
+        "amber row lamps"
+      ],
+      "viewport": "The current row dominates a fixed-column board, with work, rest, and next movement updating in place.",
+      "risk": "Departure schedules, delays, and cancellations can imply fixed timetables or missed-session judgment.",
+      "case": "Strong live-state clarity, but the schedule metaphor works against training whenever life allows.",
+      "sketch": ".impeccable/sketches/nudge-split-flap.png",
+      "hero": "https://impeccable.style/worlds/cards/signals-instruments-split-flap-concourse-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/signals-instruments-split-flap-concourse.webp"
+    },
+    {
+      "id": "cyclorama",
+      "label": "The Phase Horizon",
+      "lineage": "theater cyclorama and lighting cue systems",
+      "thesis": "Training phases become a horizon that changes from preparation through effort, recovery, and completion.",
+      "palette": [
+        "#090b13",
+        "#174ea6",
+        "#d47b8c",
+        "#f4f4ef"
+      ],
+      "materials": [
+        "painted stage light",
+        "lighting-plot stencil",
+        "horizontal cue bands"
+      ],
+      "viewport": "A broad phase horizon holds the current movement and timer while named cue bands show the path into rest, next work, and cooldown.",
+      "risk": "Atmosphere can outrun concrete next-action clarity or lean too heavily on color.",
+      "case": "Calm and distinctive across phases, but it requires more translation before a trainee instantly knows what to do.",
+      "sketch": ".impeccable/sketches/nudge-cyclorama.png",
+      "hero": "https://impeccable.style/worlds/cards/stagecraft-theater-lighting-cyclorama-dawn-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/stagecraft-theater-lighting-cyclorama-dawn.webp"
+    }
+  ],
+  "reroll": true,
+  "canon": true,
+  "canonCard": {
+    "label": "The category standard",
+    "thesis": "A polished fitness app dashboard with familiar cards, progress indicators, and restrained athletic color.",
+    "palette": [
+      "#f7f7f5",
+      "#1d2320",
+      "#397a5c",
+      "#dfe6e1"
+    ],
+    "materials": [
+      "soft neutral cards",
+      "standard progress rings",
+      "clean sans-serif controls"
+    ],
+    "viewport": "A conventional workout dashboard places session summary, current exercise, progress, and primary action in stacked cards.",
+    "risk": "Immediately familiar, but unlikely to give Nudge a memorable identity or make its planning relief tangible.",
+    "sketch": ".impeccable/sketches/nudge-canon.png"
+  },
+  "steer": true
+}
