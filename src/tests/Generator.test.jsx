@@ -103,7 +103,7 @@ describe('Generator Component', () => {
         fireEvent.click(screen.getByText('Plan my workout'));
         
         await waitFor(() => expect(screen.getByRole('region', { name: 'Leg day choice' })).toBeTruthy());
-        expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Include legs in today\'s workout?' }));
+        await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Include legs in today\'s workout?' })));
         expect(window.confirm).not.toHaveBeenCalled();
         fireEvent.click(screen.getByRole('button', { name: 'Include legs today' }));
         await waitFor(() => {
