@@ -161,9 +161,22 @@ describe('Settings tracking configuration', () => {
     expect(storage.saveCatalogItem.mock.calls[0][1]).not.toHaveProperty('restSeconds');
   });
 
+  it('labels catalog activity and whether each rest duration inherits the default', async () => {
+    renderSettings([
+      { ...exercise, trackingMode: 'simple' },
+      { ...exercise, id: 'row', name: 'Row', tier: 3, isActive: false, restSeconds: 90, trackingMode: 'simple' },
+    ]);
+
+    await screen.findByRole('heading', { name: 'Current Catalog' });
+    expect(screen.getByText('Active')).toBeTruthy();
+    expect(screen.getByText('Inactive')).toBeTruthy();
+    expect(screen.getByText('Default rest')).toBeTruthy();
+    expect(screen.getByText('Override: 90 seconds')).toBeTruthy();
+  });
+
   it('blocks invalid explicit catalog rest overrides', async () => {
     renderSettings();
-    await screen.findByRole('heading', { name: 'Add New Exercise' });
+    await screen.findByRole('heading', { name: 'Add exercise' });
     fireEvent.change(screen.getByLabelText('Exercise name'), { target: { value: 'Incline Press' } });
     fireEvent.change(screen.getByLabelText('Rest override seconds'), { target: { value: '600.5' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
@@ -174,7 +187,7 @@ describe('Settings tracking configuration', () => {
 
   it('adds new exercises in explicit simple mode by default', async () => {
     renderSettings();
-    await screen.findByRole('heading', { name: 'Add New Exercise' });
+    await screen.findByRole('heading', { name: 'Add exercise' });
 
     fireEvent.change(screen.getByLabelText('Exercise name'), { target: { value: 'Incline Press' } });
     expect(screen.getByLabelText('Tracking mode').value).toBe('simple');
@@ -193,7 +206,7 @@ describe('Settings tracking configuration', () => {
 
   it('coerces valid weighted fields at save time and labels weights in pounds', async () => {
     renderSettings();
-    await screen.findByRole('heading', { name: 'Add New Exercise' });
+    await screen.findByRole('heading', { name: 'Add exercise' });
 
     fireEvent.change(screen.getByLabelText('Exercise name'), { target: { value: 'Incline Press' } });
     fireEvent.change(screen.getByLabelText('Tracking mode'), { target: { value: 'weighted' } });
@@ -215,7 +228,7 @@ describe('Settings tracking configuration', () => {
 
   it('blocks invalid tracked configuration with an accessible inline error', async () => {
     renderSettings();
-    await screen.findByRole('heading', { name: 'Add New Exercise' });
+    await screen.findByRole('heading', { name: 'Add exercise' });
 
     fireEvent.change(screen.getByLabelText('Exercise name'), { target: { value: 'Incline Press' } });
     fireEvent.change(screen.getByLabelText('Tracking mode'), { target: { value: 'weighted' } });
@@ -301,7 +314,7 @@ describe('Settings tracking configuration', () => {
   it('retains add values and active mode after persistence failure', async () => {
     storage.saveCatalogItem.mockRejectedValueOnce(new Error('offline'));
     renderSettings();
-    await screen.findByRole('heading', { name: 'Add New Exercise' });
+    await screen.findByRole('heading', { name: 'Add exercise' });
     fireEvent.change(screen.getByLabelText('Exercise name'), { target: { value: 'Pull Up' } });
     fireEvent.change(screen.getByLabelText('Tracking mode'), { target: { value: 'bodyweight' } });
     fireEvent.change(screen.getByLabelText('Target reps'), { target: { value: '6' } });
@@ -317,7 +330,7 @@ describe('Settings tracking configuration', () => {
     let resolveAdd;
     storage.saveCatalogItem.mockReturnValueOnce(new Promise(resolve => { resolveAdd = resolve; }));
     const view = renderSettings();
-    await screen.findByRole('heading', { name: 'Add New Exercise' });
+    await screen.findByRole('heading', { name: 'Add exercise' });
     fireEvent.change(screen.getByLabelText('Exercise name'), { target: { value: 'Incline Press' } });
     const add = screen.getByRole('button', { name: 'Add' });
     fireEvent.click(add);

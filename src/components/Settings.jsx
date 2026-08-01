@@ -431,7 +431,7 @@ export default function Settings({ onClose }) {
   if (loading) return (
     <div className="settings-view">
       <div className="settings-header">
-        <h2>Catalog Management</h2>
+        <h2>Settings</h2>
         <button className="close-btn" onClick={onClose}>Close</button>
       </div>
       <div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>
@@ -441,30 +441,32 @@ export default function Settings({ onClose }) {
   return (
     <div className="settings-view">
       <div className="settings-header">
-        <h2>Catalog Management</h2>
+        <h2>Settings</h2>
         <button className="close-btn" onClick={onClose}>Close</button>
       </div>
 
-      <div className="setting-group" style={{ padding: '15px' }}>
-        <label>
-          Default rest seconds
-          <input
-            aria-label="Default rest seconds"
-            type="number"
-            min="5"
-            max="600"
-            step="1"
-            value={defaultRestSeconds}
-            onChange={event => setDefaultRestSeconds(event.target.value)}
-            onBlur={handleDefaultRestBlur}
-            aria-invalid={settingsError ? true : undefined}
-            aria-describedby={settingsError ? 'default-rest-error' : undefined}
-          />
-        </label>
-        {settingsError && <div id="default-rest-error" className="catalog-form-error" role="alert">{settingsError}</div>}
-      </div>
+      <section className="general-defaults" aria-labelledby="general-defaults-heading">
+        <h3 id="general-defaults-heading">General defaults</h3>
+        <div className="setting-group">
+          <label>
+            Default rest seconds
+            <input
+              aria-label="Default rest seconds"
+              type="number"
+              min="5"
+              max="600"
+              step="1"
+              value={defaultRestSeconds}
+              onChange={event => setDefaultRestSeconds(event.target.value)}
+              onBlur={handleDefaultRestBlur}
+              aria-invalid={settingsError ? true : undefined}
+              aria-describedby={settingsError ? 'default-rest-error' : undefined}
+            />
+          </label>
+          {settingsError && <div id="default-rest-error" className="catalog-form-error" role="alert">{settingsError}</div>}
+        </div>
 
-      <div className="setting-group" style={{ padding: '15px' }}>
+      <div className="setting-group">
         <label>
           Warmup minutes
           <input
@@ -484,7 +486,7 @@ export default function Settings({ onClose }) {
         {phaseErrors.warmup && <div id="warmup-error" className="catalog-form-error" role="alert">{phaseErrors.warmup}</div>}
       </div>
 
-      <div className="setting-group" style={{ padding: '15px' }}>
+      <div className="setting-group">
         <label>
           Cooldown minutes
           <input
@@ -504,8 +506,8 @@ export default function Settings({ onClose }) {
         {phaseErrors.cooldown && <div id="cooldown-error" className="catalog-form-error" role="alert">{phaseErrors.cooldown}</div>}
       </div>
 
-      <div className="setting-group" style={{ padding: '15px' }}>
-        <label style={{ marginRight: '10px' }}>Leg Day Schedule</label>
+      <div className="setting-group">
+        <label>Leg Day Schedule</label>
         <select value={legDayOfWeek} onChange={(e) => {
           setLegDayOfWeek(e.target.value);
           handleSaveSettings({ legDayOfWeek: e.target.value });
@@ -520,9 +522,10 @@ export default function Settings({ onClose }) {
           </div>
         )}
       </div>
+      </section>
       
       <div className="add-exercise">
-        <h3>Add New Exercise</h3>
+        <h3>Add exercise</h3>
         <form onSubmit={handleAdd} className="add-form" noValidate>
           <input 
             aria-label="Exercise name"
@@ -573,7 +576,7 @@ export default function Settings({ onClose }) {
             placeholder="Sets"
           />
           <label className="tracking-field">
-            <span>Rest override seconds (optional)</span>
+            <span>Rest override seconds (blank uses default)</span>
             <input
               aria-label="Rest override seconds"
               type="number"
@@ -619,7 +622,7 @@ export default function Settings({ onClose }) {
               {catalog.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
             </select>
           )}
-          <button type="submit" className="add-btn" disabled={isCatalogMutating}>{isAdding ? 'Adding...' : 'Add'}</button>
+          <button type="submit" className={`add-btn ${editingId ? 'is-neutral' : ''}`} disabled={isCatalogMutating}>{isAdding ? 'Adding...' : 'Add'}</button>
           {addError && <div id="add-tracking-error" className="catalog-form-error" role="alert">{addError}</div>}
         </form>
       </div>
@@ -677,7 +680,7 @@ export default function Settings({ onClose }) {
                     title="Sets"
                   />
                   <label className="tracking-field">
-                    <span>Rest override seconds (optional)</span>
+                    <span>Rest override seconds (blank uses default)</span>
                     <input
                       aria-label="Edit rest override seconds"
                       type="number"
@@ -743,6 +746,8 @@ export default function Settings({ onClose }) {
                     <span className="badge tier-badge">Tier {ex.tier}</span>
                     <span className="badge sets-badge">{ex.sets} Sets</span>
                     <span className="badge tracking-badge">{normalizeCatalogExercise(ex).trackingMode}</span>
+                    <span className="badge status-badge">{ex.isActive === false ? 'Inactive' : 'Active'}</span>
+                    <span className="rest-summary">{ex.restSeconds == null ? 'Default rest' : `Override: ${ex.restSeconds} seconds`}</span>
                     {ex.linkedTo && <span className="badge link-badge">Links: {ex.linkedTo}</span>}
                   </div>
                   <div className="item-actions">
