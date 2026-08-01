@@ -55,4 +55,11 @@ describe('touch target stylesheet contract', () => {
     expect(narrowHeader).toMatch(/flex-wrap:\s*wrap/i);
     expect(narrowHeading).toMatch(/flex-basis:\s*100%/i);
   });
+
+  it('stacks active set actions through the unsafe small-tablet width so the primary label clears its arrow', () => {
+    const narrowActions = css.match(/@media\s*\(max-width:\s*740px\)\s*\{[\s\S]*?\.active-work \.set-timing\s*\{([^}]*)\}/i)?.[1] ?? '';
+
+    expect(narrowActions).toMatch(/grid-template-columns:\s*1fr/i);
+    expect(declarationsFor('.active-work .set-timing')).toMatch(/grid-template-columns:\s*1fr\s+1fr/i);
+  });
 });
