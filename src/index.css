@@ -1941,6 +1941,12 @@ input:focus-visible {
   animation: action-arrive 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+@media (max-width: 759px) {
+  .active-work .set-timing {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 520px) {
   .app-header {
     padding-inline: 18px;
