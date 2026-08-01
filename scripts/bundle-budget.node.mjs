@@ -1,15 +1,16 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { analyzeBuild, checkBuild } from './bundle-budget.mjs'
 
 const firestoreId = '/repo/node_modules/@firebase/firestore/dist/index.esm.js'
+const requiredFonts = ['fonts/atkinson-hyperlegible-bold.ttf', 'fonts/atkinson-hyperlegible-regular.woff2', 'fonts/barlow-condensed-bold.ttf']
 const write = (root, file, value = 'export default 1') => writeFile(join(root, file), value)
 const fixture = async ({ manifestPatch = {}, provenancePatch, firestoreSize = 309235 } = {}) => {
-  const root = await mkdtemp(join(tmpdir(), 'bundle-budget-')); await mkdir(join(root, '.vite'))
-  const files = { 'entry.js': 100, 'shared.js': 40, 'plan.js': 80, 'settings.js': 900, 'workout.js': 900, 'firestore-sdk.js': firestoreSize, 'sw.js': 17, 'workbox-abc.js': 7 }
+  const root = await mkdtemp(join(tmpdir(), 'bundle-budget-')); await Promise.all([mkdir(join(root, '.vite')), mkdir(join(root, 'fonts'))])
+  const files = { 'entry.js': 100, 'shared.js': 40, 'plan.js': 80, 'settings.js': 900, 'workout.js': 900, 'firestore-sdk.js': firestoreSize, 'sw.js': 17, 'workbox-abc.js': 7, ...Object.fromEntries(requiredFonts.map(file => [file, 1])) }
   await Promise.all(Object.entries(files).map(([file, size]) => write(root, file, 'x'.repeat(size))))
   await write(root, 'entry.js', 'plan.js settings.js workout.js #retry=')
   const manifest = {
@@ -57,3 +58,10 @@ test('rejects query retry URLs and missing emitted lazy-entry identity', async (
   await withFixture({}, async root => { await write(root, 'entry.js', 'plan.js settings.js workout.js ?retry='); await assert.rejects(() => analyzeBuild(root), /missing fragment|query-string/) })
   await withFixture({}, async root => { await write(root, 'entry.js', 'plan.js settings.js #retry='); await assert.rejects(() => analyzeBuild(root), /does not reference emitted lazy entry/) })
 })
+
+test('rejects a required font missing from the final precache', async () => withFixture({}, async root => {
+  const path = join(root, '.vite', 'pwa-precache.json')
+  const precache = JSON.parse(await readFile(path, 'utf8')).filter(({ url }) => url !== requiredFonts[0])
+  await writeFile(path, JSON.stringify(precache))
+  await assert.rejects(() => analyzeBuild(root), /Required font is absent from final precache/)
+}))

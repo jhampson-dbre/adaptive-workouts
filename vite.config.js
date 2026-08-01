@@ -63,15 +63,16 @@ export default defineConfig(({ command, mode }) => {
       },
       includeAssets: ['favicon.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
       workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,ttf}'],
         manifestTransforms: [async entries => {
           writeFileSync(resolve('dist/.vite/pwa-precache.json'), JSON.stringify(entries, null, 2))
           return { manifest: entries, warnings: [] }
         }],
       },
       manifest: {
-        name: 'Adaptive Workouts',
-        short_name: 'Workouts',
-        description: 'Adaptive Hypertrophy Programming App',
+        name: 'Nudge',
+        short_name: 'Nudge',
+        description: 'Training fits real life.',
         theme_color: '#ffffff',
         icons: [
           {

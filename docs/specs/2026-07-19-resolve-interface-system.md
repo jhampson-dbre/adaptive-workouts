@@ -66,8 +66,9 @@ task still requires explicit authorization before it starts.
   `WorkoutView`; it is not a root destination.
 - Existing timing, recovery, coordination, immutable-save, storage, and access work
   defines behavior that presentation changes must preserve.
-- The translation bake-off is complete. No third-party design workflow, hook, generated
-  product context, or experimental implementation is retained.
+- The translation bake-off is complete. Its disposable implementations, experiment-scoped
+  hooks, and generated product context are not retained. Impeccable was selected for the
+  production redesign; its post-selection workflow and generated production artifacts are.
 
 ## Product relationship
 
@@ -179,8 +180,9 @@ planning. The experience succeeds when the user thinks:
 - Tiny labels, weak contrast, motion-dependent meaning, or color-only state.
 - A new Journal route or broader navigation redesign.
 - A parallel prototype application or permanent experimental route.
-- Persisting Impeccable, frontend-design, hooks, generated product context, or either
-  disposable implementation from the bake-off.
+- Persisting either disposable implementation or its experiment-scoped hooks and generated
+  product context from the bake-off. This does not exclude post-selection Impeccable
+  workflow artifacts created for the production redesign.
 - Changing product behavior while restyling it.
 
 ## Goals
@@ -291,7 +293,8 @@ its own design context, token proposal, and the same rendered slice.
 Compare the results, preferably without tool labels during the first assessment, and
 record defects, strengths, revisions required, and process cost. The user selected
 Candidate 3 as the bake-off winner. Retain the collected evidence and discard the
-experimental implementations, hooks, and generated product context.
+experiment-scoped implementations, hooks, and generated product context. Production work
+may create fresh Impeccable workflow artifacts after selection.
 
 Do not extract a production design system or use the winning candidate as a production
 reference. The selection closes the experiment and does not constrain the fresh redesign.
@@ -416,6 +419,8 @@ tasks above and should be closed as superseded with successor references.
   token or visual-principle extraction, and directed production design to start fresh
   without concept or bake-off references. The winner is a historical experiment result,
   not a production visual contract. Product boundaries and anti-goals remain binding;
-  positive aesthetic direction does not.
-- No third-party workflow, hook, generated product context, experimental implementation,
-  or custom design reviewer is retained.
+  positive aesthetic direction does not. Impeccable remains the selected production design
+  workflow, and its post-selection hook, DESIGN.md sidecar, and implementation-direction
+  comments are production artifacts rather than bake-off residue.
+- No disposable bake-off workflow, hook, generated product context, experimental
+  implementation, or custom design reviewer is retained.
