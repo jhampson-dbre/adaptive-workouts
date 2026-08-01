@@ -26,11 +26,13 @@ describe('touch target stylesheet contract', () => {
     expect(pixelDeclaration(declarationsFor('.set-timing button'), 'min-height')).toBeGreaterThanOrEqual(44);
     expect(declarationsFor('.set-timing button:disabled')).not.toMatch(/min-height/i);
     expect(pixelDeclaration(declarationsFor('.settings-toggle'), 'min-height')).toBeGreaterThanOrEqual(44);
+    expect(pixelDeclaration(declarationsFor('.sign-out-button'), 'min-height')).toBeGreaterThanOrEqual(44);
   });
 
   it('gives non-disclosure controls a 44px minimum width without constraining the full-width disclosure', () => {
     expect(pixelDeclaration(declarationsFor('.set-timing button'), 'min-width')).toBeGreaterThanOrEqual(44);
     expect(pixelDeclaration(declarationsFor('.settings-toggle'), 'min-width')).toBeGreaterThanOrEqual(44);
+    expect(pixelDeclaration(declarationsFor('.sign-out-button'), 'min-width')).toBeGreaterThanOrEqual(44);
     expect(declarationsFor('.exercise-toggle')).not.toMatch(/min-width/i);
   });
 

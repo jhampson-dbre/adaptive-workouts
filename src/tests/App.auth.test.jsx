@@ -4,15 +4,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const approved = { uid: 'u1', email: 'safe@example.test' };
 const pending = { uid: 'u2', email: 'pending@example.test' };
 
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.resetModules(); vi.doUnmock('../utils/auth'); vi.doUnmock('../utils/firebase'); vi.doUnmock('../utils/storage'); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.resetModules(); vi.doUnmock('../utils/auth'); vi.doUnmock('../utils/firebase'); vi.doUnmock('../utils/storage'); vi.doUnmock('../utils/useActiveWorkoutSession'); });
 
-async function mountGate({ evaluate = vi.fn(async () => ({ claims: { approved: true } })), migrate = vi.fn(), signOut = vi.fn() } = {}) {
+async function mountGate({ evaluate = vi.fn(async () => ({ claims: { approved: true } })), migrate = vi.fn(), signOut = vi.fn(), sessionState } = {}) {
   const observers = []; const unsubscribes = [];
   vi.doMock('../utils/firebase', () => ({ auth: {}, db: {} }));
   vi.doMock('../utils/auth', () => ({ subscribeToIdTokenChanges: callback => { observers.push(callback); const unsubscribe = vi.fn(); unsubscribes.push(unsubscribe); return unsubscribe; }, evaluateAccessToken: evaluate, isApprovedTokenResult: value => value?.claims?.approved === true, signOutUser: signOut }));
   vi.doMock('../utils/storage', () => ({ migrateLocalData: migrate }));
+  const activeWorkout = { retireIdentity: vi.fn(async () => {}) };
+  if (sessionState !== undefined) vi.doMock('../utils/useActiveWorkoutSession', () => ({ useActiveWorkoutSession: () => [sessionState, activeWorkout] }));
   const { default: App } = await import('../App'); const view = render(<App />);
-  return { emit: value => act(async () => observers.at(-1)(value)), emitSync: value => act(() => observers.at(-1)(value)), observers, unsubscribes, evaluate, migrate, signOut, ...view };
+  return { emit: value => act(async () => observers.at(-1)(value)), emitSync: value => act(() => observers.at(-1)(value)), observers, unsubscribes, evaluate, migrate, signOut, activeWorkout, ...view };
 }
 
 describe('private access gate', () => {
@@ -139,6 +141,44 @@ describe('private access gate', () => {
     expect(screen.queryByText('pending@example.test')).toBeNull();
     finishSignOut(); await act(async () => {});
     expect(await screen.findByRole('button', { name: 'Sign in with Google' })).toBeTruthy();
+  });
+
+  it('confirms dirty authorized work, retires it before Firebase settles, and recovers without protected UI on rejection', async () => {
+    let rejectSignOut; const signOut = vi.fn(() => new Promise((_, reject) => { rejectSignOut = reject; }));
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const gate = await mountGate({ signOut, sessionState: { status: 'recovery-blocked', activeWorkout: null, snapshot: { draftId: 'draft', ownershipGeneration: 1 } } });
+    await gate.emit(approved);
+    const signOutButton = await screen.findByRole('button', { name: 'Sign out' });
+    gate.activeWorkout.retireIdentity.mockClear();
+
+    fireEvent.click(signOutButton);
+    expect(confirm).toHaveBeenCalledWith('Sign out? Your unsaved changes and unfinished workout will be discarded and cannot be recovered.');
+    expect(signOut).not.toHaveBeenCalled(); expect(screen.getByText('Nudge')).toBeTruthy();
+
+    fireEvent.click(signOutButton);
+    expect(gate.activeWorkout.retireIdentity).toHaveBeenCalledOnce();
+    expect(screen.getByRole('heading', { name: 'Checking access' })).toBeTruthy(); expect(screen.queryByText('Nudge')).toBeNull();
+    rejectSignOut(new Error('offline')); await act(async () => {});
+    const error = await screen.findByRole('heading', { name: 'Unable to verify access' });
+    expect(document.activeElement).toBe(error); expect(screen.queryByText('Nudge')).toBeNull();
+  });
+
+  it('signs a clean authorized user out directly to Login', async () => {
+    const confirm = vi.spyOn(window, 'confirm'); const signOut = vi.fn(); const gate = await mountGate({ signOut });
+    await gate.emit(approved);
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
+    expect(confirm).not.toHaveBeenCalled(); expect(signOut).toHaveBeenCalledOnce();
+    const login = await screen.findByRole('button', { name: 'Sign in with Google' });
+    expect(document.activeElement).toBe(login);
+  });
+
+  it('confirms before discarding changed Plan inputs', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false); const signOut = vi.fn(); const gate = await mountGate({ signOut });
+    await gate.emit(approved);
+    const time = await screen.findByRole('slider');
+    fireEvent.change(time, { target: { value: '60' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    expect(confirm).toHaveBeenCalled(); expect(signOut).not.toHaveBeenCalled();
   });
 
   it('suppresses non-null token events while manual sign out is pending', async () => {

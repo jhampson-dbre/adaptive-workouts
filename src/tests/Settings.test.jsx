@@ -16,12 +16,12 @@ const exercise = {
   isActive: true,
 };
 
-function renderSettings(catalog = [], settings = {}) {
+function renderSettings(catalog = [], settings = {}, onDirtyChange) {
   storage.getCatalog.mockResolvedValue(catalog);
   storage.getSettings.mockResolvedValue(settings);
   return render(
     <AuthContext.Provider value={{ uid: 'user-1' }}>
-      <Settings onClose={vi.fn()} />
+      <Settings onClose={vi.fn()} onDirtyChange={onDirtyChange} />
     </AuthContext.Provider>,
   );
 }
@@ -50,6 +50,41 @@ describe('Settings tracking configuration', () => {
     await waitFor(() => expect(storage.saveSettings).toHaveBeenCalledWith(
       'user-1', expect.objectContaining({ defaultRestSeconds: 90 }),
     ));
+  });
+
+  it('reports unsaved settings edits until their save succeeds', async () => {
+    let resolveSave; storage.saveSettings.mockReturnValue(new Promise(resolve => { resolveSave = resolve; }));
+    const onDirtyChange = vi.fn(); renderSettings([], { defaultRestSeconds: 60 }, onDirtyChange);
+    const input = await screen.findByLabelText('Default rest seconds');
+    fireEvent.change(input, { target: { value: '90' } });
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    fireEvent.blur(input); resolveSave();
+    await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(false));
+  });
+
+  it('keeps Settings dirty for unsaved catalog adds and edits', async () => {
+    const addDirty = vi.fn(); renderSettings([exercise], {}, addDirty);
+    fireEvent.change(await screen.findByLabelText('Exercise name'), { target: { value: 'Incline Press' } });
+    expect(addDirty).toHaveBeenLastCalledWith(true);
+    addDirty.mockClear();
+    const rest = screen.getByLabelText('Default rest seconds');
+    fireEvent.change(rest, { target: { value: '90' } }); fireEvent.blur(rest);
+    await waitFor(() => expect(storage.saveSettings).toHaveBeenCalled());
+    expect(addDirty).not.toHaveBeenCalledWith(false);
+
+    cleanup(); const editDirty = vi.fn(); renderSettings([exercise], {}, editDirty);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Edit exercise name'), { target: { value: 'Paused Bench Press' } });
+    expect(editDirty).toHaveBeenLastCalledWith(true);
+  });
+
+  it('keeps failed settings saves dirty', async () => {
+    storage.saveSettings.mockRejectedValue(new Error('offline'));
+    const onDirtyChange = vi.fn(); renderSettings([], { defaultRestSeconds: 60 }, onDirtyChange);
+    const input = await screen.findByLabelText('Default rest seconds');
+    fireEvent.change(input, { target: { value: '90' } }); fireEvent.blur(input);
+    await waitFor(() => expect(storage.saveSettings).toHaveBeenCalled());
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
   });
 
   it('preserves default rest and Leg Day when their saves overlap and finish out of order', async () => {

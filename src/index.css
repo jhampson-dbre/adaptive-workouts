@@ -838,6 +838,10 @@ input:focus-visible {
 }
 
 .app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   min-height: 84px;
   box-sizing: border-box;
   margin: 0;
@@ -855,7 +859,17 @@ input:focus-visible {
   line-height: 1;
 }
 
-.settings-toggle {
+.app-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.settings-toggle,
+.sign-out-button {
+  min-width: 44px;
+  min-height: 44px;
   border: 1px solid #101010;
   border-radius: 0;
   background: #ffffff;
@@ -863,7 +877,8 @@ input:focus-visible {
   font-weight: 700;
 }
 
-.settings-toggle:hover {
+.settings-toggle:hover,
+.sign-out-button:hover {
   border-color: #101010;
   background: #101010;
   color: #ffffff;
@@ -1741,6 +1756,10 @@ input:focus-visible {
 @media (max-width: 520px) {
   .app-header {
     padding-inline: 18px;
+  }
+
+  .app-header-actions {
+    gap: 4px;
   }
 
   .journey-progress ol {

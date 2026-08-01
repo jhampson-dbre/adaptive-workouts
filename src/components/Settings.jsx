@@ -111,7 +111,7 @@ function TrackingFields({ prefix = '', mode, values, setters, invalid = false, e
   );
 }
 
-export default function Settings({ onClose }) {
+export default function Settings({ onClose, onDirtyChange }) {
   const user = useContext(AuthContext);
   const [loading, setLoading] = useState(true);
   const [catalog, setCatalog] = useState([]);
@@ -123,6 +123,7 @@ export default function Settings({ onClose }) {
   const [settingsError, setSettingsError] = useState('');
   const [warmupMinutes, setWarmupMinutes] = useState('10');
   const [cooldownMinutes, setCooldownMinutes] = useState('5');
+  const [savedSettings, setSavedSettings] = useState(null);
   const [phaseErrors, setPhaseErrors] = useState({ warmup: '', cooldown: '' });
   
   // New exercise state
@@ -157,6 +158,7 @@ export default function Settings({ onClose }) {
   const [editError, setEditError] = useState('');
   const [editErrorIsValidation, setEditErrorIsValidation] = useState(false);
   const [isEditSaving, setIsEditSaving] = useState(false);
+  const [editDirty, setEditDirty] = useState(false);
   const editSaveInFlight = useRef(false);
 
   useEffect(() => {
@@ -174,8 +176,15 @@ export default function Settings({ onClose }) {
         setDefaultRestSeconds(String(currentSettings.defaultRestSeconds ?? 60));
         setWarmupMinutes(String((currentSettings.warmupSeconds ?? 600) / 60));
         setCooldownMinutes(String((currentSettings.cooldownSeconds ?? 300) / 60));
+        setSavedSettings({
+          legDayOfWeek: currentSettings.legDayOfWeek || 'None',
+          defaultRestSeconds: String(currentSettings.defaultRestSeconds ?? 60),
+          warmupMinutes: String((currentSettings.warmupSeconds ?? 600) / 60),
+          cooldownMinutes: String((currentSettings.cooldownSeconds ?? 300) / 60),
+        });
       } catch (error) {
         console.error("Failed to load data:", error);
+        setSavedSettings({ legDayOfWeek: 'None', defaultRestSeconds: '60', warmupMinutes: '10', cooldownMinutes: '5' });
       } finally {
         setLoading(false);
       }
@@ -183,9 +192,19 @@ export default function Settings({ onClose }) {
     loadData();
   }, [user]);
 
+  const hasNewExercise = Boolean(newName || newGroup !== 'Chest' || Number(newTier) !== 3 || Number(newSets) !== 3 || newLink || newTrackingMode !== 'simple' || newStartingWeight || newTargetReps || newFloorReps || newWeightStep || newRestSeconds);
+  const hasChangedSettings = savedSettings && (legDayOfWeek !== savedSettings.legDayOfWeek || defaultRestSeconds !== savedSettings.defaultRestSeconds || warmupMinutes !== savedSettings.warmupMinutes || cooldownMinutes !== savedSettings.cooldownMinutes);
+  const isDirty = Boolean(hasNewExercise || hasChangedSettings || (editingId && editDirty) || isCatalogMutating);
+  useEffect(() => { onDirtyChange?.(isDirty); }, [isDirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+
   const handleSaveSettings = async (updates) => {
     try {
       await saveSettings(user.uid, updates);
+      setSavedSettings(current => ({ ...current,
+        ...(Object.hasOwn(updates, 'legDayOfWeek') ? { legDayOfWeek: updates.legDayOfWeek } : {}),
+        ...(Object.hasOwn(updates, 'defaultRestSeconds') ? { defaultRestSeconds: String(updates.defaultRestSeconds) } : {}),
+      }));
     } catch (error) {
       console.error("Failed to save settings:", error);
     }
@@ -220,6 +239,7 @@ export default function Settings({ onClose }) {
     setPhaseErrors(current => ({ ...current, [phase]: '' }));
     try {
       await saveSettings(user.uid, { [`${phase}Seconds`]: value * 60 });
+      setSavedSettings(current => ({ ...current, [`${phase}Minutes`]: String(value) }));
     } catch (error) {
       console.error('Failed to save phase setting:', error);
       setPhaseErrors(current => ({
@@ -282,6 +302,7 @@ export default function Settings({ onClose }) {
     setEditRestSeconds(ex.restSeconds ?? '');
     setEditError('');
     setEditErrorIsValidation(false);
+    setEditDirty(false);
   };
 
   const handleSaveEdit = async (id) => {
@@ -340,6 +361,7 @@ export default function Settings({ onClose }) {
     try {
       await handleSave(updated, changedItem);
       setEditingId(null);
+      setEditDirty(false);
     } catch (error) {
       console.error('Failed to save exercise edit:', error);
       setEditError('Could not save this exercise. Your changes are still here; try again.');
@@ -638,9 +660,10 @@ export default function Settings({ onClose }) {
                     aria-label="Edit exercise name"
                     type="text" 
                     value={editName} 
-                    onChange={(e) => setEditName(e.target.value)} 
+                    onChange={(e) => { setEditDirty(true); setEditName(e.target.value); }}
                   />
                   <select value={editGroup} onChange={(e) => {
+                    setEditDirty(true);
                     setEditGroup(e.target.value);
                     if (e.target.value === 'Legs' && editTier !== 3 && editTier !== 4) setEditTier(3);
                     if (e.target.value !== 'Legs' && editTier !== 1 && editTier !== 3 && editTier !== 4) setEditTier(3);
@@ -655,7 +678,7 @@ export default function Settings({ onClose }) {
                   </select>
                   <select 
                     value={editTier} 
-                    onChange={(e) => setEditTier(e.target.value)} 
+                    onChange={(e) => { setEditDirty(true); setEditTier(e.target.value); }}
                     title="Priority Tier"
                   >
                     {editGroup === 'Legs' ? (
@@ -676,7 +699,7 @@ export default function Settings({ onClose }) {
                     min="1" 
                     max="10" 
                     value={editSets} 
-                    onChange={(e) => setEditSets(e.target.value)} 
+                    onChange={(e) => { setEditDirty(true); setEditSets(e.target.value); }}
                     title="Sets"
                   />
                   <label className="tracking-field">
@@ -688,7 +711,7 @@ export default function Settings({ onClose }) {
                       max="600"
                       step="1"
                       value={editRestSeconds}
-                      onChange={event => setEditRestSeconds(event.target.value)}
+                      onChange={event => { setEditDirty(true); setEditRestSeconds(event.target.value); }}
                       aria-invalid={editErrorIsValidation || undefined}
                       aria-describedby={editErrorIsValidation ? `edit-tracking-error-${editingId}` : undefined}
                     />
@@ -699,6 +722,7 @@ export default function Settings({ onClose }) {
                       aria-label="Edit tracking mode"
                       value={editTrackingMode}
                       onChange={(e) => {
+                        setEditDirty(true);
                         setEditTrackingMode(e.target.value);
                         setEditError('');
                         setEditErrorIsValidation(false);
@@ -718,14 +742,14 @@ export default function Settings({ onClose }) {
                     prefix="Edit"
                     mode={editTrackingMode}
                     values={{ startingWeight: editStartingWeight, targetReps: editTargetReps, floorReps: editFloorReps, weightStep: editWeightStep }}
-                    setters={{ setStartingWeight: setEditStartingWeight, setTargetReps: setEditTargetReps, setFloorReps: setEditFloorReps, setWeightStep: setEditWeightStep }}
+                    setters={{ setStartingWeight: value => { setEditDirty(true); setEditStartingWeight(value); }, setTargetReps: value => { setEditDirty(true); setEditTargetReps(value); }, setFloorReps: value => { setEditDirty(true); setEditFloorReps(value); }, setWeightStep: value => { setEditDirty(true); setEditWeightStep(value); } }}
                     invalid={editErrorIsValidation}
                     errorId={`edit-tracking-error-${editingId}`}
                   />
                   {editGroup === 'Legs' && String(editTier) === '3' ? (
                     <span className="badge">Primary Leg exercises are automatically linked together on Leg Day.</span>
                   ) : (
-                    <select value={editLink} onChange={(e) => setEditLink(e.target.value)}>
+                    <select value={editLink} onChange={(e) => { setEditDirty(true); setEditLink(e.target.value); }}>
                       <option value="">None</option>
                       {catalog.filter(c => c.id !== ex.id).map(c => (
                         <option key={c.id} value={c.id}>{c.name}</option>
@@ -734,7 +758,7 @@ export default function Settings({ onClose }) {
                   )}
                   <div className="edit-actions">
                     <button onClick={() => handleSaveEdit(ex.id)} className="save-btn" disabled={isCatalogMutating}>{isEditSaving ? 'Saving...' : 'Save'}</button>
-                    <button onClick={() => setEditingId(null)} className="cancel-btn" disabled={isCatalogMutating}>Cancel</button>
+                    <button onClick={() => { setEditingId(null); setEditDirty(false); }} className="cancel-btn" disabled={isCatalogMutating}>Cancel</button>
                   </div>
                   {editError && <div id={`edit-tracking-error-${editingId}`} className="catalog-form-error" role="alert">{editError}</div>}
                 </div>
