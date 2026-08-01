@@ -63,6 +63,7 @@ export default defineConfig(({ command, mode }) => {
       },
       includeAssets: ['favicon.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
       workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,ttf}'],
         manifestTransforms: [async entries => {
           writeFileSync(resolve('dist/.vite/pwa-precache.json'), JSON.stringify(entries, null, 2))
           return { manifest: entries, warnings: [] }
