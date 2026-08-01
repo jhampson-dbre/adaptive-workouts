@@ -24,7 +24,7 @@ const historyFor = kind => kind === 'empty'
     : validHistory;
 const pendingHistory = () => new Promise(() => {});
 const failedHistory = () => Promise.reject(new Error('offline'));
-const exhaustedHistory = () => Promise.resolve({ items: validHistory, nextCursor: null, hasMore: false });
+const exhaustedHistory = () => Promise.resolve({ items: progressionHistory, nextCursor: null, hasMore: false });
 const olderFailureHistory = ({ cursor }) => cursor
   ? Promise.reject(new Error('offline'))
   : Promise.resolve({ items: validHistory.slice(0, 1), nextCursor: 'older', hasMore: true });

@@ -6,7 +6,7 @@
 - Rationale: Workout history changes hierarchy, dense responsive layout, recoverable feedback, and visible keyboard focus inside the active workout surface.
 - Approved scenario or artifact: TREK-235 task contract plus the fresh UX design review recorded during implementation; the established Clear Signal system remains authoritative.
 
-All evidence uses synthetic local fixtures. Build: `codex/trek-235-nudge-history` working tree on base `7e87411`; source-diff SHA-256 `0962d0bf799c3daa0a631f8f15b44004fd53f4e803a4821a9eed050a5f9c4446`.
+All evidence uses synthetic local fixtures. Build: `codex/trek-235-nudge-history` working tree on base `7e87411`; source-diff SHA-256 `40bc65ef0eb9cb396ac2c06f2e4639705a2dc4ca3a0e4646be96dfedbf9c0cfd`.
 
 ## Changed scenario
 
