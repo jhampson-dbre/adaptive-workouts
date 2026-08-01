@@ -35,7 +35,7 @@ test('accepts the repository contract', () => validate())
 
 test('rejects a missing evidence field', () => withFixture((root) => {
   mutate(root, 'docs/templates/ux-evidence-matrix.md', (value) =>
-    value.replace('- Rendered evidence:', '- Screenshot:'))
+    value.replaceAll('- Rendered evidence:', '- Screenshot:'))
   assert.throws(() => validate(root), /Rendered evidence/)
 }))
 
