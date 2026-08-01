@@ -38,7 +38,7 @@ the safe method attempted and the best available alternative.
 ## Changed scenario
 
 - Scenario: Start a weighted set and verify the active confirm/cancel actions at phone width.
-- Build / commit: `codex/fix-confirm-arrow-responsive` at `73e8702` plus the current worktree.
+- Build / commit: `codex/fix-confirm-arrow-responsive` source commit `edba0df`.
 - Viewport and starting state: In-app Browser, 390 × 844 override (375 × 844 document viewport); seeded local emulator user with a generated workout and Barbell Curl set 1 active.
 - Actions: Plan workout → Start Workout → Start Barbell Curl set 1.
 - Observed result: Active actions render in one 318.75px column; “Confirm attempt” clears the CSS arrow, “Cancel timer” remains a separate full-width secondary action, document overflow is 0px, and the unchanged 760px layout retains two columns.
@@ -48,9 +48,9 @@ the safe method attempted and the best available alternative.
 ## Changed scenario
 
 - Scenario: Verify the active confirm/cancel actions across the residual landscape breakpoint.
-- Build / commit: `codex/fix-confirm-arrow-responsive` at `73e8702` plus the current worktree.
+- Build / commit: `codex/fix-confirm-arrow-responsive` source commit `edba0df`.
 - Viewport and starting state: Chrome DevTools mobile emulation at 568 × 320 and 760 × 600; seeded local emulator user with Barbell Curl set 1 active.
 - Actions: Plan workout → Start Workout → Start Barbell Curl set 1; inspect the active actions at both widths.
 - Observed result: At 568px the actions stack into one 487.2px column, “Confirm attempt” clears the arrow by 76.1px, and document overflow is 0px. At 760px the actions retain two 322.3px columns with 15.8px arrow clearance and 0px document overflow.
-- Rendered evidence: Chrome DevTools element capture recorded in the task session; existing portrait capture remains at `.impeccable/evidence/mobile-confirm-arrow-fixed.png`.
+- Rendered evidence: `.impeccable/evidence/mobile-confirm-arrow-landscape-568.png` and `.impeccable/evidence/mobile-confirm-arrow-two-column-760.png`; existing portrait capture remains at `.impeccable/evidence/mobile-confirm-arrow-fixed.png`.
 - Material limitation: Device emulation verifies Chromium layout and font metrics, not physical-device Safari rendering.
