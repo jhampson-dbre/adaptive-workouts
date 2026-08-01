@@ -7,6 +7,7 @@
           {
             "type": "command",
             "command": "[ ! -f \".agents/skills/impeccable/scripts/hook.mjs\" ] || node \".agents/skills/impeccable/scripts/hook.mjs\"",
+            "commandWindows": "if (Test-Path \".agents/skills/impeccable/scripts/hook.mjs\") { node \".agents/skills/impeccable/scripts/hook.mjs\" }",
             "timeout": 5,
             "statusMessage": "Checking UI changes"
           }
@@ -19,6 +20,7 @@
           {
             "type": "command",
             "command": "[ ! -f \".agents/skills/impeccable/scripts/hook.mjs\" ] || node \".agents/skills/impeccable/scripts/hook.mjs\"",
+            "commandWindows": "if (Test-Path \".agents/skills/impeccable/scripts/hook.mjs\") { node \".agents/skills/impeccable/scripts/hook.mjs\" }",
             "timeout": 30,
             "statusMessage": "Design deep pass"
           }
