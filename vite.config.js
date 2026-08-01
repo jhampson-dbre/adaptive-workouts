@@ -70,9 +70,9 @@ export default defineConfig(({ command, mode }) => {
         }],
       },
       manifest: {
-        name: 'Adaptive Workouts',
-        short_name: 'Workouts',
-        description: 'Adaptive Hypertrophy Programming App',
+        name: 'Nudge',
+        short_name: 'Nudge',
+        description: 'Training fits real life.',
         theme_color: '#ffffff',
         icons: [
           {
