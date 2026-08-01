@@ -11,14 +11,17 @@ const createClock = () => { let value = 1_000; return { now: () => value, advanc
 const makeController = (clock, setCount = 1) => createTimingPresentationController({ now: clock.now, phaseTargets: { warmupSeconds: 60, performanceSeconds: 300, cooldownSeconds: 60 }, exercises: [{ ...exercise, sets: setCount, prescribedSetCount: setCount }] });
 const act = (controller, clock, action, advance = 0) => { if (advance) clock.advance(advance); controller.dispatch(action); };
 
-const validHistory = [0, 1, 2].map(index => ({ id: `123e4567-e89b-42d3-a456-42661417400${index}`, schemaVersion: 4, status: 'completed', date: `2026-07-${22 - index}T12:00:00.000Z`, actualDurationSeconds: 76, phaseDurations: { warmup: { plannedSeconds: 60, actualSeconds: 10 }, performance: { plannedSeconds: 300, actualSeconds: 5 }, cooldown: { plannedSeconds: 60, actualSeconds: 61 } }, exercises: [{ ...exercise, occurrenceId: `plank:${index}`, setRecords: [{ index: 0, completed: true, plannedRestSeconds: null, workDurationSeconds: 5, actualRestSeconds: null }] }] }));
-const historyFor = kind => kind === 'legacy'
+const validHistory = [{ id: '123e4567-e89b-42d3-a456-426614174000', schemaVersion: 4, status: 'completed', date: '2026-07-22T12:00:00.000Z', actualDurationSeconds: 76, phaseDurations: { warmup: { plannedSeconds: 60, actualSeconds: 10 }, performance: { plannedSeconds: 300, actualSeconds: 5 }, cooldown: { plannedSeconds: 60, actualSeconds: 61 } }, exercises: [{ id: 'bench', occurrenceId: 'bench:0', name: 'Bench Press', muscleGroup: 'Chest', tier: 1, trackingMode: 'weighted', sets: 1, prescribedSetCount: 1, startingWeight: 95, targetReps: 8, floorReps: 6, weightStep: 5, setRecords: [{ index: 0, completed: true, plannedRestSeconds: null, workDurationSeconds: 5, actualRestSeconds: null, targetWeight: 100, targetReps: 8, actualWeight: 100, actualReps: 8, recommendationReason: { decision: 'starting', sourceWorkoutId: null, sourceWorkoutDate: null, sourceAnchorWeight: null, appliedWeightStep: 0, recommendedWeight: 100, reasonCode: 'STARTING_NO_ANCHOR' } }] }] }];
+const historyFor = kind => kind === 'empty'
+  ? []
+  : kind === 'legacy'
   ? [{ date: '2026-07-22', actualDuration: 1, exercises: [{ name: 'Legacy exercise', sets: 1 }] }]
   : kind === 'malformed'
     ? [{ id: 'bad', schemaVersion: 4, status: 'completed', date: 'bad', exercises: [] }]
     : validHistory;
 const pendingHistory = () => new Promise(() => {});
 const failedHistory = () => Promise.reject(new Error('offline'));
+const exhaustedHistory = () => Promise.resolve({ items: validHistory, nextCursor: null, hasMore: false });
 const olderFailureHistory = ({ cursor }) => cursor
   ? Promise.reject(new Error('offline'))
   : Promise.resolve({ items: validHistory.slice(0, 1), nextCursor: 'older', hasMore: true });
@@ -26,6 +29,8 @@ const historyPropsFor = kind => kind === 'loading'
   ? { loadPage: pendingHistory }
   : kind === 'error'
     ? { loadPage: failedHistory }
+    : kind === 'exhausted'
+      ? { loadPage: exhaustedHistory }
     : kind === 'olderError'
       ? { loadPage: olderFailureHistory }
       : { history: historyFor(kind) };
@@ -93,7 +98,7 @@ export function TimingHarness({ initialScenario = 'T-01' }) {
     <section aria-label="Scenario evidence"><h2>Scenario {scenario.id}: {scenario.title}</h2><p>Start state: {scenario.start}</p><ol>{scenario.actions.map((action, index) => <li key={`${index}-${action}`}>{action}</li>)}</ol><p>Expected visible outcome: {scenario.expected}</p><p>Observed state: {controller.getViewModel().phase}; recovery: {controller.getViewModel().recovery ?? 'none'}.</p>{staged.outcome && <p>Observed synthetic path: {staged.outcome}.</p>}</section>
     {scenario.id === 'T-04' && <button type="button" onClick={() => setPathController(stageNoWorkCancellation())}>Show no-work cancellation</button>}
     {scenario.id === 'T-06' && <section aria-label="Resume and undo controls"><button type="button" onClick={() => setPathController(stageResumePath())}>Show Resume Workout path</button><button type="button" onClick={() => setPathController(stageUndoPath())}>Show final-set Undo path</button></section>}
-    {scenario.id === 'T-09' && <section aria-label="History fixture selector"><button type="button" onClick={() => setHistoryKind('valid')}>Show valid v4 History</button><button type="button" onClick={() => setHistoryKind('loading')}>Show loading History</button><button type="button" onClick={() => setHistoryKind('error')}>Show error History</button><button type="button" onClick={() => setHistoryKind('olderError')}>Show older-page error History</button><button type="button" onClick={() => setHistoryKind('malformed')}>Show malformed History</button><button type="button" onClick={() => setHistoryKind('legacy')}>Show legacy History</button></section>}
+    {scenario.id === 'T-09' && <section aria-label="History fixture selector"><button type="button" onClick={() => setHistoryKind('valid')}>Show valid v4 History</button><button type="button" onClick={() => setHistoryKind('empty')}>Show empty History</button><button type="button" onClick={() => setHistoryKind('exhausted')}>Show exhausted History</button><button type="button" onClick={() => setHistoryKind('loading')}>Show loading History</button><button type="button" onClick={() => setHistoryKind('error')}>Show error History</button><button type="button" onClick={() => setHistoryKind('olderError')}>Show older-page error History</button><button type="button" onClick={() => setHistoryKind('malformed')}>Show malformed History</button><button type="button" onClick={() => setHistoryKind('legacy')}>Show legacy History</button></section>}
     {OUTCOME_CONTROLS[scenario.id] && <section aria-label="Synthetic outcome controls">{OUTCOME_CONTROLS[scenario.id].map(outcome => <button key={outcome} type="button" onClick={() => { setSyntheticOutcome(outcome); if (outcome === 'saved') { controller.setRecovery(null); controller.setSaveState('saved'); } else controller.setRecovery(outcome); }}>Show {outcome} outcome</button>)}{syntheticOutcome && <p>Observed synthetic outcome: {syntheticOutcome}.</p>}</section>}
     {scenario.id === 'T-10' && <section aria-label="Accessibility probes"><p>Reduced motion: no animated timing transition is required.</p><p>Viewport probes: {TIMING_VIEWPORTS.join(', ')}.</p></section>}
     <TimingPresentation controller={controller} />
