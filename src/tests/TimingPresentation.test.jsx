@@ -179,7 +179,7 @@ describe('Timing presentation controller', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show exhausted History' }));
     fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
     expect(await screen.findByText('All available workouts are shown.')).toBeDefined();
-    fireEvent.click(screen.getByRole('button', { name: 'Show valid v4 History' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show progression History' }));
     expect(screen.getByText('Starting recommendation: 100 lb.')).toBeDefined();
     cleanup();
   });

@@ -6,7 +6,7 @@
 - Rationale: Workout history changes hierarchy, dense responsive layout, recoverable feedback, and visible keyboard focus inside the active workout surface.
 - Approved scenario or artifact: TREK-235 task contract plus the fresh UX design review recorded during implementation; the established Clear Signal system remains authoritative.
 
-All evidence uses synthetic local fixtures. Build: `codex/trek-235-nudge-history` working tree on base `7e87411`; source-diff SHA-256 `c127b78fdaf3adc74b127abbeb363c4f01f0d1a07effc1727be07a91c5a2d5c6`.
+All evidence uses synthetic local fixtures. Build: `codex/trek-235-nudge-history` working tree on base `7e87411`; source-diff SHA-256 `0962d0bf799c3daa0a631f8f15b44004fd53f4e803a4821a9eed050a5f9c4446`.
 
 ## Changed scenario
 
@@ -103,7 +103,7 @@ All evidence uses synthetic local fixtures. Build: `codex/trek-235-nudge-history
 - Scenario: Saved progression explanation.
 - Build / commit: Source-diff SHA-256 above.
 - Viewport and starting state: 390 × 844; schema-valid weighted v4 fixture; disclosure collapsed.
-- Actions: Selected Valid v4 History and opened the disclosure.
+- Actions: Selected Progression History and opened the disclosure.
 - Observed result: The card shows target and actual performance plus the existing factual explanation `Starting recommendation: 100 lb.` without adding coaching logic or unsupported intelligence.
 - Rendered evidence: `.impeccable/evidence/trek-235-history-progression-mobile.png`
 - Material limitation: Synthetic saved recommendation reason.
