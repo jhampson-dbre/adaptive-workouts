@@ -12,7 +12,7 @@
 | ID | Surface and state | Primary evidence | Result |
 | --- | --- | --- | --- |
 | CORE-01 | Plan, phone and desktop | `trek-233-plan-mobile-current.png`; `trek-233-plan-desktop-current.png` | Time and one yellow Plan action lead; optional constraints remain subordinate. |
-| CORE-02 | Workout ready and active performance | `trek-233-workout-ready-mobile-current.png`; `trek-233-performance-header-390-current.png`; `trek-233-performance-390-current.png` | Start/Confirm is dominant, Cancel is neutral, and the phone heading does not overflow. |
+| CORE-02 | Workout ready and active performance | `trek-233-workout-ready-mobile-current.png`; `mobile-confirm-arrow-fixed.png`; `mobile-confirm-arrow-landscape-568.png`; `mobile-confirm-arrow-two-column-760.png` | Start/Confirm is dominant, Cancel is neutral, and the post-fix action clears its arrow at portrait, landscape, and two-column widths. |
 | CORE-03 | Due leg-day choice | `trek-233-leg-day-choice-mobile-current.png` | Focus reaches the inline decision; both choices preserve agency without pressure copy. |
 | CORE-04 | Early-finish guard | `trek-233-early-finish-mobile-current.png` | Remaining work is factual; Return remains primary and Continue is explicit. |
 | CORE-05 | Cooldown and resume | `trek-233-cooldown-mobile-current.png` | Finish is dominant; Resume is neutral; remaining work is disclosed on demand. |
@@ -37,6 +37,7 @@
 | SET-03 | Invalid default rest | `trek-236-settings-invalid-mobile.png` | An inline alert explains the constraint and preserves the value for correction. |
 | SET-04 | Dirty catalog edit | `trek-236-settings-edit-add-neutral-mobile.png`; `trek-236-settings-edit-mobile.png` | Add becomes neutral while Save is the sole yellow action; Cancel remains neutral. |
 | SET-05 | Deactivate and reactivate | `trek-236-settings-inactive-mobile.png`; `trek-236-settings-reactivated-mobile.png` | Non-color status and reversible actions prove both inactive and restored states. |
+| SET-06 | Catalog persistence failure | `trek-236-settings-persistence-failure-mobile.png` | The inline alert is visible and the edited value remains available after a rejected save. |
 
 Evidence assets are under `.impeccable/evidence/`. Full actions, viewports, observations, limitations, and task-level verification are recorded in:
 
@@ -49,8 +50,9 @@ Evidence assets are under `.impeccable/evidence/`. Full actions, viewports, obse
 
 - Production source has no import or runtime reference to `docs/reports/nudge-concepts`, `docs/reports/nudge-translation-bakeoff`, `.impeccable/mocks`, `.impeccable/sketches`, or `.impeccable/nudge-direction-options.json`.
 - The stale generated "airport wayfinding / chosen challenger / seed" HTML comment was removed from `index.html`; concept and bake-off language now remains under documentation/evidence paths only.
-- No EPIC-13 prototype component, experimental hook, route, stored field, package, or generated product-context module is present. The existing Timing harness remains explicitly non-production, script-addressable, and test-covered for recovery evidence.
+- The active Impeccable hook and generated design context were removed (`.codex/hooks.json` and `.impeccable/design.json`); the remaining `.gitignore` entries cover ephemeral local state while historical evidence stays tracked. No EPIC-13 prototype component, route, stored field, package, or generated product-context module is present. The existing Timing harness remains explicitly non-production, script-addressable, and test-covered for recovery evidence.
 - Runtime copy inspection found no EPIC-13 addition of gamification, guilt, fake urgency, simulated intimacy, readiness claims, or authoritative coaching language. Existing saved recommendation values retain their pre-redesign data meaning.
+- `public/fonts/OFL.txt` ships the Atkinson Hyperlegible and Barlow copyright notices with the SIL Open Font License 1.1 in the deployable font directory.
 
 ## Bounded integration verification
 
@@ -58,5 +60,5 @@ Evidence assets are under `.impeccable/evidence/`. Full actions, viewports, obse
 - The identical Firestore rules suite was then run with the repository's isolated `firebase.emulator-test.json` ports (`18080`/`19150`): all 14 tests passed. `npm run ci:workflow` and `npm run ci:agent-models` also passed.
 - The current production build emits a service worker, web manifest, both PWA icons, and a Workbox precache containing all three approved local font assets: `atkinson-hyperlegible-bold.ttf`, `atkinson-hyperlegible-regular.woff2`, and `barlow-condensed-bold.ttf`.
 - The bundle contract rejects a build when any required font is absent from the final precache; its six focused Node tests pass. Font faces retain `font-display: swap` for a readable fallback while the local asset loads.
-- The integration delta changes no rendered layout or interaction code. The 26 scenario rows above retain their task-level phone, desktop, 320px reflow, keyboard, loading, failure, recovery, and saved-state evidence; the current build continues to enforce the existing touch-target and overflow contracts.
+- The integration delta changes no rendered layout or interaction code. The 27 scenario rows above retain their task-level phone, desktop, 320px reflow, keyboard, loading, failure, recovery, and saved-state evidence; the current build continues to enforce the existing touch-target and overflow contracts.
 - Device-specific Safari behavior and a true network-interruption session remain the documented limitations from the source reports; offline shell/font availability is verified from the generated production service worker rather than inferred from screenshots.
