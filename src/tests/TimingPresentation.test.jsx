@@ -167,14 +167,20 @@ describe('Timing presentation controller', () => {
     cleanup();
   });
 
-  it('exposes the no-work cancellation and History fixture controls without developer tools', () => {
+  it('exposes the no-work cancellation and required History fixture states without developer tools', async () => {
     render(<TimingHarness initialScenario="T-04" />);
     fireEvent.click(screen.getByRole('button', { name: 'Show no-work cancellation' }));
     expect(screen.getByRole('heading', { level: 1, name: 'Workout cancelled' })).toBeDefined();
     cleanup();
     render(<TimingHarness initialScenario="T-09" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Show valid v4 History' }));
-    expect(screen.getByRole('button', { name: 'Workout history' })).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Show empty History' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
+    expect(screen.getByText('No workouts logged yet.')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Show exhausted History' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
+    expect(await screen.findByText('All available workouts are shown.')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Show progression History' }));
+    expect(screen.getByText('Starting recommendation: 100 lb.')).toBeDefined();
     cleanup();
   });
 

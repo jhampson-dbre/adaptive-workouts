@@ -252,7 +252,7 @@ function V4Workout({ entry, headingRef, focusable, onFocusLeave }) {
         <h3 ref={headingRef} tabIndex={focusable ? '-1' : undefined} onBlur={focusable ? onFocusLeave : undefined}>{formatWorkoutDate(entry.date)}</h3>
         <p>Duration: {formatDuration(entry.actualDurationSeconds)}</p>
       </header>
-      <section aria-label="Phase durations">
+      <section className="history-phase-durations" aria-label="Phase durations">
         <p>Warmup: Planned {formatDuration(entry.phaseDurations.warmup.plannedSeconds)} · Actual {formatDuration(entry.phaseDurations.warmup.actualSeconds)}</p>
         <p>Performance: Planned {formatDuration(entry.phaseDurations.performance.plannedSeconds)} · Actual {formatDuration(entry.phaseDurations.performance.actualSeconds)}</p>
         <p>Cooldown: Planned {formatDuration(entry.phaseDurations.cooldown.plannedSeconds)} · Actual {formatDuration(entry.phaseDurations.cooldown.actualSeconds)}</p>

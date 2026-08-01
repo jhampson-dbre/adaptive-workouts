@@ -9,7 +9,7 @@ related_targets: ["src/components/Generator.jsx","src/components/WorkoutView.jsx
 
 ## Scope and mode
 
-Required mobile-first Operate UI for the shared shell and Plan → Perform → Cooldown → Review/completion. Settings and history keep their behavior and are outside this visual pilot.
+Required mobile-first Operate UI for the shared shell, Plan → Perform → Cooldown → Review/completion, and the existing read-only Workout history disclosure. Settings keeps its behavior and remains outside this visual pilot.
 
 ## Audience and job
 
@@ -17,7 +17,7 @@ An individual trainee, often alone and handling a phone around equipment, needs 
 
 ## Action and content
 
-Each state presents what is happening, one dominant next action, then optional alternatives. Plan collects time and constraints; Perform exposes the current set and exercise list; Cooldown closes the session; Review confirms exactly what will be saved. Existing engine, timing, recovery, persistence, focus, authentication, and lazy navigation semantics remain unchanged.
+Each state presents what is happening, one dominant next action, then optional alternatives. Plan collects time and constraints; Perform exposes the current set and exercise list; Cooldown closes the session; Review confirms exactly what will be saved. Workout history remains a neutral, lazy disclosure beneath the current workout and presents newest-first saved facts without competing with the active action. Existing engine, timing, recovery, persistence, focus, authentication, and lazy navigation semantics remain unchanged.
 
 ## Direction and memorable moment
 
@@ -30,6 +30,7 @@ Approved comp: `.impeccable/mocks/nudge-single-next-action.png`.
 - Semantic code: Nudge wordmark, four-phase progress, current exercise, set inputs, dominant action, passive concurrent-rest status, exercise rows, cooldown action, review summary.
 - CSS geometry: black/yellow/white sign planes, large numeric identifiers, authored arrow geometry, thin rules, responsive stacking, visible keyboard focus.
 - Raster media: none. Core text and controls remain semantic and responsive.
+- History evidence: `.impeccable/evidence/trek-235-history-mobile.png`, `.impeccable/evidence/trek-235-history-desktop.png`, and `.impeccable/evidence/trek-235-history-reflow-320.png`.
 
 ## Constraints
 

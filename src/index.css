@@ -1744,10 +1744,102 @@ input:focus-visible {
 }
 
 .history-disclosure {
-  border: 0;
-  background: transparent;
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border: 1px solid #101010;
+  border-radius: 0;
+  background: #ffffff;
   color: #101010;
   font-weight: 700;
+}
+
+.history-disclosure::after {
+  width: 16px;
+  height: 16px;
+  content: '';
+  background:
+    linear-gradient(#101010 0 0) center / 100% 2px no-repeat,
+    linear-gradient(#101010 0 0) center / 2px 100% no-repeat;
+}
+
+.history-disclosure[aria-expanded='true']::after {
+  background: linear-gradient(#101010 0 0) center / 100% 2px no-repeat;
+}
+
+.history-list {
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.history-card {
+  padding: 16px;
+  border-color: #101010;
+  border-radius: 0;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.history-card-heading h3,
+.history-exercise h4 {
+  font-family: var(--heading);
+  font-weight: 700;
+}
+
+.history-card-heading > p,
+.history-exercise-summary,
+.history-simple-status,
+.history-recommendation,
+.history-set-performance,
+.history-set-timing {
+  color: #454545;
+}
+
+.history-exercise {
+  border-color: #101010;
+}
+
+.history-set-row {
+  border-radius: 0;
+  background: #f0eee7;
+}
+
+.history-set-row strong {
+  color: #101010;
+}
+
+.history-phase-durations {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+  color: #454545;
+}
+
+.history-phase-durations p {
+  overflow-wrap: anywhere;
+}
+
+.workout-history-section .error-message {
+  margin-top: 12px;
+  border: 1px solid #101010;
+  background: #ffffff;
+  color: #101010;
+}
+
+@media (max-width: 600px) {
+  .history-card-heading {
+    display: grid;
+    gap: 4px;
+  }
+
+  .history-phase-durations {
+    grid-template-columns: 1fr;
+  }
 }
 
 .error-message {
