@@ -86,7 +86,7 @@ components:
 
 Nudge is a high-contrast operating interface for a trainee using a phone around equipment. Hard-edged black, white, pale-concrete, and signal-yellow planes establish context quickly; generous identifiers and condensed headings make the current state legible without decoration or motivational theater.
 
-The system applies to the shared shell and the approved Plan → Perform → Cooldown → Review journey. Every state answers three questions in order: what is happening, what is the one dominant next action, and which other exercises remain available. Guidance comes from hierarchy and plain language, never literal route, gate, airport, or destination terminology.
+The system applies to the shared shell, the approved Plan → Perform → Cooldown → Review journey, and the read-only Workout history disclosure. Every active state answers three questions in order: what is happening, what is the one dominant next action, and which other exercises remain available. Guidance comes from hierarchy and plain language, never literal route, gate, airport, or destination terminology.
 
 **Key Characteristics:**
 
@@ -183,7 +183,11 @@ The form language is deliberately hard-edged. Panels, buttons, fields, planning 
 ### Navigation
 
 - **Journey progress:** Four equal columns on an ink plane. White connected markers show the full journey; the current step alone changes to signal yellow and uses `aria-current="step"`.
-- **Shared shell:** A white Nudge wordmark bar separated from the journey by a 2px black rule. Settings and history are outside this system’s approved visual scope.
+- **Shared shell:** A white Nudge wordmark bar separated from the journey by a 2px black rule. Settings remains outside this system’s approved visual scope.
+
+### Workout History
+
+Workout history is a neutral, full-width disclosure on pale concrete. Square white workout cards use black rules, condensed date and exercise headings, quieter factual metadata, compact concrete set rows, and neutral recovery controls. It never uses signal yellow or outranks the current workout action; phase durations use three columns when space permits and stack for phone and 200% reflow.
 
 ### Exercise Row
 
