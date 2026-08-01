@@ -3,6 +3,8 @@ import { useState } from 'react';
 import './index.css';
 import TimingPresentation from './components/TimingPresentation';
 import WorkoutHistory from './components/WorkoutHistory';
+import WorkoutView from './components/WorkoutView';
+import { AuthContext } from './context/AuthContext';
 import { createTimingPresentationController } from './utils/timingPresentationController';
 import { TIMING_SCENARIOS, TIMING_VIEWPORTS } from './utils/timingScenarioManifest';
 
@@ -38,6 +40,23 @@ const historyPropsFor = kind => kind === 'loading'
       ? { loadPage: olderFailureHistory }
       : { history: historyFor(kind) };
 const OUTCOME_CONTROLS = { 'C-03': ['timeout', 'denied', 'unsupported', 'lost'], 'C-04': ['malformed', 'unsupported-version', 'stale', 'wrong-user', 'wrong-project'], 'C-06': ['retryable-absent', 'reconcile-indeterminate', 'blocked-conflict', 'saved'], 'T-09': ['retryable-absent', 'reconcile-indeterminate', 'blocked-conflict', 'saved'] };
+
+const productionRecoveryState = (scenarioId, outcome) => {
+  const snapshot = { draftId: '123e4567-e89b-42d3-a456-426614174000', ownershipGeneration: 1 };
+  if (scenarioId === 'C-01') return { status: 'recovery-available', activeWorkout: null, blocked: true };
+  if (scenarioId === 'C-06') {
+    const saveState = outcome ?? 'reconcile-indeterminate';
+    if (saveState === 'saved') return { status: 'saved' };
+    return { status: 'review', blocked: saveState === 'blocked-conflict', error: saveState === 'blocked-conflict' ? 'conflict' : 'indeterminate', pendingSave: { state: saveState }, phaseTargets: { warmupSeconds: 60, performanceSeconds: 300, cooldownSeconds: 60 }, activeWorkout: { exercises: [{ ...exercise, setRecords: [{ index: 0, completed: true }] }], workoutStartedAt: 1_000, phase: 'review', phaseCandidate: { actualDurationSeconds: 0, phaseActualSeconds: { warmup: 0, performance: 0, cooldown: 0 }, finishRequestedAtEpochMs: 1_000 }, _phaseTimingEnabled: true } };
+  }
+  return { status: 'recovery-blocked', activeWorkout: null, blocked: true, snapshot: ['C-02', 'C-03'].includes(scenarioId) ? snapshot : undefined, error: outcome ?? { 'C-02': 'conflict', 'C-03': 'timeout', 'C-04': 'stale', 'C-05': 'storage-error' }[scenarioId] };
+};
+
+function ProductionRecoveryFixture({ scenarioId, outcome }) {
+  const state = productionRecoveryState(scenarioId, outcome);
+  const session = { resume: async () => false, requestHandoff: async () => false, discard: async () => undefined, exit: async () => undefined, save: async () => undefined, action: async () => false };
+  return <section aria-label="Production recovery fixture"><p><strong>Synthetic production recovery fixture.</strong> It renders the production surface but does not prove storage, locks, server reconciliation, or routing.</p><AuthContext.Provider value={{ uid: 'synthetic-user' }}><WorkoutView session={session} sessionState={state} /></AuthContext.Provider></section>;
+}
 
 function stageTimingScenario(id) {
   const clock = createClock(); const controller = makeController(clock); let historyKind = null;
@@ -90,10 +109,11 @@ export function TimingHarness({ initialScenario = 'T-01' }) {
   const [staged, setStaged] = useState(() => stageTimingScenario(initialScenario));
   const [pathController, setPathController] = useState(null);
   const [syntheticOutcome, setSyntheticOutcome] = useState(null);
+  const [showProductionRecovery, setShowProductionRecovery] = useState(false);
   const scenario = TIMING_SCENARIOS.find(item => item.id === scenarioId);
   const controller = pathController ?? staged.controller;
   const [historyKind, setHistoryKind] = useState(staged.historyKind);
-  const choose = event => { const id = event.target.value; const next = stageTimingScenario(id); setScenarioId(id); setStaged(next); setPathController(null); setSyntheticOutcome(null); setHistoryKind(next.historyKind); setRun(value => value + 1); };
+  const choose = event => { const id = event.target.value; const next = stageTimingScenario(id); setScenarioId(id); setStaged(next); setPathController(null); setSyntheticOutcome(null); setShowProductionRecovery(false); setHistoryKind(next.historyKind); setRun(value => value + 1); };
   return <main className="timing-harness" aria-label="Non-production Timing presentation harness">
     <p><strong>Non-production synthetic/proxy harness.</strong> It presents injected outcomes only; it does not prove real storage, locks, server reconciliation, or production routing.</p>
     <label htmlFor="timing-scenario">Scenario</label><select className="timing-harness-control" id="timing-scenario" value={scenarioId} onChange={choose}>{TIMING_SCENARIOS.map(item => <option key={item.id} value={item.id}>{item.id}: {item.title}</option>)}</select>
@@ -104,6 +124,8 @@ export function TimingHarness({ initialScenario = 'T-01' }) {
     {scenario.id === 'T-09' && <section aria-label="History fixture selector"><button type="button" onClick={() => setHistoryKind('valid')}>Show valid v4 History</button><button type="button" onClick={() => setHistoryKind('progression')}>Show progression History</button><button type="button" onClick={() => setHistoryKind('empty')}>Show empty History</button><button type="button" onClick={() => setHistoryKind('exhausted')}>Show exhausted History</button><button type="button" onClick={() => setHistoryKind('loading')}>Show loading History</button><button type="button" onClick={() => setHistoryKind('error')}>Show error History</button><button type="button" onClick={() => setHistoryKind('olderError')}>Show older-page error History</button><button type="button" onClick={() => setHistoryKind('malformed')}>Show malformed History</button><button type="button" onClick={() => setHistoryKind('legacy')}>Show legacy History</button></section>}
     {OUTCOME_CONTROLS[scenario.id] && <section aria-label="Synthetic outcome controls">{OUTCOME_CONTROLS[scenario.id].map(outcome => <button key={outcome} type="button" onClick={() => { setSyntheticOutcome(outcome); if (outcome === 'saved') { controller.setRecovery(null); controller.setSaveState('saved'); } else controller.setRecovery(outcome); }}>Show {outcome} outcome</button>)}{syntheticOutcome && <p>Observed synthetic outcome: {syntheticOutcome}.</p>}</section>}
     {scenario.id === 'T-10' && <section aria-label="Accessibility probes"><p>Reduced motion: no animated timing transition is required.</p><p>Viewport probes: {TIMING_VIEWPORTS.join(', ')}.</p></section>}
+    {scenario.group === 'recovery' && <button type="button" onClick={() => setShowProductionRecovery(true)}>Show production recovery surface</button>}
+    {showProductionRecovery && <ProductionRecoveryFixture scenarioId={scenario.id} outcome={syntheticOutcome} />}
     <TimingPresentation controller={controller} />
     {historyKind && <WorkoutHistory {...historyPropsFor(historyKind)} historyKey={`timing-${historyKind}-${run}`} />}
   </main>;
