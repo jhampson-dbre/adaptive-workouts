@@ -46,6 +46,7 @@ const markBaselineFailure = error => Object.assign(
 function App() {
   const [timeBudget, setTimeBudget] = useState(45)
   const [unrecoveredGroups, setUnrecoveredGroups] = useState([])
+  const [settingsDirty, setSettingsDirty] = useState(false)
   const [destination, setDestination] = useState('plan')
   const [destinationGeneration, setDestinationGeneration] = useState(0)
   const [user, setUser] = useState(null)
@@ -69,6 +70,7 @@ function App() {
     if (retireIdentity) void activeWorkout.retireIdentity()
     setTimeBudget(45)
     setUnrecoveredGroups([])
+    setSettingsDirty(false)
     setDestination('plan')
     setDestinationGeneration(value => value + 1)
   }, [activeWorkout])
@@ -76,6 +78,7 @@ function App() {
     setDestination(next)
     setDestinationGeneration(value => value + 1)
   }, [])
+  const onSettingsDirtyChange = useCallback(value => setSettingsDirty(value), [])
 
   const invalidate = useCallback(() => {
     generation.current += 1
@@ -234,9 +237,13 @@ function App() {
     }
   }
   const signOut = async () => {
+    const authorized = access === 'authorized'
+    const hasDirtyWork = Boolean(activeWorkoutSession.activeWorkout || activeWorkoutSession.snapshot || timeBudget !== 45 || unrecoveredGroups.length || settingsDirty)
+    if (authorized && hasDirtyWork && !window.confirm('Sign out? Your unsaved changes and unfinished workout will be discarded and cannot be recovered.')) return
     const currentUser = user
     signOutPending.current = true
     const id = invalidate()
+    if (authorized) clearAuthorizedState({ retireIdentity: true })
     setAccess('checking')
     try {
       await signOutUser()
@@ -252,7 +259,7 @@ function App() {
     if (generation.current !== id) return
     session.current = null
     migration.current = null
-    clearAuthorizedState({ retireIdentity: true })
+    if (!authorized) clearAuthorizedState({ retireIdentity: true })
     setUser(null)
     setAccess('signed-out')
   }
@@ -286,9 +293,12 @@ function App() {
     <AuthContext.Provider value={user}>
       <header className="app-header">
         <h1>Nudge</h1>
-        {!sessionForcesWorkout && <button className="settings-toggle" onClick={() => chooseDestination(destination === 'settings' ? (workout?.length ? 'workout' : 'plan') : 'settings')}>
-          {destination === 'settings' ? (workout?.length ? 'Back to Workout' : 'Back to Generator') : 'Manage Catalog'}
-        </button>}
+        <div className="app-header-actions">
+          {!sessionForcesWorkout && <button className="settings-toggle" onClick={() => chooseDestination(destination === 'settings' ? (workout?.length ? 'workout' : 'plan') : 'settings')}>
+            {destination === 'settings' ? (workout?.length ? 'Back to Workout' : 'Back to Generator') : 'Manage Catalog'}
+          </button>}
+          <button className="sign-out-button" type="button" onClick={signOut}>Sign out</button>
+        </div>
       </header>
       <main ref={mainRef} tabIndex="-1">
         <LazyDestination
@@ -300,7 +310,7 @@ function App() {
           retryLoader={generation => import(/* @vite-ignore */ retryModuleUrl(lazyEntryUrls[activeDestination], generation))}
           componentProps={activeDestination === 'plan'
             ? { workout, timeBudget, setTimeBudget, unrecoveredGroups, setUnrecoveredGroups, onGenerate: async (generated, options = {}) => { const staged = await activeWorkout.stageGenerated(generated, options.phaseTargets ?? { warmupSeconds: 0, performanceSeconds: timeBudget * 60, cooldownSeconds: 0 }); if (staged && generated?.length) chooseDestination('workout') } }
-            : activeDestination === 'settings' ? { onClose: () => chooseDestination(workout?.length ? 'workout' : 'plan') }
+            : activeDestination === 'settings' ? { onClose: () => chooseDestination(workout?.length ? 'workout' : 'plan'), onDirtyChange: onSettingsDirtyChange }
               : { session: activeWorkout, sessionState: activeWorkoutSession, onFinish: () => { chooseDestination('plan') }, onResume: () => { setDestination('workout') } }}
           onReady={() => {}}
           isCurrent={() => access === 'authorized'}

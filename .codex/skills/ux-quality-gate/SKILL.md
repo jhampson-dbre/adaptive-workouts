@@ -17,6 +17,11 @@ actions, observed result, rendered evidence, and any material limitation in
 `docs/templates/ux-evidence-matrix.md`. Never require sensitive, personal, or
 production evidence.
 
+When a changed interaction opens a browser-owned dialog, an active-dialog click
+timeout is incomplete changed-surface evidence, not an unavailable-tooling
+limitation; automation must handle the dialog concurrently with its trigger and
+observe the expected terminal state before completion.
+
 Static inspection may establish a defect but cannot prove usability. A direct
 changed-surface defect or missing rendered evidence for a required material scenario
 blocks completion. If the preferred harness is unavailable, record the safe method

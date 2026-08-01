@@ -5,7 +5,7 @@ const approved = uid => ({ uid, email: `${uid}@example.test` })
 
 async function mount({ evaluate = vi.fn(async () => ({ claims: { approved: true } })), settingsFactory, initialSessionState = { status: 'idle', activeWorkout: null }, resumedWorkout } = {}) {
   const observers = []
-  let updateSessionState
+  let updateSessionState; let settingsProps
   vi.doMock('../utils/auth', () => ({
     subscribeToIdTokenChanges: callback => { observers.push(callback); return vi.fn() },
     evaluateAccessToken: evaluate,
@@ -39,10 +39,10 @@ async function mount({ evaluate = vi.fn(async () => ({ claims: { approved: true 
     }
   })
   vi.doMock('../components/Generator', () => ({ default: ({ timeBudget, setTimeBudget, unrecoveredGroups, setUnrecoveredGroups, onGenerate }) => <section><h2>Generate Workout</h2><p>Budget {timeBudget}; groups {unrecoveredGroups.join(',')}</p><label>Time Budget<input aria-label="Time Budget" type="range" value={timeBudget} onChange={event => setTimeBudget(Number(event.target.value))} /></label><label><input aria-label="Back unrecovered" type="checkbox" checked={unrecoveredGroups.includes('Back')} onChange={event => setUnrecoveredGroups(event.target.checked ? ['Back'] : [])} />Back</label><button onClick={() => setTimeBudget(60)}>Set 60</button><button onClick={() => setUnrecoveredGroups(['Back'])}>Set Back</button><button onClick={() => onGenerate([{ id: 'same-workout' }])}>Generate nonempty</button></section> }))
-  vi.doMock('../components/Settings', settingsFactory ?? (() => ({ default: ({ onClose }) => <section><h2>Catalog Management</h2><button onClick={onClose}>Close</button></section> })))
+  vi.doMock('../components/Settings', settingsFactory ?? (() => ({ default: props => { settingsProps = props; return <section><h2>Catalog Management</h2><button onClick={props.onClose}>Close</button></section> } })))
   vi.doMock('../components/WorkoutView', () => ({ default: ({ session, sessionState, onResume, onFinish }) => <section><h2>Ready to sweat?</h2><p>Status {sessionState.status}</p><p>Workout {sessionState.activeWorkout?.exercises?.[0]?.id}</p>{sessionState.status === 'recovery-available' && <button onClick={async () => { if (await session.resume()) onResume?.() }}>Resume</button>}{sessionState.status === 'generated' && <button onClick={async () => { await session.discard(); onFinish?.(); }}>Cancel generated</button>}</section> }))
   const { default: App } = await import('../App'); render(<App />)
-  return { emit: value => act(async () => observers[0](value)), emitSync: value => act(() => observers[0](value)), setSessionState: value => act(() => updateSessionState(value)), evaluate }
+  return { emit: value => act(async () => observers[0](value)), emitSync: value => act(() => observers[0](value)), setSessionState: value => act(() => updateSessionState(value)), settingsProps: () => settingsProps, evaluate }
 }
 
 afterEach(() => { cleanup(); vi.resetModules(); vi.doUnmock('../utils/auth'); vi.doUnmock('../utils/storage'); vi.doUnmock('../utils/useActiveWorkoutSession'); vi.doUnmock('../components/Generator'); vi.doUnmock('../components/Settings'); vi.doUnmock('../components/WorkoutView') })
@@ -86,6 +86,14 @@ describe('lazy authorized navigation', () => {
     expect(document.activeElement).toBe(slider)
     const checkbox = screen.getByRole('checkbox', { name: 'Back unrecovered' }); checkbox.focus(); fireEvent.click(checkbox)
     expect(document.activeElement).toBe(checkbox)
+  })
+
+  it('routes unsaved Settings state into the shell sign-out confirmation', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false); const app = await mount(); await app.emit(approved('u1'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage Catalog' })); await screen.findByRole('heading', { name: 'Catalog Management' });
+    act(() => app.settingsProps().onDirtyChange(true));
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    expect(confirm).toHaveBeenCalled();
   })
 
   it('returns Settings opened from Plan to preserved selections through Close and header Back', async () => {
