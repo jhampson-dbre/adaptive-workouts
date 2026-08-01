@@ -136,9 +136,9 @@ function WorkoutSummary({ candidate, phaseTargets, isSaving, saveError, saveStat
       })}</ul>
       {!hasWork && <p className="error-message" role="alert">Confirm at least one exercise or set before saving.</p>}
       {hasWork && unconfirmed.length > 0 && <details className="summary-remaining"><summary>Planned work not recorded</summary><ul>{unconfirmed.map((exercise, index) => <li key={`${exercise.id}-${index}`}>{exercise.name}</li>)}</ul></details>}
-      {saveError && <p className="error-message" role="alert">{saveError}</p>}
-      <div className="summary-actions">
-        {blockedConflict ? <><button type="button" onClick={onKeepPending}>Keep pending</button><button type="button" onClick={onExit}>Exit</button></> : <>
+      {saveError && <p className="error-message recovery-feedback" role="alert">{saveError}</p>}
+      <div className={`summary-actions${blockedConflict ? ' recovery-actions' : ''}`}>
+        {blockedConflict ? <><button className="recovery-primary" type="button" onClick={onKeepPending}>Keep pending</button><button className="recovery-secondary" type="button" onClick={onExit}>Exit</button></> : <>
           <button type="button" onClick={onBack} disabled={isSaving}>Back to workout</button>
           <button type="button" className="finish-btn" onClick={onSave} disabled={!hasWork || isSaving} aria-busy={isSaving}>
             {isSaving ? 'Saving...' : ['write-pending', 'reconcile-indeterminate'].includes(saveStatus) ? 'Check again' : saveStatus === 'retryable-absent' ? 'Retry exact save' : 'Save workout'}
@@ -563,12 +563,16 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
     const checking = recovery === 'checking';
     const discardable = resumable || sessionState?.error === 'stale';
     const canAcquireRetainedDraft = hasRecoveryIdentity(sessionState?.snapshot);
-    return <div className="workout-view">
-      <h1 ref={recoveryHeadingRef} tabIndex="-1">{checking ? 'Checking active workout' : resumable ? 'Resume workout?' : 'Workout recovery'}</h1>
-      <p role={checking ? 'status' : 'alert'}>{checking ? 'Checking for a saved workout draft.' : resumable ? RECOVERY_MESSAGES.resumable : publicStatusMessage(sessionState?.error)}</p>
-      {!checking && resumable && <button type="button" onClick={async () => { if (await session.resume()) { setRecoveryAcknowledgement('Workout resumed.'); onResume?.(); } }}>Resume</button>}
-      {!checking && canAcquireRetainedDraft && ['timeout', 'conflict'].includes(sessionState?.error) && <><button type="button" onClick={async () => { if (await session.requestHandoff?.()) { setRecoveryAcknowledgement('Workout resumed.'); onResume?.(); } }}>Request handoff</button><button type="button" onClick={async () => { if (await session.resume?.()) { setRecoveryAcknowledgement('Workout resumed.'); onResume?.(); } }}>Retry acquisition</button></>}
-      {!checking && <button type="button" onClick={async () => { if (discardable) await session.discard(); else { await session.exit(); onFinish?.(); } }}>{discardable ? 'Discard' : 'Exit'}</button>}
+    return <div className="workout-view recovery-view">
+      <section className="recovery-panel" role="region" aria-label="Workout recovery">
+        <h1 ref={recoveryHeadingRef} tabIndex="-1">{checking ? 'Checking active workout' : resumable ? 'Resume workout?' : 'Workout recovery'}</h1>
+        <p className="recovery-message" role={checking ? 'status' : 'alert'}>{checking ? 'Checking for a saved workout draft.' : resumable ? RECOVERY_MESSAGES.resumable : publicStatusMessage(sessionState?.error)}</p>
+        {!checking && <div className="recovery-actions">
+          {resumable && <button className="recovery-primary" type="button" onClick={async () => { if (await session.resume()) { setRecoveryAcknowledgement('Workout resumed.'); onResume?.(); } }}>Resume</button>}
+          {canAcquireRetainedDraft && ['timeout', 'conflict'].includes(sessionState?.error) && <><button className="recovery-primary" type="button" onClick={async () => { if (await session.requestHandoff?.()) { setRecoveryAcknowledgement('Workout resumed.'); onResume?.(); } }}>Request handoff</button><button className="recovery-secondary" type="button" onClick={async () => { if (await session.resume?.()) { setRecoveryAcknowledgement('Workout resumed.'); onResume?.(); } }}>Retry acquisition</button></>}
+          <button className="recovery-secondary" type="button" onClick={async () => { if (discardable) await session.discard(); else { await session.exit(); onFinish?.(); } }}>{discardable ? 'Discard' : 'Exit'}</button>
+        </div>}
+      </section>
     </div>;
   }
   if (sessionState?.status === 'saved') return <div className="workout-view"><JourneyProgress current="Review" /><section className="workout-summary" role="status"><h1 ref={savedRef} tabIndex="-1">Workout saved</h1><p>Your recorded work is available in workout history.</p><button type="button" className="finish-btn" onClick={() => onFinish?.()}>Plan another workout</button></section></div>;

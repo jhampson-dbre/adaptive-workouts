@@ -64,6 +64,13 @@ test('a blocked active workout exposes recovery controls and awaits Exit before 
   expect(onFinish).toHaveBeenCalledOnce();
 });
 
+test('recovery gives the retained-workout action visual priority without changing its controls', () => {
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ resume: vi.fn(), discard: vi.fn() }} sessionState={{ status: 'recovery-available', activeWorkout: null, blocked: true }} /></AuthContext.Provider>);
+  expect(screen.getByRole('region', { name: 'Workout recovery' }).className).toContain('recovery-panel');
+  expect(screen.getByRole('button', { name: 'Resume' }).className).toContain('recovery-primary');
+  expect(screen.getByRole('button', { name: 'Discard' }).className).toContain('recovery-secondary');
+});
+
 test('a stale recovery blocker offers exact Discard rather than Exit', () => {
   const discard = vi.fn();
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ discard }} sessionState={{ status: 'recovery-blocked', activeWorkout: null, error: 'stale', blocked: true }} /></AuthContext.Provider>);
@@ -755,6 +762,9 @@ test('blocked immutable-save conflict keeps frozen Review with only non-mutating
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ save, exit, action: vi.fn() }} sessionState={{ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 0, performanceSeconds: 2700, cooldownSeconds: 0 }, snapshot: { draftId: 'd', ownershipGeneration: 1 }, pendingSave: { state: 'blocked-conflict' }, error: 'conflict', blocked: true }} onFinish={onFinish} /></AuthContext.Provider>);
   expect(await screen.findByRole('heading', { level: 1, name: 'Review' })).toBe(document.activeElement);
   expect(screen.getByText('A different saved workout conflicts with this save.')).toBeDefined();
+  expect(screen.getByRole('alert').className).toContain('recovery-feedback');
+  expect(screen.getByRole('button', { name: 'Keep pending' }).className).toContain('recovery-primary');
+  expect(screen.getByRole('button', { name: 'Exit' }).className).toContain('recovery-secondary');
   expect(screen.queryByRole('button', { name: 'Back to workout' })).toBeNull(); expect(screen.queryByRole('button', { name: 'Save workout' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Keep pending' }));
   expect(save).not.toHaveBeenCalled(); expect(screen.getByRole('status').textContent).toBe('Save conflict remains pending.');

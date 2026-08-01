@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import TimingPresentation from '../components/TimingPresentation';
 import { createTimingPresentationController } from '../utils/timingPresentationController';
 import { TIMING_SCENARIOS, TIMING_VIEWPORTS, validateTimingScenarioManifest } from '../utils/timingScenarioManifest';
@@ -434,6 +434,24 @@ describe('Timing presentation controller', () => {
     expect(screen.getByText(/Expected visible outcome:/i)).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: 'Reset and run scenario' }));
     expect(screen.getByText(/Observed state:/i)).toBeDefined();
+    cleanup();
+  });
+
+  it('renders the production recovery surface from a synthetic C-03 fixture', () => {
+    render(<TimingHarness initialScenario="C-03" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show production recovery surface' }));
+    expect(screen.getByRole('region', { name: 'Workout recovery' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Request handoff' })).toBeDefined();
+    cleanup();
+  });
+
+  it('renders the selected production recovery outcome', () => {
+    render(<TimingHarness initialScenario="C-06" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show blocked-conflict outcome' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show production recovery surface' }));
+    const fixture = within(screen.getByRole('region', { name: 'Production recovery fixture' }));
+    expect(fixture.getByRole('button', { name: 'Keep pending' })).toBeDefined();
+    expect(fixture.queryByRole('button', { name: 'Check again' })).toBeNull();
     cleanup();
   });
 });
