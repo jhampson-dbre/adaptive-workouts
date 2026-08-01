@@ -1,6 +1,7 @@
-import { useState, useContext } from 'react';
+import { useState, useContext, useEffect, useRef } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { generateWorkout, getDaysSinceLastLegDay, getDayOfWeek } from '../utils/engine';
+import JourneyProgress from './JourneyProgress';
 
 const MUSCLE_GROUPS = ['Biceps', 'Shoulders', 'Back', 'Chest', 'Triceps', 'Core', 'Legs'];
 const HISTORY_UNAVAILABLE_MESSAGE = 'Workout history is unavailable. Retry before generating a workout.';
@@ -25,6 +26,12 @@ export default function Generator({
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState(null);
   const [canRetryHistory, setCanRetryHistory] = useState(false);
+  const [legDayChoice, setLegDayChoice] = useState(null);
+  const legDayChoiceHeadingRef = useRef(null);
+
+  useEffect(() => {
+    if (legDayChoice) legDayChoiceHeadingRef.current?.focus();
+  }, [legDayChoice]);
 
   const handleToggleGroup = (group) => {
     setUnrecoveredGroups((prev) => 
@@ -79,20 +86,9 @@ export default function Generator({
         const isOverdue = daysSince !== Infinity && daysSince > 7 && getDayOfWeek(today) !== settings.legDayOfWeek;
         const isEarly = getDayOfWeek(tomorrow) === settings.legDayOfWeek && daysSince >= 4;
 
-        if (isOverdue) {
-            const overdueDays = Math.floor(daysSince - 7);
-            const totalDays = Math.floor(daysSince);
-            const doLegDay = window.confirm(`Leg Day is ${overdueDays} day${overdueDays === 1 ? '' : 's'} overdue! (${totalDays} days since last Leg workout).\n\nClick OK to do Leg Day today, or Cancel to skip to normal workout.`);
-            const generated = generateWorkout(timeBudget, unrecoveredGroups, doLegDay, catalog, history, settings); // doLegDay=true means forceLegDay=true
-            handoffGeneratedWorkout(generated);
-            return;
-        }
-        
-        if (isEarly) {
-            const doEarly = window.confirm(`Tomorrow is Leg Day. Want to do it a day early?`);
-            const generated = generateWorkout(timeBudget, unrecoveredGroups, doEarly, catalog, history, settings);
-            handoffGeneratedWorkout(generated);
-            return;
+        if (isOverdue || isEarly) {
+          setLegDayChoice({ catalog, history, settings });
+          return;
         }
       }
 
@@ -115,9 +111,31 @@ export default function Generator({
     }
   };
 
+  const completeLegDayChoice = forceLegDay => {
+    if (!legDayChoice) return;
+    try {
+      const generated = generateWorkout(timeBudget, unrecoveredGroups, forceLegDay, legDayChoice.catalog, legDayChoice.history, legDayChoice.settings);
+      onGenerate?.(generated, {
+        phaseTargets: {
+          warmupSeconds: legDayChoice.settings.warmupSeconds ?? generated.phaseTargets?.warmupSeconds ?? 0,
+          performanceSeconds: timeBudget * 60,
+          cooldownSeconds: legDayChoice.settings.cooldownSeconds ?? generated.phaseTargets?.cooldownSeconds ?? 0,
+        },
+      });
+      setLegDayChoice(null);
+    } catch (err) {
+      setLegDayChoice(null);
+      setError(err?.name === 'InvalidCatalogExerciseError' ? err.message : 'Failed to generate workout. Please try again.');
+    }
+  };
+
   return (
     <div className="generator">
-      <h2 ref={headingRef} tabIndex={baselineFocus ? '-1' : undefined}>Generate Workout</h2>
+      <JourneyProgress current="Plan" />
+      <div className="plan-intro">
+        <h2 ref={headingRef} tabIndex={baselineFocus ? '-1' : undefined}>How much time do you have?</h2>
+        <p>Nudge will use your recent training to decide what is worth doing next.</p>
+      </div>
       
       {error && <div className="error-message">{error}</div>}
       {canRetryHistory && (
@@ -128,8 +146,8 @@ export default function Generator({
 
       <div className="slider-container">
         <label htmlFor="time-slider">
-          Time Budget (minutes)
-          <span className="slider-value">{timeBudget}</span>
+          Time available
+          <span className="slider-value">{timeBudget} <small>min</small></span>
         </label>
         <input
           id="time-slider"
@@ -143,8 +161,18 @@ export default function Generator({
         />
       </div>
 
-      <div className="groups-container">
-        <h3>Unrecovered Muscle Groups</h3>
+      <button className="generate-btn" onClick={handleGenerate} disabled={isGenerating}>
+        {isGenerating ? 'Planning...' : 'Plan my workout'}
+      </button>
+      {legDayChoice && <section className="leg-day-choice" role="region" aria-label="Leg day choice">
+        <h2 ref={legDayChoiceHeadingRef} tabIndex="-1">Include legs in today&apos;s workout?</h2>
+        <button type="button" onClick={() => completeLegDayChoice(true)}>Include legs today</button>
+        <button type="button" onClick={() => completeLegDayChoice(false)}>Keep current plan</button>
+      </section>}
+
+      <details className="groups-container">
+        <summary>Anything to work around?</summary>
+        <p>Select any muscle groups you would rather rest today.</p>
         <div className="checkbox-grid">
           {MUSCLE_GROUPS.map((group) => (
             <label key={group} className="checkbox-label">
@@ -157,11 +185,7 @@ export default function Generator({
             </label>
           ))}
         </div>
-      </div>
-
-      <button className="generate-btn" onClick={handleGenerate} disabled={isGenerating}>
-        {isGenerating ? 'Generating...' : 'Generate Plan'}
-      </button>
+      </details>
     </div>
   );
 }

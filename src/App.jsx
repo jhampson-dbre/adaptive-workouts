@@ -258,14 +258,14 @@ function App() {
   }
   if (isBaselineBuild && baselineStage === 'preparing') return (
     <main className="baseline-bootstrap" aria-labelledby="baseline-loading-heading" tabIndex="-1">
-      <h1>Adaptive Workouts</h1>
+      <h1>Nudge</h1>
       <h2 id="baseline-loading-heading" ref={baselineLoadingRef} tabIndex="-1">Preparing emulator baseline…</h2>
       <p role="status">Checking seeded account and workout data</p>
     </main>
   )
   if (isBaselineBuild && baselineStage === 'error') return (
     <main className="baseline-bootstrap" aria-labelledby="baseline-error-heading">
-      <h1>Adaptive Workouts</h1>
+      <h1>Nudge</h1>
       <h2 id="baseline-error-heading" ref={baselineErrorRef} tabIndex="-1">Baseline unavailable</h2>
       <p role="alert"><strong>{baselineError.title}</strong></p>
       <button className="baseline-retry" type="button" onClick={retryBaseline}>Retry baseline</button>
@@ -285,7 +285,7 @@ function App() {
   return (
     <AuthContext.Provider value={user}>
       <header className="app-header">
-        <h1>Adaptive Hypertrophy</h1>
+        <h1>Nudge</h1>
         {!sessionForcesWorkout && <button className="settings-toggle" onClick={() => chooseDestination(destination === 'settings' ? (workout?.length ? 'workout' : 'plan') : 'settings')}>
           {destination === 'settings' ? (workout?.length ? 'Back to Workout' : 'Back to Generator') : 'Manage Catalog'}
         </button>}

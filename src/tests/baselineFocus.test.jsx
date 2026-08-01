@@ -75,7 +75,7 @@ describe('baseline shared access gate', () => {
     expect(verifyBaselineData).toHaveBeenCalledOnce();
     await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
     const error = screen.getByRole('heading', { name: 'Unable to verify access' });
-    expect(document.activeElement).toBe(error); expect(screen.queryByText('Adaptive Hypertrophy')).toBeNull();
+    expect(document.activeElement).toBe(error); expect(screen.queryByText('Nudge')).toBeNull();
     completeVerification(); await act(async () => {});
     expect(screen.getByRole('heading', { name: 'Unable to verify access' })).toBeTruthy(); expect(document.activeElement).toBe(error);
     import.meta.env.MODE = priorMode;

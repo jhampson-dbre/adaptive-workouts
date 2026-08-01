@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-31T03:49:23.4858773Z",
+  "title": "Design System: Nudge",
+  "extensions": {
+    "colorMeta": {
+      "signal-yellow": {
+        "role": "primary",
+        "displayName": "Signal Yellow",
+        "canonical": "#ffd400",
+        "tonalRamp": ["oklch(18% 0.04 95)", "oklch(28% 0.07 95)", "oklch(40% 0.11 95)", "oklch(52% 0.15 95)", "oklch(64% 0.18 95)", "oklch(76% 0.18 95)", "oklch(86% 0.13 95)", "oklch(95% 0.05 95)"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#050505",
+        "tonalRamp": ["oklch(15% 0 0)", "oklch(26% 0 0)", "oklch(38% 0 0)", "oklch(50% 0 0)", "oklch(62% 0 0)", "oklch(74% 0 0)", "oklch(86% 0 0)", "oklch(95% 0 0)"]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Rule Black",
+        "canonical": "#101010",
+        "tonalRamp": ["oklch(15% 0 0)", "oklch(26% 0 0)", "oklch(38% 0 0)", "oklch(50% 0 0)", "oklch(62% 0 0)", "oklch(74% 0 0)", "oklch(86% 0 0)", "oklch(95% 0 0)"]
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "White",
+        "canonical": "#ffffff",
+        "tonalRamp": ["oklch(15% 0 0)", "oklch(26% 0 0)", "oklch(38% 0 0)", "oklch(50% 0 0)", "oklch(62% 0 0)", "oklch(74% 0 0)", "oklch(86% 0 0)", "oklch(100% 0 0)"]
+      },
+      "concrete": {
+        "role": "neutral",
+        "displayName": "Pale Concrete",
+        "canonical": "#f0eee7",
+        "tonalRamp": ["oklch(15% 0.008 90)", "oklch(27% 0.008 90)", "oklch(39% 0.008 90)", "oklch(51% 0.008 90)", "oklch(63% 0.008 90)", "oklch(75% 0.008 90)", "oklch(87% 0.008 90)", "oklch(95% 0.008 90)"]
+      },
+      "muted-text": {
+        "role": "neutral",
+        "displayName": "Muted Graphite",
+        "canonical": "#454545",
+        "tonalRamp": ["oklch(15% 0 0)", "oklch(26% 0 0)", "oklch(38% 0 0)", "oklch(50% 0 0)", "oklch(62% 0 0)", "oklch(74% 0 0)", "oklch(86% 0 0)", "oklch(95% 0 0)"]
+      },
+      "focus-blue": {
+        "role": "tertiary",
+        "displayName": "Focus Blue",
+        "canonical": "#1261a0",
+        "tonalRamp": ["oklch(18% 0.06 250)", "oklch(29% 0.09 250)", "oklch(40% 0.12 250)", "oklch(51% 0.14 250)", "oklch(63% 0.13 250)", "oklch(75% 0.10 250)", "oklch(86% 0.06 250)", "oklch(95% 0.025 250)"]
+      },
+      "error-red": {
+        "role": "tertiary",
+        "displayName": "Error Red",
+        "canonical": "#721c24",
+        "tonalRamp": ["oklch(18% 0.06 25)", "oklch(29% 0.10 25)", "oklch(40% 0.13 25)", "oklch(51% 0.15 25)", "oklch(63% 0.13 25)", "oklch(75% 0.09 25)", "oklch(86% 0.05 25)", "oklch(95% 0.02 25)"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Phase headings, review headings, and strongest current-context statements."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Dominant next-action labels."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Section prompts and compact group headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Instructions, values, status, and feedback."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Journey steps and compact status labels."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "action-arrive",
+        "value": "420ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "One-time clipped reveal for a newly available dominant action; disabled under reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "phone-stack",
+        "value": "520px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Next Action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single dominant action for the current journey state.",
+      "html": "<button class=\"ds-primary-action\">START SET</button>",
+      "css": ".ds-primary-action { position: relative; width: 100%; min-height: 116px; box-sizing: border-box; padding: 24px 86px 24px clamp(22px, 7vw, 52px); border: 0; border-radius: 0; background: var(--accent, #ffd400); color: var(--text-h, #050505); font: 700 clamp(1.9rem, 8vw, 3rem)/1 var(--heading, sans-serif); letter-spacing: -0.02em; text-align: left; text-transform: uppercase; animation: ds-action-arrive 420ms cubic-bezier(0.16, 1, 0.3, 1) both; } .ds-primary-action::after { position: absolute; top: 50%; right: 32px; width: 34px; height: 34px; border-top: 10px solid currentColor; border-right: 10px solid currentColor; content: ''; transform: translateY(-50%) rotate(45deg); } .ds-primary-action:hover { background: #050505; color: var(--accent, #ffd400); } .ds-primary-action:focus-visible { outline: 4px solid #1261a0; outline-offset: 3px; } .ds-primary-action:active { filter: brightness(0.92); } @keyframes ds-action-arrive { from { clip-path: inset(0 5% 0 0); filter: brightness(0.9); } to { clip-path: inset(0); filter: brightness(1); } } @media (prefers-reduced-motion: reduce) { .ds-primary-action { animation: none; } }"
+    },
+    {
+      "name": "Secondary Action",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "A quiet alternative or recovery action that does not compete with the next action.",
+      "html": "<button class=\"ds-secondary-action\">Keep working</button>",
+      "css": ".ds-secondary-action { min-height: 52px; padding: 12px 16px; border: 1px solid #101010; border-radius: 0; background: transparent; color: #101010; font: 700 18px/1.4 var(--heading, sans-serif); } .ds-secondary-action:hover { background: #050505; color: #ffffff; } .ds-secondary-action:focus-visible { outline: 4px solid #1261a0; outline-offset: 3px; } .ds-secondary-action:active { filter: brightness(0.88); }"
+    },
+    {
+      "name": "Planning Constraint",
+      "kind": "chip",
+      "description": "A factual optional constraint using a native checkbox and explicit selected state.",
+      "html": "<label class=\"ds-constraint\"><input type=\"checkbox\"> Shoulders</label>",
+      "css": ".ds-constraint { display: flex; min-height: 48px; box-sizing: border-box; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #101010; border-radius: 0; background: #ffffff; color: #101010; font: 700 18px/1.4 'Atkinson Hyperlegible', sans-serif; } .ds-constraint:hover { background: #fff2a8; } .ds-constraint:has(input:checked) { background: var(--accent, #ffd400); } .ds-constraint input { width: 22px; height: 22px; accent-color: #050505; } .ds-constraint input:focus-visible { outline: 4px solid #1261a0; outline-offset: 3px; }"
+    },
+    {
+      "name": "Journey Progress",
+      "kind": "nav",
+      "description": "The persistent four-step Plan, Perform, Cooldown, Review orientation path.",
+      "html": "<nav class=\"ds-journey\" aria-label=\"Workout progress\"><ol><li><span></span>Plan</li><li aria-current=\"step\"><span></span>Perform</li><li><span></span>Cooldown</li><li><span></span>Review</li></ol></nav>",
+      "css": ".ds-journey { overflow: hidden; background: #050505; color: #ffffff; } .ds-journey ol { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; padding: 18px 12px 16px; list-style: none; } .ds-journey li { position: relative; display: grid; min-width: 0; justify-items: center; gap: 8px; color: #ffffff; font: 700 0.72rem/1 var(--heading, sans-serif); letter-spacing: 0.03em; text-transform: uppercase; } .ds-journey li::before { position: absolute; top: 9px; right: 50%; left: -50%; height: 2px; background: #ffffff; content: ''; } .ds-journey li:first-child::before { display: none; } .ds-journey li span { z-index: 1; width: 16px; height: 16px; box-sizing: border-box; border: 3px solid #ffffff; border-radius: 50%; background: #050505; } .ds-journey li[aria-current='step'] { color: var(--accent, #ffd400); } .ds-journey li[aria-current='step'] span { border-color: var(--accent, #ffd400); background: var(--accent, #ffd400); box-shadow: 0 0 0 3px #050505, 0 0 0 5px var(--accent, #ffd400); }"
+    },
+    {
+      "name": "Exercise Row",
+      "kind": "custom",
+      "refersTo": "exercise-row",
+      "description": "A reachable alternate exercise with its identity, progress, timing, and disclosure state.",
+      "html": "<button class=\"ds-exercise-row\" aria-expanded=\"false\"><span class=\"ds-exercise-number\">02</span><span class=\"ds-exercise-name\"><strong>Shoulder Press</strong><small>Shoulders</small></span><span class=\"ds-exercise-status\">1/3 · Ready · Expand</span></button>",
+      "css": ".ds-exercise-row { display: grid; width: 100%; min-height: 78px; grid-template-columns: 62px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px clamp(16px, 5vw, 32px); border: 0; border-bottom: 1px solid #101010; border-radius: 0; background: #ffffff; color: #101010; text-align: left; } .ds-exercise-row:hover { background: #fff2a8; } .ds-exercise-row:focus-visible { outline: 4px solid #1261a0; outline-offset: -4px; background: #fff2a8; } .ds-exercise-number { font: 700 2.5rem/1 var(--heading, sans-serif); letter-spacing: -0.04em; } .ds-exercise-name { display: grid; min-width: 0; font: 700 1.15rem/1.2 'Atkinson Hyperlegible', sans-serif; } .ds-exercise-name small { color: #5a5a5a; font-size: 0.8rem; } .ds-exercise-status { max-width: 18ch; color: #454545; font: 400 0.78rem/1.4 'Atkinson Hyperlegible', sans-serif; text-align: right; } @media (max-width: 520px) { .ds-exercise-row { grid-template-columns: 52px minmax(0, 1fr); } .ds-exercise-status { grid-column: 2; max-width: none; text-align: left; } }"
+    },
+    {
+      "name": "Set Input",
+      "kind": "input",
+      "refersTo": "set-input",
+      "description": "A large numeric field for set performance details.",
+      "html": "<label class=\"ds-set-input\"><span>Weight (lb)</span><input type=\"number\" value=\"35\" min=\"0\"></label>",
+      "css": ".ds-set-input { display: grid; gap: 6px; color: #101010; font: 700 0.9rem/1.2 'Atkinson Hyperlegible', sans-serif; } .ds-set-input input { width: 100%; min-height: 58px; box-sizing: border-box; padding: 8px 12px; border: 1px solid #101010; border-radius: 0; background: #ffffff; color: #101010; font: 700 1.6rem/1.2 'Atkinson Hyperlegible', sans-serif; } .ds-set-input input:hover { background: #fff2a8; } .ds-set-input input:focus-visible { outline: 4px solid #1261a0; outline-offset: 3px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Clear Signal",
+    "overview": "Nudge is a high-contrast operating interface for a trainee using a phone around equipment. Hard-edged black, white, pale-concrete, and signal-yellow planes establish context quickly; generous identifiers and condensed headings make the current state legible without decoration or motivational theater.\n\nThe system applies to the shared shell and the approved Plan → Perform → Cooldown → Review journey. Every state answers three questions in order: what is happening, what is the one dominant next action, and which other exercises remain available. Guidance comes from hierarchy and plain language, never literal route, gate, airport, or destination terminology.",
+    "keyCharacteristics": [
+      "One unmistakable signal-yellow next action per state",
+      "Flat, hard-edged planes separated by thin rules",
+      "Condensed, oversized state labels paired with highly legible body copy",
+      "Mobile-first stacking with alternatives present but visually quieter",
+      "Calm, factual language that preserves trainee agency"
+    ],
+    "rules": [
+      {
+        "name": "The One Signal Rule",
+        "body": "Signal yellow identifies the current state or the one dominant next action; do not distribute it across competing controls.",
+        "section": "colors"
+      },
+      {
+        "name": "The Structural Contrast Rule",
+        "body": "Use black, white, concrete, and thin rules to separate regions before introducing any additional color.",
+        "section": "colors"
+      },
+      {
+        "name": "The State Before Detail Rule",
+        "body": "Lead with the phase, action, timer, or exercise identifier; supporting explanation follows in body type.",
+        "section": "typography"
+      },
+      {
+        "name": "The Decision Order Rule",
+        "body": "Place current context first, the dominant next action second, and alternate exercises or disclosures after it.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat Signal Rule",
+        "body": "Do not use shadows to manufacture importance; use plane contrast, rules, and scale.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do make one worthwhile next action unmistakable in every journey state.",
+      "Do keep other exercises visible and reachable without asking the trainee to re-plan.",
+      "Do preserve visible keyboard focus, readable timing and status, reduced-motion behavior, and phone-sized touch targets.",
+      "Do use plain labels such as “Exercises,” “Start set,” “Cooldown,” and “Review.”"
+    ],
+    "donts": [
+      "Don't use route, gate, destination, next-stop, or other literal airport terminology.",
+      "Don't introduce streak pressure, guilt, gamification, faux precision, unsupported readiness, invented recommendations, or authoritative coaching.",
+      "Don't add configuration or hierarchy outside the approved shared shell and Plan → Perform → Cooldown → Review journey.",
+      "Don't make alternate actions compete in scale, color, or placement with the dominant next action."
+    ]
+  }
+}

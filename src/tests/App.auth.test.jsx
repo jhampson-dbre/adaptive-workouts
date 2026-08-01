@@ -20,7 +20,7 @@ describe('private access gate', () => {
     const gate = await mountGate({ evaluate: vi.fn(async () => ({ claims: { approved: 'true' } })) });
     await gate.emit(pending);
     const heading = await screen.findByRole('heading', { name: 'Awaiting approval' });
-    expect(document.activeElement).toBe(heading); expect(screen.queryByText('Adaptive Hypertrophy')).toBeNull();
+    expect(document.activeElement).toBe(heading); expect(screen.queryByText('Nudge')).toBeNull();
   });
 
   it('times out initial settlement and forced refresh fail-closed', async () => {
@@ -91,24 +91,24 @@ describe('private access gate', () => {
     rejectOld(new Error('stale')); await act(async () => {});
     expect(screen.getByRole('heading', { name: 'Checking access' })).toBeTruthy();
     resolveRetry({ claims: { approved: true } });
-    expect(await screen.findByText('Adaptive Hypertrophy')).toBeTruthy(); expect(evaluate).toHaveBeenCalledTimes(3);
+    expect(await screen.findByText('Nudge')).toBeTruthy(); expect(evaluate).toHaveBeenCalledTimes(3);
   });
 
   it('removes authorized content immediately for refresh/revocation, then supports approved and pending forced refreshes', async () => {
     const evaluate = vi.fn().mockResolvedValueOnce({ claims: { approved: true } }).mockResolvedValueOnce({ claims: { approved: false } }).mockResolvedValueOnce({ claims: { approved: true } });
     const gate = await mountGate({ evaluate }); await gate.emit(approved);
-    expect(await screen.findByText('Adaptive Hypertrophy')).toBeTruthy(); gate.emitSync(approved);
+    expect(await screen.findByText('Nudge')).toBeTruthy(); gate.emitSync(approved);
     expect(screen.getByRole('heading', { name: 'Checking access' })).toBeTruthy();
     expect(await screen.findByRole('heading', { name: 'Awaiting approval' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
-    expect(screen.getByRole('heading', { name: 'Checking access' })).toBeTruthy(); expect(await screen.findByText('Adaptive Hypertrophy')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Checking access' })).toBeTruthy(); expect(await screen.findByText('Nudge')).toBeTruthy();
     expect(evaluate.mock.calls[2][1]).toEqual({ forceRefresh: true });
   });
 
   it('signout and account switching retire prior identity and protected content', async () => {
     const signOut = vi.fn(); const evaluate = vi.fn(async user => ({ claims: { approved: user.uid === 'u1' } })); const gate = await mountGate({ evaluate, signOut });
-    await gate.emit(approved); expect(await screen.findByText('Adaptive Hypertrophy')).toBeTruthy();
-    await gate.emit(pending); expect(await screen.findByText('pending@example.test')).toBeTruthy(); expect(screen.queryByText('Adaptive Hypertrophy')).toBeNull();
+    await gate.emit(approved); expect(await screen.findByText('Nudge')).toBeTruthy();
+    await gate.emit(pending); expect(await screen.findByText('pending@example.test')).toBeTruthy(); expect(screen.queryByText('Nudge')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(await screen.findByRole('button', { name: 'Sign in with Google' })).toBeTruthy(); expect(signOut).toHaveBeenCalledOnce();
   });
@@ -151,7 +151,7 @@ describe('private access gate', () => {
 
     await gate.emit(approved); await act(async () => {});
     expect(screen.getByRole('heading', { name: 'Checking access' })).toBeTruthy();
-    expect(screen.queryByText('Adaptive Hypertrophy')).toBeNull(); expect(evaluate).toHaveBeenCalledOnce();
+    expect(screen.queryByText('Nudge')).toBeNull(); expect(evaluate).toHaveBeenCalledOnce();
 
     finishSignOut(); await act(async () => {});
     expect(await screen.findByRole('button', { name: 'Sign in with Google' })).toBeTruthy(); expect(evaluate).toHaveBeenCalledOnce();
@@ -190,16 +190,16 @@ describe('private access gate', () => {
   it('runs migration once per signed-in authorization session, awaits it, resets it on switch, and logs failures while continuing', async () => {
     const migration = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('offline'));
     const error = vi.spyOn(console, 'error').mockImplementation(() => {}); const gate = await mountGate({ migrate: migration });
-    await gate.emit(approved); await screen.findByText('Adaptive Hypertrophy'); await gate.emit(approved); await screen.findByText('Adaptive Hypertrophy');
-    expect(migration).toHaveBeenCalledTimes(1); await gate.emit({ ...approved, uid: 'u3' }); await screen.findByText('Adaptive Hypertrophy');
+    await gate.emit(approved); await screen.findByText('Nudge'); await gate.emit(approved); await screen.findByText('Nudge');
+    expect(migration).toHaveBeenCalledTimes(1); await gate.emit({ ...approved, uid: 'u3' }); await screen.findByText('Nudge');
     expect(migration).toHaveBeenCalledTimes(2); expect(error).toHaveBeenCalledWith('Migration failed, continuing with Firestore:', expect.any(Error));
   });
 
   it('keeps protected UI unmounted while one owned migration is in flight and resets migration after same-UID signout', async () => {
     let finishMigration; const migration = vi.fn(() => new Promise(resolve => { finishMigration = resolve; })); const gate = await mountGate({ migrate: migration });
     gate.emitSync(approved); gate.emitSync(approved); await act(async () => {});
-    expect(migration).toHaveBeenCalledOnce(); expect(screen.getByRole('heading', { name: 'Checking access' })).toBeTruthy(); expect(screen.queryByText('Adaptive Hypertrophy')).toBeNull();
-    finishMigration(); await act(async () => {}); expect(await screen.findByText('Adaptive Hypertrophy')).toBeTruthy();
+    expect(migration).toHaveBeenCalledOnce(); expect(screen.getByRole('heading', { name: 'Checking access' })).toBeTruthy(); expect(screen.queryByText('Nudge')).toBeNull();
+    finishMigration(); await act(async () => {}); expect(await screen.findByText('Nudge')).toBeTruthy();
     await gate.emit(null); await gate.emit(approved); await waitFor(() => expect(migration).toHaveBeenCalledTimes(2));
   });
 
@@ -207,7 +207,7 @@ describe('private access gate', () => {
     let resolve; const gate = await mountGate({ evaluate: vi.fn().mockImplementationOnce(() => new Promise(done => { resolve = done; })).mockResolvedValueOnce({ claims: { approved: true } }) });
     gate.emitSync(approved); const checking = screen.getByRole('heading', { name: 'Checking access' }); expect(document.activeElement).toBe(checking);
     await gate.emit(approved); resolve({ claims: { approved: false } }); await act(async () => {});
-    const title = await screen.findByRole('heading', { name: 'Generate Workout' }); await waitFor(() => expect(document.activeElement).toBe(title));
+    const title = await screen.findByRole('heading', { name: 'How much time do you have?' }); await waitFor(() => expect(document.activeElement).toBe(title));
     await gate.emit(null); expect(document.activeElement).toBe(await screen.findByRole('button', { name: 'Sign in with Google' }));
   });
 
