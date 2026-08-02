@@ -154,3 +154,23 @@ the safe method attempted and the best available alternative.
 - Observed result: Warmup timing and labeled overtime render without horizontal overflow; expanded history retains phase durations, set details, and readable card hierarchy.
 - Rendered evidence: `.impeccable/evidence/trek-271-timing-harness-mobile.png` and `.impeccable/evidence/trek-271-history-mobile.png`.
 - Material limitation: The harness presents injected outcomes and does not prove storage, locks, reconciliation, or production routing.
+
+---
+
+## 2026-08-02 - Plan time slider touch target
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-273 increases the phone-primary Plan time control's interactive height from 28px to the documented 44px minimum.
+- Approved scenario or artifact: `.impeccable/surfaces/src-app-jsx.md`; preserve native range semantics, the Nudge track appearance, Plan layout, copy, and keyboard behavior.
+
+## Changed scenario
+
+- Scenario: Verify the Plan time slider's touch area and native interaction across phone, reflow-equivalent, and desktop widths.
+- Build / commit: `codex/epic-14-audit-remediation` working tree for TREK-273 before task commit.
+- Viewport and starting state: Chrome DevTools at 320 x 844, 390 x 844, 640 x 900, and 1280 x 900; canonical synthetic emulator baseline on Plan.
+- Actions: Inspect the computed slider box and native appearance; check document overflow; focus the slider, set 70 minutes, then press ArrowLeft and ArrowRight.
+- Observed result: Slider height is 44px at every viewport; `appearance: auto` and the ink accent preserve the native track; ArrowLeft changes 70 to 65 and ArrowRight restores 70; the blue 4px focus outline remains visible; there is no horizontal overflow or console warning/error.
+- Rendered evidence: `.impeccable/evidence/trek-273-plan-slider-mobile.png` and `.impeccable/evidence/trek-273-plan-slider-desktop.png`.
+- Material limitation: Chromium emulation verifies layout, keyboard behavior, and computed hit area, not physical-device Safari touch acquisition.

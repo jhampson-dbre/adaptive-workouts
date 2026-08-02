@@ -21,6 +21,7 @@ function workoutButtonDeclarations() {
 
 describe('touch target stylesheet contract', () => {
   it('keeps measured controls at least 44px tall in every state', () => {
+    expect(pixelDeclaration(declarationsFor('.slider'), 'height')).toBeGreaterThanOrEqual(44);
     expect(pixelDeclaration(declarationsFor('.exercise-toggle'), 'min-height')).toBeGreaterThanOrEqual(44);
     expect(pixelDeclaration(declarationsFor('.set-input input'), 'min-height')).toBeGreaterThanOrEqual(44);
     expect(pixelDeclaration(declarationsFor('.set-timing button'), 'min-height')).toBeGreaterThanOrEqual(44);
