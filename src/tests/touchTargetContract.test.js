@@ -21,6 +21,7 @@ function workoutButtonDeclarations() {
 
 describe('touch target stylesheet contract', () => {
   it('keeps measured controls at least 44px tall in every state', () => {
+    expect(pixelDeclaration(declarationsFor('.slider'), 'height')).toBeGreaterThanOrEqual(44);
     expect(pixelDeclaration(declarationsFor('.exercise-toggle'), 'min-height')).toBeGreaterThanOrEqual(44);
     expect(pixelDeclaration(declarationsFor('.set-input input'), 'min-height')).toBeGreaterThanOrEqual(44);
     expect(pixelDeclaration(declarationsFor('.set-timing button'), 'min-height')).toBeGreaterThanOrEqual(44);
@@ -52,7 +53,7 @@ describe('touch target stylesheet contract', () => {
 
   it('wraps the active Workout phase header at narrow viewports so its elapsed timer stays contained', () => {
     const narrowHeader = css.match(/@media\s*\(max-width:\s*420px\)\s*\{[\s\S]*?\.workout-header\s*\{([^}]*)\}/i)?.[1] ?? '';
-    const narrowHeading = css.match(/@media\s*\(max-width:\s*420px\)\s*\{[\s\S]*?\.workout-header h1\s*\{([^}]*)\}/i)?.[1] ?? '';
+    const narrowHeading = css.match(/@media\s*\(max-width:\s*420px\)\s*\{[\s\S]*?\.workout-header \.workout-title\s*\{([^}]*)\}/i)?.[1] ?? '';
 
     expect(narrowHeader).toMatch(/flex-wrap:\s*wrap/i);
     expect(narrowHeading).toMatch(/flex-basis:\s*100%/i);

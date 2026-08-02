@@ -6,18 +6,30 @@ const pending = { uid: 'u2', email: 'pending@example.test' };
 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.resetModules(); vi.doUnmock('../utils/auth'); vi.doUnmock('../utils/firebase'); vi.doUnmock('../utils/storage'); vi.doUnmock('../utils/useActiveWorkoutSession'); });
 
-async function mountGate({ evaluate = vi.fn(async () => ({ claims: { approved: true } })), migrate = vi.fn(), signOut = vi.fn(), sessionState } = {}) {
+async function mountGate({ evaluate = vi.fn(async () => ({ claims: { approved: true } })), migrate = vi.fn(), signIn = vi.fn(), signOut = vi.fn(), sessionState } = {}) {
   const observers = []; const unsubscribes = [];
   vi.doMock('../utils/firebase', () => ({ auth: {}, db: {} }));
-  vi.doMock('../utils/auth', () => ({ subscribeToIdTokenChanges: callback => { observers.push(callback); const unsubscribe = vi.fn(); unsubscribes.push(unsubscribe); return unsubscribe; }, evaluateAccessToken: evaluate, isApprovedTokenResult: value => value?.claims?.approved === true, signOutUser: signOut }));
+  vi.doMock('../utils/auth', () => ({ subscribeToIdTokenChanges: callback => { observers.push(callback); const unsubscribe = vi.fn(); unsubscribes.push(unsubscribe); return unsubscribe; }, evaluateAccessToken: evaluate, isApprovedTokenResult: value => value?.claims?.approved === true, signInWithGoogle: signIn, signOutUser: signOut }));
   vi.doMock('../utils/storage', () => ({ migrateLocalData: migrate }));
   const activeWorkout = { retireIdentity: vi.fn(async () => {}) };
   if (sessionState !== undefined) vi.doMock('../utils/useActiveWorkoutSession', () => ({ useActiveWorkoutSession: () => [sessionState, activeWorkout] }));
   const { default: App } = await import('../App'); const view = render(<App />);
-  return { emit: value => act(async () => observers.at(-1)(value)), emitSync: value => act(() => observers.at(-1)(value)), observers, unsubscribes, evaluate, migrate, signOut, activeWorkout, ...view };
+  return { emit: value => act(async () => observers.at(-1)(value)), emitSync: value => act(() => observers.at(-1)(value)), observers, unsubscribes, evaluate, migrate, signIn, signOut, activeWorkout, ...view };
 }
 
 describe('private access gate', () => {
+  it('announces a failed Google sign-in once without moving focus', async () => {
+    const gate = await mountGate({ signIn: vi.fn(async () => { throw { code: 'auth/network-request-failed' }; }) });
+    await gate.emit(null);
+    const signIn = await screen.findByRole('button', { name: 'Sign in with Google' });
+    signIn.focus();
+    fireEvent.click(signIn);
+
+    const error = await screen.findByRole('alert');
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(error.textContent).toBe('Sign-in failed. Please try again.');
+    expect(document.activeElement).toBe(signIn);
+  });
   it('fails closed for missing or non-boolean approval claims and focuses the pending heading', async () => {
     const gate = await mountGate({ evaluate: vi.fn(async () => ({ claims: { approved: 'true' } })) });
     await gate.emit(pending);
@@ -168,7 +180,7 @@ describe('private access gate', () => {
     await gate.emit(approved);
     fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
     expect(confirm).not.toHaveBeenCalled(); expect(signOut).toHaveBeenCalledOnce();
-    const login = await screen.findByRole('button', { name: 'Sign in with Google' });
+    const login = await screen.findByRole('heading', { name: 'Nudge' });
     expect(document.activeElement).toBe(login);
   });
 
@@ -204,7 +216,7 @@ describe('private access gate', () => {
     await gate.emit(null); await act(async () => {});
     const checking = screen.getByRole('heading', { name: 'Checking access' }); expect(document.activeElement).toBe(checking); expect(screen.queryByRole('button', { name: 'Sign in with Google' })).toBeNull();
     finishSignOut(); await act(async () => {});
-    expect(document.activeElement).toBe(await screen.findByRole('button', { name: 'Sign in with Google' }));
+    expect(document.activeElement).toBe(await screen.findByRole('heading', { name: 'Nudge' }));
   });
 
   it('suppresses null token events until a rejected manual sign out reaches focused recovery', async () => {
@@ -248,7 +260,7 @@ describe('private access gate', () => {
     gate.emitSync(approved); const checking = screen.getByRole('heading', { name: 'Checking access' }); expect(document.activeElement).toBe(checking);
     await gate.emit(approved); resolve({ claims: { approved: false } }); await act(async () => {});
     const title = await screen.findByRole('heading', { name: 'How much time do you have?' }); await waitFor(() => expect(document.activeElement).toBe(title));
-    await gate.emit(null); expect(document.activeElement).toBe(await screen.findByRole('button', { name: 'Sign in with Google' }));
+    await gate.emit(null); expect(document.activeElement).toBe(await screen.findByRole('heading', { name: 'Nudge' }));
   });
 
   it('focuses error and refocuses the current pending destination once after another pending evaluation', async () => {

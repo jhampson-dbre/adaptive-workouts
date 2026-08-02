@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import React, { useState, useEffect, useContext, useRef, useCallback } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { getCatalog, saveCatalogItem, getSettings, saveSettings } from '../utils/storage';
 import { isValidCatalogExercise, normalizeCatalogExercise, TRACKING_MODES } from '../utils/workoutSchema';
@@ -53,9 +53,8 @@ function TrackingFields({ prefix = '', mode, values, setters, invalid = false, e
     <div className="tracking-fields">
       {mode === 'weighted' && (
         <label className="tracking-field">
-          <span>Starting weight (lb)</span>
+          <span>{accessibleLabel('starting weight (pounds)')}</span>
           <input
-            aria-label={accessibleLabel('starting weight (pounds)')}
             type="number"
             min="0"
             step="any"
@@ -67,9 +66,8 @@ function TrackingFields({ prefix = '', mode, values, setters, invalid = false, e
       )}
       {(mode === 'weighted' || mode === 'bodyweight') && (
         <label className="tracking-field">
-          <span>Target reps</span>
+          <span>{accessibleLabel('target reps')}</span>
           <input
-            aria-label={accessibleLabel('target reps')}
             type="number"
             min="1"
             step="1"
@@ -82,9 +80,8 @@ function TrackingFields({ prefix = '', mode, values, setters, invalid = false, e
       {mode === 'weighted' && (
         <>
           <label className="tracking-field">
-            <span>Floor reps</span>
+            <span>{accessibleLabel('floor reps')}</span>
             <input
-              aria-label={accessibleLabel('floor reps')}
               type="number"
               min="0"
               step="1"
@@ -94,9 +91,8 @@ function TrackingFields({ prefix = '', mode, values, setters, invalid = false, e
             />
           </label>
           <label className="tracking-field">
-            <span>Weight step (lb)</span>
+            <span>{accessibleLabel('weight step (pounds)')}</span>
             <input
-              aria-label={accessibleLabel('weight step (pounds)')}
               type="number"
               min="0"
               step="any"
@@ -114,6 +110,7 @@ function TrackingFields({ prefix = '', mode, values, setters, invalid = false, e
 export default function Settings({ onClose, onDirtyChange }) {
   const user = useContext(AuthContext);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [catalog, setCatalog] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [isCatalogMutating, setIsCatalogMutating] = useState(false);
@@ -121,10 +118,14 @@ export default function Settings({ onClose, onDirtyChange }) {
   const [legDayOfWeek, setLegDayOfWeek] = useState('None');
   const [defaultRestSeconds, setDefaultRestSeconds] = useState('60');
   const [settingsError, setSettingsError] = useState('');
+  const [legDayError, setLegDayError] = useState('');
+  const [catalogError, setCatalogError] = useState(null);
   const [warmupMinutes, setWarmupMinutes] = useState('10');
   const [cooldownMinutes, setCooldownMinutes] = useState('5');
   const [savedSettings, setSavedSettings] = useState(null);
   const [phaseErrors, setPhaseErrors] = useState({ warmup: '', cooldown: '' });
+  const settingsSaveQueue = useRef({});
+  const settingsSaveVersion = useRef({});
   
   // New exercise state
   const [newName, setNewName] = useState('');
@@ -140,6 +141,7 @@ export default function Settings({ onClose, onDirtyChange }) {
   const [newRestSeconds, setNewRestSeconds] = useState('');
   const [addError, setAddError] = useState('');
   const [addErrorIsValidation, setAddErrorIsValidation] = useState(false);
+  const isNameRequiredError = addError === 'Exercise name is required.';
   const [isAdding, setIsAdding] = useState(false);
   const addSaveInFlight = useRef(false);
   
@@ -161,17 +163,17 @@ export default function Settings({ onClose, onDirtyChange }) {
   const [editDirty, setEditDirty] = useState(false);
   const editSaveInFlight = useRef(false);
 
-  useEffect(() => {
-    const loadData = async () => {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const fetchedCatalog = await getCatalog(user.uid);
-        setCatalog(fetchedCatalog);
-        
-        const currentSettings = await getSettings(user.uid);
+  const loadData = useCallback(async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setLoadError('');
+    try {
+      const fetchedCatalog = await getCatalog(user.uid);
+      const currentSettings = await getSettings(user.uid);
+      setCatalog(fetchedCatalog);
         setLegDayOfWeek(currentSettings.legDayOfWeek || 'None');
         setDefaultRestSeconds(String(currentSettings.defaultRestSeconds ?? 60));
         setWarmupMinutes(String((currentSettings.warmupSeconds ?? 600) / 60));
@@ -182,15 +184,15 @@ export default function Settings({ onClose, onDirtyChange }) {
           warmupMinutes: String((currentSettings.warmupSeconds ?? 600) / 60),
           cooldownMinutes: String((currentSettings.cooldownSeconds ?? 300) / 60),
         });
-      } catch (error) {
-        console.error("Failed to load data:", error);
-        setSavedSettings({ legDayOfWeek: 'None', defaultRestSeconds: '60', warmupMinutes: '10', cooldownMinutes: '5' });
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
+    } catch (error) {
+      console.error("Failed to load data:", error);
+      setLoadError('Could not load Settings. Try again.');
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const hasNewExercise = Boolean(newName || newGroup !== 'Chest' || Number(newTier) !== 3 || Number(newSets) !== 3 || newLink || newTrackingMode !== 'simple' || newStartingWeight || newTargetReps || newFloorReps || newWeightStep || newRestSeconds);
   const hasChangedSettings = savedSettings && (legDayOfWeek !== savedSettings.legDayOfWeek || defaultRestSeconds !== savedSettings.defaultRestSeconds || warmupMinutes !== savedSettings.warmupMinutes || cooldownMinutes !== savedSettings.cooldownMinutes);
@@ -199,25 +201,56 @@ export default function Settings({ onClose, onDirtyChange }) {
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   const handleSaveSettings = async (updates) => {
-    try {
-      await saveSettings(user.uid, updates);
+    const field = Object.keys(updates)[0];
+    const version = (settingsSaveVersion.current[field] || 0) + 1;
+    settingsSaveVersion.current[field] = version;
+    const previousSave = settingsSaveQueue.current[field];
+    const save = (async () => {
+      if (previousSave) await previousSave;
+      try {
+        await saveSettings(user.uid, updates);
+        return true;
+      } catch (error) {
+        console.error("Failed to save settings:", error);
+        return false;
+      }
+    })();
+    settingsSaveQueue.current[field] = save;
+    const saved = await save;
+    if (version !== settingsSaveVersion.current[field]) return null;
+    if (saved) {
       setSavedSettings(current => ({ ...current,
         ...(Object.hasOwn(updates, 'legDayOfWeek') ? { legDayOfWeek: updates.legDayOfWeek } : {}),
         ...(Object.hasOwn(updates, 'defaultRestSeconds') ? { defaultRestSeconds: String(updates.defaultRestSeconds) } : {}),
+        ...(Object.hasOwn(updates, 'warmupSeconds') ? { warmupMinutes: String(updates.warmupSeconds / 60) } : {}),
+        ...(Object.hasOwn(updates, 'cooldownSeconds') ? { cooldownMinutes: String(updates.cooldownSeconds / 60) } : {}),
       }));
-    } catch (error) {
-      console.error("Failed to save settings:", error);
     }
+    return saved;
   };
 
-  const handleDefaultRestBlur = () => {
+  const handleDefaultRestBlur = async () => {
     const value = Number(defaultRestSeconds);
     if (!isValidRestSeconds(value)) {
       setSettingsError('Default rest must be a whole number from 5 through 600 seconds.');
       return;
     }
-    setSettingsError('');
-    handleSaveSettings({ defaultRestSeconds: value });
+    const saved = await handleSaveSettings({ defaultRestSeconds: value });
+    if (saved === true) {
+      setSettingsError('');
+    } else if (saved === false) {
+      setSettingsError('Could not save default rest. Try again.');
+    }
+  };
+
+  const handleLegDayChange = async (value) => {
+    setLegDayOfWeek(value);
+    const saved = await handleSaveSettings({ legDayOfWeek: value });
+    if (saved === true) {
+      setLegDayError('');
+    } else if (saved === false) {
+      setLegDayError('Could not save Leg Day. Try again.');
+    }
   };
 
   const handlePhaseBlur = async (phase, minutes) => {
@@ -236,12 +269,10 @@ export default function Settings({ onClose, onDirtyChange }) {
       }));
       return;
     }
-    setPhaseErrors(current => ({ ...current, [phase]: '' }));
-    try {
-      await saveSettings(user.uid, { [`${phase}Seconds`]: value * 60 });
-      setSavedSettings(current => ({ ...current, [`${phase}Minutes`]: String(value) }));
-    } catch (error) {
-      console.error('Failed to save phase setting:', error);
+    const saved = await handleSaveSettings({ [`${phase}Seconds`]: value * 60 });
+    if (saved === true) {
+      setPhaseErrors(current => ({ ...current, [phase]: '' }));
+    } else if (saved === false) {
       setPhaseErrors(current => ({
         ...current,
         [phase]: `Could not save ${phase === 'warmup' ? 'Warmup' : 'Cooldown'}. Try again.`,
@@ -255,6 +286,7 @@ export default function Settings({ onClose, onDirtyChange }) {
         await saveCatalogItem(user.uid, changedItem);
       }
       setCatalog(newCatalog);
+      setCatalogError(null);
     } catch (error) {
       console.error("Failed to save catalog item:", error);
       throw error;
@@ -279,6 +311,7 @@ export default function Settings({ onClose, onDirtyChange }) {
       // Rollback the optimistic UI update
       console.error('Failed to toggle exercise active state:', error);
       setCatalog(catalog);
+      setCatalogError({ id, message: 'Could not update the catalog. Try again.' });
     } finally {
       catalogMutationInFlight.current = false;
       setIsCatalogMutating(false);
@@ -378,7 +411,11 @@ export default function Settings({ onClose, onDirtyChange }) {
     if (addSaveInFlight.current || catalogMutationInFlight.current) return;
     setAddError('');
     setAddErrorIsValidation(false);
-    if (!newName.trim()) return;
+    if (!newName.trim()) {
+      setAddError('Exercise name is required.');
+      setAddErrorIsValidation(true);
+      return;
+    }
 
     const currentT1Groups = getTier1Groups(catalog);
     if (Number(newTier) === 1) {
@@ -456,7 +493,20 @@ export default function Settings({ onClose, onDirtyChange }) {
         <h2>Settings</h2>
         <button className="close-btn" onClick={onClose}>Close</button>
       </div>
-      <div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>
+      <div role="status" style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>
+    </div>
+  );
+
+  if (loadError) return (
+    <div className="settings-view">
+      <div className="settings-header">
+        <h2>Settings</h2>
+        <button className="close-btn" onClick={onClose}>Close</button>
+      </div>
+      <div className="settings-load-error">
+        <div className="catalog-form-error" role="alert">{loadError}</div>
+        <button className="save-btn" onClick={loadData}>Retry</button>
+      </div>
     </div>
   );
 
@@ -473,7 +523,6 @@ export default function Settings({ onClose, onDirtyChange }) {
           <label>
             Default rest seconds
             <input
-              aria-label="Default rest seconds"
               type="number"
               min="5"
               max="600"
@@ -492,7 +541,6 @@ export default function Settings({ onClose, onDirtyChange }) {
         <label>
           Warmup minutes
           <input
-            aria-label="Warmup minutes"
             type="number"
             min="0"
             max="60"
@@ -512,7 +560,6 @@ export default function Settings({ onClose, onDirtyChange }) {
         <label>
           Cooldown minutes
           <input
-            aria-label="Cooldown minutes"
             type="number"
             min="0"
             max="60"
@@ -529,17 +576,17 @@ export default function Settings({ onClose, onDirtyChange }) {
       </div>
 
       <div className="setting-group">
-        <label>Leg Day Schedule</label>
-        <select value={legDayOfWeek} onChange={(e) => {
-          setLegDayOfWeek(e.target.value);
-          handleSaveSettings({ legDayOfWeek: e.target.value });
-        }}>
-          {['None', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
-            <option key={day} value={day}>{day}</option>
-          ))}
-        </select>
+        <label>
+          Leg Day Schedule
+          <select value={legDayOfWeek} onChange={e => handleLegDayChange(e.target.value)} aria-invalid={legDayError ? true : undefined} aria-describedby={legDayError ? 'leg-day-error' : undefined}>
+            {['None', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+              <option key={day} value={day}>{day}</option>
+            ))}
+          </select>
+        </label>
+        {legDayError && <div id="leg-day-error" className="catalog-form-error" role="alert">{legDayError} <button type="button" className="cancel-btn" onClick={() => handleLegDayChange(legDayOfWeek)}>Retry Leg Day</button></div>}
         {legDayOfWeek !== 'None' && catalog.filter(ex => ex.muscleGroup === 'Legs' && ex.tier === 3).length === 0 && (
-          <div className="alert-warning" style={{ color: 'red', marginTop: '5px' }}>
+          <div className="alert-warning error-message" style={{ marginTop: '5px' }}>
             You must add at least one Tier 3 Leg Exercise to the catalog to use Leg Day.
           </div>
         )}
@@ -549,32 +596,23 @@ export default function Settings({ onClose, onDirtyChange }) {
       <div className="add-exercise">
         <h3>Add exercise</h3>
         <form onSubmit={handleAdd} className="add-form" noValidate>
-          <input 
-            aria-label="Exercise name"
-            type="text" 
-            placeholder="Exercise Name" 
-            value={newName} 
-            onChange={(e) => setNewName(e.target.value)} 
-            required 
-          />
-          <select value={newGroup} onChange={(e) => {
-            setNewGroup(e.target.value);
-            if (e.target.value === 'Legs' && newTier !== 3 && newTier !== 4) setNewTier(3);
-            if (e.target.value !== 'Legs' && newTier !== 1 && newTier !== 3 && newTier !== 4) setNewTier(3);
-          }}>
-            <option value="Chest">Chest</option>
-            <option value="Back">Back</option>
-            <option value="Legs">Legs</option>
-            <option value="Shoulders">Shoulders</option>
-            <option value="Biceps">Biceps</option>
-            <option value="Triceps">Triceps</option>
-            <option value="Core">Core</option>
-          </select>
-          <select 
-            value={newTier} 
-            onChange={(e) => setNewTier(e.target.value)} 
-            title="Priority Tier"
-          >
+          <label className="tracking-field">
+            Exercise name
+            <input type="text" placeholder="Exercise Name" value={newName} onChange={(e) => { setNewName(e.target.value); if (isNameRequiredError) { setAddError(''); setAddErrorIsValidation(false); } }} required aria-invalid={isNameRequiredError || undefined} aria-describedby={isNameRequiredError ? 'add-tracking-error' : undefined} />
+          </label>
+          <label className="tracking-field">
+            Muscle group
+            <select value={newGroup} onChange={(e) => {
+              setNewGroup(e.target.value);
+              if (e.target.value === 'Legs' && newTier !== 3 && newTier !== 4) setNewTier(3);
+              if (e.target.value !== 'Legs' && newTier !== 1 && newTier !== 3 && newTier !== 4) setNewTier(3);
+            }}>
+              <option value="Chest">Chest</option><option value="Back">Back</option><option value="Legs">Legs</option><option value="Shoulders">Shoulders</option><option value="Biceps">Biceps</option><option value="Triceps">Triceps</option><option value="Core">Core</option>
+            </select>
+          </label>
+          <label className="tracking-field">
+            Priority tier
+            <select value={newTier} onChange={(e) => setNewTier(e.target.value)}>
             {newGroup === 'Legs' ? (
               <>
                 <option value="3">Tier 3 (Primary Leg Day)</option>
@@ -587,42 +625,37 @@ export default function Settings({ onClose, onDirtyChange }) {
                 <option value="4">Tier 4 (Low Priority)</option>
               </>
             )}
-          </select>
-          <input 
-            type="number" 
-            min="1" 
-            max="10" 
-            value={newSets} 
-            onChange={(e) => setNewSets(e.target.value)} 
-            title="Sets"
-            placeholder="Sets"
-          />
+            </select>
+          </label>
           <label className="tracking-field">
-            <span>Rest override seconds (blank uses default)</span>
+            Sets
+            <input type="number" min="1" max="10" value={newSets} onChange={(e) => setNewSets(e.target.value)} placeholder="Sets" />
+          </label>
+          <label className="tracking-field">
+            <span>Rest override seconds</span>
             <input
-              aria-label="Rest override seconds"
               type="number"
               min="5"
               max="600"
               step="1"
               value={newRestSeconds}
               onChange={event => setNewRestSeconds(event.target.value)}
-              aria-invalid={addErrorIsValidation || undefined}
-              aria-describedby={addErrorIsValidation ? 'add-tracking-error' : undefined}
+              aria-invalid={addErrorIsValidation && !isNameRequiredError || undefined}
+              aria-describedby={addErrorIsValidation && !isNameRequiredError ? 'add-tracking-error' : undefined}
             />
           </label>
+          <span> (blank uses default)</span>
           <label className="tracking-field tracking-mode-field">
             <span>Tracking mode</span>
             <select
-              aria-label="Tracking mode"
               value={newTrackingMode}
               onChange={(e) => {
                 setNewTrackingMode(e.target.value);
                 setAddError('');
                 setAddErrorIsValidation(false);
               }}
-              aria-invalid={addErrorIsValidation || undefined}
-              aria-describedby={addErrorIsValidation ? 'add-tracking-error' : undefined}
+              aria-invalid={addErrorIsValidation && !isNameRequiredError || undefined}
+              aria-describedby={addErrorIsValidation && !isNameRequiredError ? 'add-tracking-error' : undefined}
             >
               <option value="simple">Simple completion</option>
               <option value="weighted">Weighted sets</option>
@@ -633,16 +666,19 @@ export default function Settings({ onClose, onDirtyChange }) {
             mode={newTrackingMode}
             values={{ startingWeight: newStartingWeight, targetReps: newTargetReps, floorReps: newFloorReps, weightStep: newWeightStep }}
             setters={{ setStartingWeight: setNewStartingWeight, setTargetReps: setNewTargetReps, setFloorReps: setNewFloorReps, setWeightStep: setNewWeightStep }}
-            invalid={addErrorIsValidation}
+            invalid={addErrorIsValidation && !isNameRequiredError}
             errorId="add-tracking-error"
           />
           {newGroup === 'Legs' && String(newTier) === '3' ? (
             <span className="badge">Primary Leg exercises are automatically linked together on Leg Day.</span>
           ) : (
-            <select value={newLink} onChange={(e) => setNewLink(e.target.value)}>
+            <label className="tracking-field">
+              Linked exercise
+              <select value={newLink} onChange={(e) => setNewLink(e.target.value)}>
               <option value="">None</option>
               {catalog.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
-            </select>
+              </select>
+            </label>
           )}
           <button type="submit" className={`add-btn ${editingId ? 'is-neutral' : ''}`} disabled={isCatalogMutating}>{isAdding ? 'Adding...' : 'Add'}</button>
           {addError && <div id="add-tracking-error" className="catalog-form-error" role="alert">{addError}</div>}
@@ -656,13 +692,13 @@ export default function Settings({ onClose, onDirtyChange }) {
             <li key={ex.id} className={`catalog-item ${ex.isActive === false ? 'inactive' : ''}`}>
               {editingId === ex.id ? (
                 <div className="edit-form">
-                  <input 
-                    aria-label="Edit exercise name"
-                    type="text" 
-                    value={editName} 
-                    onChange={(e) => { setEditDirty(true); setEditName(e.target.value); }}
-                  />
-                  <select value={editGroup} onChange={(e) => {
+                  <label className="tracking-field">
+                    Edit exercise name
+                    <input type="text" value={editName} onChange={(e) => { setEditDirty(true); setEditName(e.target.value); }} />
+                  </label>
+                  <label className="tracking-field">
+                    Edit muscle group
+                    <select value={editGroup} onChange={(e) => {
                     setEditDirty(true);
                     setEditGroup(e.target.value);
                     if (e.target.value === 'Legs' && editTier !== 3 && editTier !== 4) setEditTier(3);
@@ -675,12 +711,11 @@ export default function Settings({ onClose, onDirtyChange }) {
                     <option value="Biceps">Biceps</option>
                     <option value="Triceps">Triceps</option>
                     <option value="Core">Core</option>
-                  </select>
-                  <select 
-                    value={editTier} 
-                    onChange={(e) => { setEditDirty(true); setEditTier(e.target.value); }}
-                    title="Priority Tier"
-                  >
+                    </select>
+                  </label>
+                  <label className="tracking-field">
+                    Edit priority tier
+                    <select value={editTier} onChange={(e) => { setEditDirty(true); setEditTier(e.target.value); }}>
                     {editGroup === 'Legs' ? (
                       <>
                         <option value="3">Tier 3 (Primary Leg Day)</option>
@@ -693,19 +728,15 @@ export default function Settings({ onClose, onDirtyChange }) {
                         <option value="4">Tier 4 (Low Priority)</option>
                       </>
                     )}
-                  </select>
-                  <input 
-                    type="number" 
-                    min="1" 
-                    max="10" 
-                    value={editSets} 
-                    onChange={(e) => { setEditDirty(true); setEditSets(e.target.value); }}
-                    title="Sets"
-                  />
+                    </select>
+                  </label>
                   <label className="tracking-field">
-                    <span>Rest override seconds (blank uses default)</span>
+                    Edit sets
+                    <input type="number" min="1" max="10" value={editSets} onChange={(e) => { setEditDirty(true); setEditSets(e.target.value); }} />
+                  </label>
+                  <label className="tracking-field">
+                    <span>Edit rest override seconds</span>
                     <input
-                      aria-label="Edit rest override seconds"
                       type="number"
                       min="5"
                       max="600"
@@ -716,10 +747,10 @@ export default function Settings({ onClose, onDirtyChange }) {
                       aria-describedby={editErrorIsValidation ? `edit-tracking-error-${editingId}` : undefined}
                     />
                   </label>
+                  <span> (blank uses default)</span>
                   <label className="tracking-field tracking-mode-field">
-                    <span>Tracking mode</span>
+                    <span>Edit tracking mode</span>
                     <select
-                      aria-label="Edit tracking mode"
                       value={editTrackingMode}
                       onChange={(e) => {
                         setEditDirty(true);
@@ -749,12 +780,15 @@ export default function Settings({ onClose, onDirtyChange }) {
                   {editGroup === 'Legs' && String(editTier) === '3' ? (
                     <span className="badge">Primary Leg exercises are automatically linked together on Leg Day.</span>
                   ) : (
-                    <select value={editLink} onChange={(e) => { setEditDirty(true); setEditLink(e.target.value); }}>
+                    <label className="tracking-field">
+                      Edit linked exercise
+                      <select value={editLink} onChange={(e) => { setEditDirty(true); setEditLink(e.target.value); }}>
                       <option value="">None</option>
                       {catalog.filter(c => c.id !== ex.id).map(c => (
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
-                    </select>
+                      </select>
+                    </label>
                   )}
                   <div className="edit-actions">
                     <button onClick={() => handleSaveEdit(ex.id)} className="save-btn" disabled={isCatalogMutating}>{isEditSaving ? 'Saving...' : 'Save'}</button>
@@ -780,6 +814,7 @@ export default function Settings({ onClose, onDirtyChange }) {
                       {ex.isActive === false ? 'Reactivate' : 'Deactivate'}
                     </button>
                   </div>
+                  {catalogError?.id === ex.id && <div className="catalog-form-error" role="alert">{catalogError.message}</div>}
                 </div>
               )}
             </li>

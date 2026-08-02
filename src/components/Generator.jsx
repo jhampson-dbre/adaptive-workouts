@@ -137,7 +137,7 @@ export default function Generator({
         <p>Nudge will use your recent training to decide what is worth doing next.</p>
       </div>
       
-      {error && <div className="error-message">{error}</div>}
+      {error && <div className="error-message" role="alert">{error}</div>}
       {canRetryHistory && (
         <button type="button" onClick={handleGenerate} disabled={isGenerating}>
           {isGenerating ? 'Retrying...' : 'Retry'}

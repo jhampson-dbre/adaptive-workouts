@@ -76,6 +76,12 @@ components:
     textColor: "{colors.line}"
     rounded: "{rounded.sharp}"
     height: "58px"
+  settings-field:
+    backgroundColor: "{colors.white}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body}"
+    rounded: "{rounded.sharp}"
+    height: "44px"
 ---
 
 # Design System: Nudge
@@ -86,7 +92,7 @@ components:
 
 Nudge is a high-contrast operating interface for a trainee using a phone around equipment. Hard-edged black, white, pale-concrete, and signal-yellow planes establish context quickly; generous identifiers and condensed headings make the current state legible without decoration or motivational theater.
 
-The system applies to the shared shell, the approved Plan → Perform → Cooldown → Review journey, and the read-only Workout history disclosure. Every active state answers three questions in order: what is happening, what is the one dominant next action, and which other exercises remain available. Guidance comes from hierarchy and plain language, never literal route, gate, airport, or destination terminology.
+The system applies to the shared shell, the approved Plan → Perform → Cooldown → Review journey, the read-only Workout history disclosure, and Settings with its exercise catalog. Every active state answers three questions in order: what is happening, what is the one dominant next action, and which other exercises remain available. Guidance comes from hierarchy and plain language, never literal route, gate, airport, or destination terminology.
 
 **Key Characteristics:**
 
@@ -112,7 +118,7 @@ The palette uses signal yellow sparingly against ink, white, and pale concrete s
 - **Pale Concrete** (#f0eee7): Quieter planning, exercise-list, history, and action-supporting regions.
 - **Muted Graphite** (#454545): Supporting descriptions, metadata, and inactive status copy.
 - **Focus Blue** (#1261a0): Keyboard focus outlines; it stays distinct from yellow action state.
-- **Error Red** (#721c24): Blocking error feedback only.
+- **Error Red** (#721c24): Actionable warning and error feedback only, on white for readable contrast.
 
 ### Named Rules
 
@@ -139,11 +145,13 @@ The palette uses signal yellow sparingly against ink, white, and pale concrete s
 
 **The State Before Detail Rule.** Lead with the phase, action, timer, or exercise identifier; supporting explanation follows in body type.
 
+**The One Page Heading Rule.** The shared Nudge wordmark is the page’s sole first-level heading; each active surface or workout state begins at the second level without changing its visual scale.
+
 ## Layout
 
-The journey is a single 760px maximum-width working column on a pale-concrete page. Within it, regions run edge to edge as stacked sign-like planes. Content padding repeatedly scales from 22px on phones to 52px on wider screens; 8px, 12px, 16px, 22px, 28px, and 32px provide the supporting rhythm.
+The application is a single 760px maximum-width working column on a pale-concrete page. Within it, regions run edge to edge as stacked sign-like planes. Content padding repeatedly scales from 22px on phones to 52px on wider screens; 8px, 12px, 16px, 22px, 28px, and 32px provide the supporting rhythm.
 
-The four-step journey path stays in one equal-width row. Planner choices use two columns until 520px, then stack. Exercise rows reduce from three columns to two at the same breakpoint, moving status beneath the exercise name. Dominant actions span the available width and retain at least 116px height; ordinary interactive targets retain at least 44–48px.
+The four-step journey path stays in one equal-width row. Planner choices use two columns until 520px, then stack. Exercise rows reduce from three columns to two at the same breakpoint, moving status beneath the exercise name. Settings forms wrap related labeled fields as a group and stack them at 600px without separating tracking controls from their labels. Dominant actions span the available width and retain at least 116px height; ordinary interactive targets, including the native time slider, retain at least 44–48px.
 
 **The Decision Order Rule.** Place current context first, the dominant next action second, and alternate exercises or disclosures after it.
 
@@ -179,11 +187,17 @@ The form language is deliberately hard-edged. Panels, buttons, fields, planning 
 ### Inputs / Fields
 
 - **Set input:** A white, square, 58px-minimum field with a thin black border and bold 1.6rem value. The shared blue focus outline remains visible against every plane.
+- **Settings field:** Native text, number, and select controls sit beneath explicit 18px labels, use a white square 44px-minimum field with a thin black border, and stack at phone widths. Related tracking fields remain a wrapping group rather than collapsing into an unlabeled row.
+- **Feedback:** Invalid fields keep their label and control visible, link to a square white error block in error red, and use live status or alert semantics for asynchronous and blocking feedback.
 
 ### Navigation
 
 - **Journey progress:** Four equal columns on an ink plane. White connected markers show the full journey; the current step alone changes to signal yellow and uses `aria-current="step"`.
-- **Shared shell:** A white Nudge wordmark bar separated from the journey by a 2px black rule. Settings remains outside this system’s approved visual scope.
+- **Shared shell:** A white Nudge wordmark bar separated from the current surface by a 2px black rule. Settings and sign-out use quiet square 44px-minimum controls that invert to ink on hover.
+
+### Settings & Catalog
+
+Settings uses an ink title plane followed by General defaults, Add exercise, and Current catalog regions. White and concrete planes alternate, section headings use condensed headline type, labeled fields wrap without losing their grouping, and catalog items use simple black rules instead of cards or badges. Add and save are the only signal-yellow actions; edit, activate, deactivate, cancel, and close remain neutral.
 
 ### Workout History
 
@@ -200,11 +214,12 @@ Exercise rows carry a large two-digit identifier, exercise name, muscle group, c
 - **Do** make one worthwhile next action unmistakable in every journey state.
 - **Do** keep other exercises visible and reachable without asking the trainee to re-plan.
 - **Do** preserve visible keyboard focus, readable timing and status, reduced-motion behavior, and phone-sized touch targets.
+- **Do** keep settings controls explicitly labeled and keep warning, error, loading, and mutation feedback adjacent to the affected region.
 - **Do** use plain labels such as “Exercises,” “Start set,” “Cooldown,” and “Review.”
 
 ### Don't:
 
 - **Don't** use route, gate, destination, next-stop, or other literal airport terminology.
 - **Don't** introduce streak pressure, guilt, gamification, faux precision, unsupported readiness, invented recommendations, or authoritative coaching.
-- **Don't** add configuration or hierarchy outside the approved shared shell and Plan → Perform → Cooldown → Review journey.
+- **Don't** turn Settings or the catalog into a separate visual language of rounded cards, decorative badges, or competing accent actions.
 - **Don't** make alternate actions compete in scale, color, or placement with the dominant next action.

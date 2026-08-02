@@ -155,6 +155,8 @@ describe('Generator Component', () => {
         fireEvent.click(screen.getByText('Plan my workout'));
 
         const retry = await screen.findByRole('button', { name: 'Retry' });
+        expect(screen.getAllByRole('alert')).toHaveLength(1);
+        expect(screen.getByRole('alert').textContent).toMatch(/workout history is unavailable/i);
         expect(screen.getByText(/workout history is unavailable/i)).not.toBeNull();
         expect(engine.generateWorkout).not.toHaveBeenCalled();
         expect(onGenerate).not.toHaveBeenCalled();
@@ -183,7 +185,8 @@ describe('Generator Component', () => {
         />);
         fireEvent.click(screen.getByText('Plan my workout'));
 
-        expect(await screen.findByText(/failed to generate workout/i)).not.toBeNull();
+        expect((await screen.findByRole('alert')).textContent).toMatch(/failed to generate workout/i);
+        expect(screen.getAllByRole('alert')).toHaveLength(1);
         expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
     });
 

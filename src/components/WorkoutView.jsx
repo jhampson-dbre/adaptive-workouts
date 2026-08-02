@@ -122,7 +122,7 @@ function WorkoutSummary({ candidate, phaseTargets, isSaving, saveError, saveStat
   const unconfirmed = candidate.exercises.filter(exercise => exercise.setRecords?.some(record => !record.completed) || (!exercise.setRecords && !exercise.completed));
   return (
     <section className="workout-summary" role="region" aria-label="Workout summary">
-      <h1 tabIndex="-1" ref={summaryRef}>Review</h1>
+      <h2 tabIndex="-1" ref={summaryRef}>Review</h2>
       <p className="summary-total">{recordedWork} recorded · {formatTime(candidate.actualDurationSeconds)}</p>
       <ul aria-label="Frozen phase timing">
         {['warmup', 'performance', 'cooldown'].map(phase => <li key={phase}>{phaseReadout(phase[0].toUpperCase() + phase.slice(1), phaseTargets?.[`${phase}Seconds`] ?? 0, candidate.phaseActualSeconds?.[phase] ?? 0)}</li>)}
@@ -565,7 +565,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
     const canAcquireRetainedDraft = hasRecoveryIdentity(sessionState?.snapshot);
     return <div className="workout-view recovery-view">
       <section className="recovery-panel" role="region" aria-label="Workout recovery">
-        <h1 ref={recoveryHeadingRef} tabIndex="-1">{checking ? 'Checking active workout' : resumable ? 'Resume workout?' : 'Workout recovery'}</h1>
+        <h2 ref={recoveryHeadingRef} tabIndex="-1">{checking ? 'Checking active workout' : resumable ? 'Resume workout?' : 'Workout recovery'}</h2>
         <p className="recovery-message" role={checking ? 'status' : 'alert'}>{checking ? 'Checking for a saved workout draft.' : resumable ? RECOVERY_MESSAGES.resumable : publicStatusMessage(sessionState?.error)}</p>
         {!checking && <div className="recovery-actions">
           {resumable && <button className="recovery-primary" type="button" onClick={async () => { if (await session.resume()) { setRecoveryAcknowledgement('Workout resumed.'); onResume?.(); } }}>Resume</button>}
@@ -575,12 +575,12 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
       </section>
     </div>;
   }
-  if (sessionState?.status === 'saved') return <div className="workout-view"><JourneyProgress current="Review" /><section className="workout-summary" role="status"><h1 ref={savedRef} tabIndex="-1">Workout saved</h1><p>Your recorded work is available in workout history.</p><button type="button" className="finish-btn" onClick={() => onFinish?.()}>Plan another workout</button></section></div>;
+  if (sessionState?.status === 'saved') return <div className="workout-view"><JourneyProgress current="Review" /><section className="workout-summary" role="status"><h2 ref={savedRef} tabIndex="-1">Workout saved</h2><p>Your recorded work is available in workout history.</p><button type="button" className="finish-btn" onClick={() => onFinish?.()}>Plan another workout</button></section></div>;
   return <div className={`workout-view phase-${activeWorkout.phase}`}>
     <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{restAnnouncement || recoveryAcknowledgement}</div>
     <JourneyProgress current={finishCandidate ? 'Review' : journeyStep} />
     {finishCandidate ? <WorkoutSummary candidate={finishCandidate} phaseTargets={sessionState?.phaseTargets} isSaving={isSaving} saveError={saveError} saveStatus={saveStatus} blockedConflict={blockedSaveConflict} onBack={handleBack} onSave={handleSave} onKeepPending={() => setRecoveryAcknowledgement('Save conflict remains pending.')} onExit={async () => { await session.exit(); onFinish?.(); }} summaryRef={summaryRef} /> : <>
-      <div className="workout-header"><h1 ref={phaseHeadingRef} tabIndex="-1">{phaseTitle}</h1>{started && <div className="timer" aria-label={`Total elapsed ${formatTime(displayedElapsedSeconds)}`}>{formatTime(displayedElapsedSeconds)}</div>}</div>
+      <div className="workout-header"><h2 className="workout-title" ref={phaseHeadingRef} tabIndex="-1">{phaseTitle}</h2>{started && <div className="timer" aria-label={`Total elapsed ${formatTime(displayedElapsedSeconds)}`}>{formatTime(displayedElapsedSeconds)}</div>}</div>
       <p id="workout-start-help" className="workout-help">{['warmup', 'cooldown'].includes(activeWorkout.phase) && activeWorkout.phaseLedger ? phaseReadout(activeWorkout.phase === 'warmup' ? 'Warmup' : 'Cooldown', sessionState?.phaseTargets?.[`${activeWorkout.phase}Seconds`] ?? 0, getPhaseElapsedSeconds(activeWorkout, activeWorkout.phase, now), true) : started ? 'Start a ready set. Only one work timer can run at a time.' : 'Start the workout to enable set timers.'}</p>
       {!started && activeWorkout.phase !== 'cancelled' && <button className="start-btn" onClick={() => { const timestamp = acceptDisplayTime(Date.now()); dispatch({ type: 'startWorkout', timestamp }); }}>Start Workout</button>}
       {activeWorkout.phase === 'cooldown' && <div className="summary-actions"><button ref={finishRef} className="finish-btn" aria-describedby={finishError ? 'finish-feedback' : undefined} onClick={handleFinish}>Finish Workout</button><button type="button" onClick={() => dispatch({ type: 'resumeWorkout', timestamp: acceptDisplayTime(Date.now()) })}>Resume Workout</button>{finishError && <p id="finish-feedback" className="error-message" role="alert">{finishError}</p>}</div>}

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-07-31T03:49:23.4858773Z",
+  "generatedAt": "2026-08-02T12:54:00.6051622Z",
   "title": "Design System: Nudge",
   "extensions": {
     "colorMeta": {
@@ -136,11 +136,19 @@
       "description": "A large numeric field for set performance details.",
       "html": "<label class=\"ds-set-input\"><span>Weight (lb)</span><input type=\"number\" value=\"35\" min=\"0\"></label>",
       "css": ".ds-set-input { display: grid; gap: 6px; color: #101010; font: 700 0.9rem/1.2 'Atkinson Hyperlegible', sans-serif; } .ds-set-input input { width: 100%; min-height: 58px; box-sizing: border-box; padding: 8px 12px; border: 1px solid #101010; border-radius: 0; background: #ffffff; color: #101010; font: 700 1.6rem/1.2 'Atkinson Hyperlegible', sans-serif; } .ds-set-input input:hover { background: #fff2a8; } .ds-set-input input:focus-visible { outline: 4px solid #1261a0; outline-offset: 3px; }"
+    },
+    {
+      "name": "Settings Field",
+      "kind": "input",
+      "refersTo": "settings-field",
+      "description": "An explicitly labeled native field with adjacent validation feedback.",
+      "html": "<label class=\"ds-settings-field\"><span>Default rest seconds</span><input type=\"number\" value=\"90\" min=\"5\" max=\"600\" aria-invalid=\"true\" aria-describedby=\"ds-settings-error\"><small id=\"ds-settings-error\">Enter 5 to 600 seconds.</small></label>",
+      "css": ".ds-settings-field { display: grid; gap: 8px; color: #050505; font: 400 18px/1.4 'Atkinson Hyperlegible', sans-serif; } .ds-settings-field input { min-width: 44px; min-height: 44px; box-sizing: border-box; padding: 10px 12px; border: 1px solid #101010; border-radius: 0; background: #ffffff; color: #050505; } .ds-settings-field input:hover { background: #fff2a8; } .ds-settings-field input:focus-visible { outline: 4px solid #1261a0; outline-offset: 3px; } .ds-settings-field input[aria-invalid='true'] { border-color: #721c24; } .ds-settings-field small { padding: 10px 12px; border: 1px solid #721c24; background: #ffffff; color: #721c24; }"
     }
   ],
   "narrative": {
     "northStar": "The Clear Signal",
-    "overview": "Nudge is a high-contrast operating interface for a trainee using a phone around equipment. Hard-edged black, white, pale-concrete, and signal-yellow planes establish context quickly; generous identifiers and condensed headings make the current state legible without decoration or motivational theater.\n\nThe system applies to the shared shell and the approved Plan → Perform → Cooldown → Review journey. Every state answers three questions in order: what is happening, what is the one dominant next action, and which other exercises remain available. Guidance comes from hierarchy and plain language, never literal route, gate, airport, or destination terminology.",
+    "overview": "Nudge is a high-contrast operating interface for a trainee using a phone around equipment. Hard-edged black, white, pale-concrete, and signal-yellow planes establish context quickly; generous identifiers and condensed headings make the current state legible without decoration or motivational theater.\n\nThe system applies to the shared shell, the approved Plan → Perform → Cooldown → Review journey, the read-only Workout history disclosure, and Settings with its exercise catalog. Every active state answers three questions in order: what is happening, what is the one dominant next action, and which other exercises remain available. Guidance comes from hierarchy and plain language, never literal route, gate, airport, or destination terminology.",
     "keyCharacteristics": [
       "One unmistakable signal-yellow next action per state",
       "Flat, hard-edged planes separated by thin rules",
@@ -165,6 +173,11 @@
         "section": "typography"
       },
       {
+        "name": "The One Page Heading Rule",
+        "body": "The shared Nudge wordmark is the page’s sole first-level heading; each active surface or workout state begins at the second level without changing its visual scale.",
+        "section": "typography"
+      },
+      {
         "name": "The Decision Order Rule",
         "body": "Place current context first, the dominant next action second, and alternate exercises or disclosures after it.",
         "section": "layout"
@@ -179,12 +192,13 @@
       "Do make one worthwhile next action unmistakable in every journey state.",
       "Do keep other exercises visible and reachable without asking the trainee to re-plan.",
       "Do preserve visible keyboard focus, readable timing and status, reduced-motion behavior, and phone-sized touch targets.",
+      "Do keep settings controls explicitly labeled and keep warning, error, loading, and mutation feedback adjacent to the affected region.",
       "Do use plain labels such as “Exercises,” “Start set,” “Cooldown,” and “Review.”"
     ],
     "donts": [
       "Don't use route, gate, destination, next-stop, or other literal airport terminology.",
       "Don't introduce streak pressure, guilt, gamification, faux precision, unsupported readiness, invented recommendations, or authoritative coaching.",
-      "Don't add configuration or hierarchy outside the approved shared shell and Plan → Perform → Cooldown → Review journey.",
+      "Don't turn Settings or the catalog into a separate visual language of rounded cards, decorative badges, or competing accent actions.",
       "Don't make alternate actions compete in scale, color, or placement with the dominant next action."
     ]
   }

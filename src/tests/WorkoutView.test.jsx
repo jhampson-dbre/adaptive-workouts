@@ -56,7 +56,7 @@ test('a blocked active workout exposes recovery controls and awaits Exit before 
   const exit = vi.fn().mockResolvedValue(undefined); const onFinish = vi.fn();
   const activeWorkout = initializeActiveWorkout(timedWorkout, { phaseTimingEnabled: true });
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ exit }} sessionState={{ status: 'blocked', activeWorkout, error: 'unsupported', blocked: true }} onFinish={onFinish} /></AuthContext.Provider>);
-  expect(screen.getByRole('heading', { name: 'Workout recovery' })).toBeDefined();
+  expect(screen.getByRole('heading', { level: 2, name: 'Workout recovery' })).toBeDefined();
   expect(screen.getByText('This browser cannot safely start a recoverable workout.')).toBeDefined();
   expect(screen.queryByRole('button', { name: 'Start Workout' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Exit' }));
@@ -654,7 +654,7 @@ test('Finish uses a fresh reducer snapshot after Back and saves coherent v4 timi
   expect(screen.getByText(/Plank: 1 set remaining/)).toBeDefined();
   expect(screen.getByRole('button', { name: 'Return to workout' })).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Continue to Cooldown' }));
-  expect(screen.getByRole('heading', { level: 1, name: 'Cooldown' })).toBe(document.activeElement);
+  expect(screen.getByRole('heading', { level: 2, name: 'Cooldown' })).toBe(document.activeElement);
   fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
   await act(async () => {});
   expect(screen.getByText(/1 set recorded/)).toBeDefined();
@@ -663,6 +663,7 @@ test('Finish uses a fresh reducer snapshot after Back and saves coherent v4 timi
   fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Plan another workout' })).toBeDefined());
+  expect(screen.getByRole('heading', { level: 2, name: 'Workout saved' })).toBe(document.activeElement);
   fireEvent.click(screen.getByRole('button', { name: 'Plan another workout' }));
   expect(onFinish).toHaveBeenCalledOnce();
   expect(view.api.save).toHaveBeenCalledOnce();
@@ -687,11 +688,11 @@ test('A8 saves a strict v4 document with frozen phase durations instead of the l
 test('A8 production phase targets drive Warmup, Performance, Cooldown, and Review with final-confirm focus on Cooldown', async () => {
   const view = renderWorkout([{ ...timedWorkout[1] }], () => {}, { uid: 'test-user-id' }, { warmupSeconds: 60, performanceSeconds: 0, cooldownSeconds: 60 });
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
-  expect(screen.getByRole('heading', { level: 1, name: 'Warmup' })).toBe(document.activeElement);
+  expect(screen.getByRole('heading', { level: 2, name: 'Warmup' })).toBe(document.activeElement);
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
-  expect(screen.getByRole('heading', { level: 1, name: 'Performance' })).toBe(document.activeElement);
+  expect(screen.getByRole('heading', { level: 2, name: 'Performance' })).toBe(document.activeElement);
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
-  expect(screen.getByRole('heading', { level: 1, name: 'Cooldown' })).toBe(document.activeElement);
+  expect(screen.getByRole('heading', { level: 2, name: 'Cooldown' })).toBe(document.activeElement);
   fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
   expect(await screen.findByRole('region', { name: 'Workout summary' })).toBeDefined();
   expect(view.api.action.mock.calls.map(([action]) => action.type)).toEqual(expect.arrayContaining(['startWorkout', 'startSet', 'confirmSet', 'finishWorkout']));
@@ -705,7 +706,7 @@ test('renders planned phase timing and freezes all phase totals in the semantic 
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
-  expect(screen.getByRole('heading', { level: 1, name: 'Review' })).toBe(document.activeElement);
+  expect(screen.getByRole('heading', { level: 2, name: 'Review' })).toBe(document.activeElement);
   expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Warmup: 0:00 actual \/ 1:00 planned/);
   expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Performance: 0:00 actual \/ 0:45 planned/);
   expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Cooldown: 0:00 actual \/ 0:30 planned/);
@@ -760,7 +761,7 @@ test('blocked immutable-save conflict keeps frozen Review with only non-mutating
   for (const action of [{ type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 1002 }, { type: 'finishWorkout', timestamp: 1003 }]) review = activeWorkoutReducer(review, action);
   const save = vi.fn(); const exit = vi.fn().mockResolvedValue(undefined); const onFinish = vi.fn();
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ save, exit, action: vi.fn() }} sessionState={{ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 0, performanceSeconds: 2700, cooldownSeconds: 0 }, snapshot: { draftId: 'd', ownershipGeneration: 1 }, pendingSave: { state: 'blocked-conflict' }, error: 'conflict', blocked: true }} onFinish={onFinish} /></AuthContext.Provider>);
-  expect(await screen.findByRole('heading', { level: 1, name: 'Review' })).toBe(document.activeElement);
+  expect(await screen.findByRole('heading', { level: 2, name: 'Review' })).toBe(document.activeElement);
   expect(screen.getByText('A different saved workout conflicts with this save.')).toBeDefined();
   expect(screen.getByRole('alert').className).toContain('recovery-feedback');
   expect(screen.getByRole('button', { name: 'Keep pending' }).className).toContain('recovery-primary');
@@ -787,12 +788,12 @@ test('renders the session-produced divergent immutable-save conflict as frozen R
   const renderState = state => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={session} sessionState={state} onFinish={onFinish} /></AuthContext.Provider>;
   const view = render(renderState(session.getState()));
   const unsubscribe = session.subscribe(state => view.rerender(renderState(state)));
-  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Review' })));
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Review' })));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
   await waitFor(() => expect(session.getState()).toMatchObject({ status: 'review', blocked: true, pendingSave: { state: 'blocked-conflict' } }));
 
   const summary = await screen.findByRole('region', { name: 'Workout summary' });
-  expect(screen.getByRole('heading', { level: 1, name: 'Review' })).toBe(document.activeElement);
+  expect(screen.getByRole('heading', { level: 2, name: 'Review' })).toBe(document.activeElement);
   expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Performance: 0:00 actual \/ 45:00 planned/);
   expect(summary.textContent).toMatch(/1 set recorded/);
   expect([...summary.querySelectorAll('button')].map(button => button.textContent)).toEqual(['Keep pending', 'Exit']);
@@ -832,7 +833,7 @@ test('Review Back keeps the frozen summary hidden while durable publication is p
   await act(async () => {});
   expect(screen.queryByRole('region', { name: 'Workout summary' })).toBeNull();
   view.rerender(renderState(activeWorkoutReducer(review, { type: 'reviewBack', timestamp: 1004 })));
-  await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Cooldown' })).toBe(document.activeElement));
+  await waitFor(() => expect(screen.getByRole('heading', { level: 2, name: 'Cooldown' })).toBe(document.activeElement));
 });
 
 test('a rejected Review Back restores the identical frozen candidate and actions', async () => {

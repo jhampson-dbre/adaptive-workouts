@@ -35,6 +35,60 @@ describe('Settings tracking configuration', () => {
 
   afterEach(cleanup);
 
+  it('announces the initial catalog and settings load once', () => {
+    storage.getCatalog.mockReturnValue(new Promise(() => {}));
+    storage.getSettings.mockReturnValue(new Promise(() => {}));
+    render(
+      <AuthContext.Provider value={{ uid: 'user-1' }}>
+        <Settings onClose={vi.fn()} />
+      </AuthContext.Provider>,
+    );
+
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(screen.getByRole('status').textContent).toBe('Loading...');
+  });
+
+  it('shows a field-associated error when the required exercise name is empty', async () => {
+    renderSettings();
+    const name = await screen.findByLabelText('Exercise name');
+    const rest = screen.getByLabelText('Rest override seconds');
+    const trackingMode = screen.getByLabelText('Tracking mode');
+    fireEvent.change(trackingMode, { target: { value: 'bodyweight' } });
+    const targetReps = screen.getByLabelText('Target reps');
+
+    expect(name.validity.valueMissing).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Exercise name is required.');
+    expect(name.getAttribute('aria-invalid')).toBe('true');
+    expect(name.getAttribute('aria-describedby')).toBe('add-tracking-error');
+    for (const field of [rest, trackingMode, targetReps]) {
+      expect(field.getAttribute('aria-invalid')).toBeNull();
+      expect(field.getAttribute('aria-describedby')).toBeNull();
+    }
+    expect(storage.saveCatalogItem).not.toHaveBeenCalled();
+
+    fireEvent.change(name, { target: { value: 'Row' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(name.getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('blocks Settings after an initial load failure and retries both reads', async () => {
+    storage.getCatalog.mockResolvedValueOnce([exercise]).mockResolvedValueOnce([exercise]);
+    storage.getSettings.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ defaultRestSeconds: 90 });
+    render(
+      <AuthContext.Provider value={{ uid: 'user-1' }}>
+        <Settings onClose={vi.fn()} />
+      </AuthContext.Provider>,
+    );
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(/could not load settings/i);
+    expect(screen.queryByLabelText('Default rest seconds')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect((await screen.findByLabelText('Default rest seconds')).value).toBe('90');
+    expect(storage.getCatalog).toHaveBeenCalledTimes(2);
+    expect(storage.getSettings).toHaveBeenCalledTimes(2);
+  });
+
   it('shows normalized default rest and saves only whole values from 5 through 600', async () => {
     renderSettings([], { defaultRestSeconds: 60 });
     const input = await screen.findByLabelText('Default rest seconds');
@@ -50,6 +104,29 @@ describe('Settings tracking configuration', () => {
     await waitFor(() => expect(storage.saveSettings).toHaveBeenCalledWith(
       'user-1', expect.objectContaining({ defaultRestSeconds: 90 }),
     ));
+  });
+
+  it('gives every Settings catalog control a visible accessible name', async () => {
+    renderSettings([{ ...exercise, trackingMode: 'simple' }]);
+    await screen.findByRole('heading', { name: 'Add exercise' });
+
+    expect(screen.getByRole('combobox', { name: 'Leg Day Schedule' })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Exercise name' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Muscle group' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Priority tier' })).toBeTruthy();
+    expect(screen.getByRole('spinbutton', { name: 'Sets' })).toBeTruthy();
+    expect(screen.getByRole('spinbutton', { name: 'Rest override seconds' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Tracking mode' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Linked exercise' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByRole('textbox', { name: 'Edit exercise name' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Edit muscle group' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Edit priority tier' })).toBeTruthy();
+    expect(screen.getByRole('spinbutton', { name: 'Edit sets' })).toBeTruthy();
+    expect(screen.getByRole('spinbutton', { name: 'Edit rest override seconds' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Edit tracking mode' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Edit linked exercise' })).toBeTruthy();
   });
 
   it('reports unsaved settings edits until their save succeeds', async () => {
@@ -85,6 +162,92 @@ describe('Settings tracking configuration', () => {
     fireEvent.change(input, { target: { value: '90' } }); fireEvent.blur(input);
     await waitFor(() => expect(storage.saveSettings).toHaveBeenCalled());
     expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it('serializes same-field saves so the latest default rest persists last', async () => {
+    let resolveFirst;
+    let resolveSecond;
+    storage.saveSettings
+      .mockReturnValueOnce(new Promise(resolve => { resolveFirst = resolve; }))
+      .mockReturnValueOnce(new Promise(resolve => { resolveSecond = resolve; }));
+    const onDirtyChange = vi.fn(); renderSettings([], { defaultRestSeconds: 60 }, onDirtyChange);
+    const rest = await screen.findByLabelText('Default rest seconds');
+    fireEvent.change(rest, { target: { value: '90' } });
+    fireEvent.blur(rest);
+    fireEvent.change(rest, { target: { value: '120' } });
+    fireEvent.blur(rest);
+
+    expect(storage.saveSettings).toHaveBeenCalledTimes(1);
+    expect(storage.saveSettings).toHaveBeenCalledWith('user-1', { defaultRestSeconds: 90 });
+    resolveFirst();
+    await waitFor(() => expect(storage.saveSettings).toHaveBeenNthCalledWith(2, 'user-1', { defaultRestSeconds: 120 }));
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    resolveSecond();
+    await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(false));
+    expect(rest.value).toBe('120');
+    expect(screen.queryByText(/could not save default rest/i)).toBeNull();
+  });
+
+  it('serializes same-phase saves so the latest warmup persists last', async () => {
+    let resolveFirst;
+    let resolveSecond;
+    storage.saveSettings
+      .mockReturnValueOnce(new Promise(resolve => { resolveFirst = resolve; }))
+      .mockReturnValueOnce(new Promise(resolve => { resolveSecond = resolve; }));
+    const onDirtyChange = vi.fn(); renderSettings([], { warmupSeconds: 600 }, onDirtyChange);
+    const warmup = await screen.findByLabelText('Warmup minutes');
+    fireEvent.change(warmup, { target: { value: '15' } });
+    fireEvent.blur(warmup);
+    fireEvent.change(warmup, { target: { value: '20' } });
+    fireEvent.blur(warmup);
+
+    expect(storage.saveSettings).toHaveBeenCalledTimes(1);
+    expect(storage.saveSettings).toHaveBeenCalledWith('user-1', { warmupSeconds: 900 });
+    resolveFirst();
+    await waitFor(() => expect(storage.saveSettings).toHaveBeenNthCalledWith(2, 'user-1', { warmupSeconds: 1200 }));
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    resolveSecond();
+    await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(false));
+    expect(warmup.value).toBe('20');
+    expect(screen.queryByText(/could not save warmup/i)).toBeNull();
+  });
+
+  it('keeps failed default rest and Leg Day saves dirty until a retry succeeds', async () => {
+    storage.saveSettings
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce();
+    const onDirtyChange = vi.fn(); renderSettings([], { defaultRestSeconds: 60 }, onDirtyChange);
+    const rest = await screen.findByLabelText('Default rest seconds');
+    fireEvent.change(rest, { target: { value: '90' } });
+    fireEvent.blur(rest);
+    expect((await screen.findByRole('alert')).textContent).toMatch(/could not save default rest.*try again/i);
+    expect(rest.getAttribute('aria-describedby')).toBe('default-rest-error');
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    fireEvent.blur(rest);
+    await waitFor(() => expect(screen.queryByText(/could not save default rest/i)).toBeNull());
+
+    const legDay = screen.getByRole('combobox', { name: 'Leg Day Schedule' });
+    fireEvent.change(legDay, { target: { value: 'Tuesday' } });
+    expect((await screen.findByRole('alert')).textContent).toMatch(/could not save leg day.*try again/i);
+    expect(legDay.getAttribute('aria-describedby')).toBe('leg-day-error');
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry Leg Day' }));
+    await waitFor(() => expect(screen.queryByText(/could not save leg day/i)).toBeNull());
+  });
+
+  it('announces a catalog toggle rollback until a later catalog save succeeds', async () => {
+    storage.saveCatalogItem.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce();
+    renderSettings([exercise]);
+    const deactivate = await screen.findByRole('button', { name: 'Deactivate' });
+    const item = deactivate.closest('.catalog-item');
+    expect(item).toBeTruthy();
+    fireEvent.click(deactivate);
+    await waitFor(() => expect(item.querySelector('[role="alert"]').textContent).toMatch(/could not update the catalog.*try again/i));
+    expect(screen.getByText('Active')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Deactivate' }));
+    await waitFor(() => expect(item.querySelector('[role="alert"]')).toBeNull());
   });
 
   it('preserves default rest and Leg Day when their saves overlap and finish out of order', async () => {
