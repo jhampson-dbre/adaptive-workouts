@@ -22,7 +22,7 @@ export default function Login() {
       <button autoFocus onClick={handleSignIn} style={{ padding: '10px 20px', fontSize: '1.2rem' }}>
         Sign in with Google
       </button>
-      {error && <p className="error-message" style={{ marginTop: '1rem' }}>{error}</p>}
+      {error && <p className="error-message" role="alert" style={{ marginTop: '1rem' }}>{error}</p>}
     </div>
   );
 }

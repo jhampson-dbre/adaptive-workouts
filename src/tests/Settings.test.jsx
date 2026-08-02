@@ -35,6 +35,19 @@ describe('Settings tracking configuration', () => {
 
   afterEach(cleanup);
 
+  it('announces the initial catalog and settings load once', () => {
+    storage.getCatalog.mockReturnValue(new Promise(() => {}));
+    storage.getSettings.mockReturnValue(new Promise(() => {}));
+    render(
+      <AuthContext.Provider value={{ uid: 'user-1' }}>
+        <Settings onClose={vi.fn()} />
+      </AuthContext.Provider>,
+    );
+
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(screen.getByRole('status').textContent).toBe('Loading...');
+  });
+
   it('shows normalized default rest and saves only whole values from 5 through 600', async () => {
     renderSettings([], { defaultRestSeconds: 60 });
     const input = await screen.findByLabelText('Default rest seconds');

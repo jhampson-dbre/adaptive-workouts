@@ -452,7 +452,7 @@ export default function Settings({ onClose, onDirtyChange }) {
         <h2>Settings</h2>
         <button className="close-btn" onClick={onClose}>Close</button>
       </div>
-      <div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>
+      <div role="status" style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>
     </div>
   );
 
