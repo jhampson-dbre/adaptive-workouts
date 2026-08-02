@@ -354,3 +354,23 @@ the safe method attempted and the best available alternative.
 - Observed result: All three font checks return true and `document.fonts.status` reports loaded. Resource timing contains only `atkinson-hyperlegible-regular.woff2` (17,184 bytes), `atkinson-hyperlegible-bold.woff2` (23,268 bytes), and `barlow-condensed-bold.woff2` (33,088 bytes); the live stylesheet has zero TTF references. Plan and Settings headings retain Barlow Condensed 700, body/select text retains Atkinson Hyperlegible 400 at 18px, and catalog titles retain Atkinson Hyperlegible 700. Phone and desktop client/scroll widths remain equal, with no console warnings or errors. Total local font bytes fall from 157,720 to 73,540, saving 84,180 bytes (53.37%).
 - Rendered evidence: Chrome DevTools MCP accessibility snapshots, resource/computed-style measurements, and an inline Settings phone screenshot.
 - Material limitation: Local Vite transfer measurements omit production CDN/cache effects, and Chromium rendering does not replace physical-device Safari font validation. The WOFF2 conversion separately preserved source glyph order, OpenType tables, name records, 1000 UPEM, weight, and italic angle.
+
+---
+
+## 2026-08-02 - index.css palette consolidation
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-282 replaces color literals across every authored surface in `src/index.css`, including normal, selected, hover, focus, and error states.
+- Approved scenario or artifact: Preserve the `DESIGN.md` Clear Signal palette and exact rendered colors while consolidating downstream uses behind the established CSS custom properties.
+
+## Changed scenario
+
+- Scenario: Verify representative Plan and Settings surfaces at desktop and phone widths, including keyboard focus and an actual Settings validation error.
+- Build / commit: `codex/epic-14-audit-remediation` working tree for TREK-282 before task commit.
+- Viewport and starting state: Chrome DevTools MCP at 1282 x 667 and emulated 390 x 844; canonical synthetic baseline on Plan and Settings.
+- Actions: Inspect all 11 root palette values and representative computed foreground, background, border, and outline colors; open Settings, submit the empty Add form to produce the production validation state, use keyboard Tab to confirm focus-visible styling, and repeat the error/containment check at phone width.
+- Observed result: Root tokens resolve to the exact approved hex values. White, ink, line, concrete, graphite, signal-yellow, focus-blue, and error-red surfaces compute to their unchanged RGB values. Keyboard focus remains a solid 4px `rgb(18, 97, 160)` outline; the Settings validation message remains `rgb(114, 28, 36)` on white, and the primary Add action remains yellow with ink text. Desktop and phone client/scroll widths remain equal (1267px and 390px), and Chrome reports no warnings or errors.
+- Rendered evidence: Chrome DevTools MCP accessibility snapshots, computed-style measurements, and an inline phone screenshot of the real Add validation state.
+- Material limitation: This bounded pass samples representative palette states rather than every selector; the focused source contract separately proves that each of the 11 palette literals appears only once in `:root` and all downstream uses resolve through its matching token. Chromium evidence does not replace physical-device or assistive-technology testing.

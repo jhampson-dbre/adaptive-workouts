@@ -24,9 +24,9 @@ p { margin: 0; }
 
 .recommendation-reason, .bodyweight-total { margin-top: 10px; font-size: var(--type-metadata); }
 
-.timer-overtime { color: #721c24; font-family: var(--mono); font-weight: 700; }
+.timer-overtime { color: var(--error); font-family: var(--mono); font-weight: 700; }
 
-.workout-summary:focus { outline: 4px solid #1261a0; outline-offset: 3px; }
+.workout-summary:focus { outline: 4px solid var(--focus); outline-offset: 3px; }
 
 .summary-total { font-weight: 700; }
 
@@ -85,6 +85,8 @@ p { margin: 0; }
   --accent-bg: #fff2a8;
   --accent-border: #8a7200;
   --social-bg: #e5e2d9;
+  --focus: #1261a0;
+  --error: #721c24;
   --shadow: none;
   --sans: 'Atkinson Hyperlegible', sans-serif;
   --heading: 'Barlow Condensed', 'Atkinson Hyperlegible', sans-serif;
@@ -148,7 +150,7 @@ button {
 
 button:focus-visible,
 input:focus-visible {
-  outline: 4px solid #1261a0;
+  outline: 4px solid var(--focus);
   outline-offset: 3px;
 }
 
@@ -162,12 +164,12 @@ input:focus-visible {
   margin: 0;
   padding: 14px 24px;
   border-bottom: 2px solid var(--border);
-  background: #ffffff;
+  background: var(--code-bg);
 }
 
 .app-header h1 {
   margin: 0;
-  color: #050505;
+  color: var(--text-h);
   font-size: var(--type-wordmark);
   font-weight: 700;
   letter-spacing: -0.04em;
@@ -185,24 +187,24 @@ input:focus-visible {
 .sign-out-button {
   min-width: 44px;
   min-height: 44px;
-  border: 1px solid #101010;
+  border: 1px solid var(--border);
   border-radius: 0;
-  background: #ffffff;
-  color: #101010;
+  background: var(--code-bg);
+  color: var(--border);
   font-weight: 700;
 }
 
 .settings-toggle:hover,
 .sign-out-button:hover {
-  border-color: #101010;
-  background: #101010;
-  color: #ffffff;
+  border-color: var(--border);
+  background: var(--border);
+  color: var(--code-bg);
 }
 
 .journey-progress {
   overflow: hidden;
-  background: #050505;
-  color: #ffffff;
+  background: var(--text-h);
+  color: var(--code-bg);
 }
 
 .journey-progress ol {
@@ -219,7 +221,7 @@ input:focus-visible {
   min-width: 0;
   justify-items: center;
   gap: 8px;
-  color: #ffffff;
+  color: var(--code-bg);
   font-size: var(--type-label);
   font-weight: 700;
   letter-spacing: 0.03em;
@@ -234,7 +236,7 @@ input:focus-visible {
   right: 50%;
   left: -50%;
   height: 2px;
-  background: #ffffff;
+  background: var(--code-bg);
   content: '';
 }
 
@@ -247,9 +249,9 @@ input:focus-visible {
   width: 16px;
   height: 16px;
   box-sizing: border-box;
-  border: 3px solid #ffffff;
+  border: 3px solid var(--code-bg);
   border-radius: 50%;
-  background: #050505;
+  background: var(--text-h);
 }
 
 .journey-progress li[aria-current='step'] {
@@ -259,7 +261,7 @@ input:focus-visible {
 .journey-progress li[aria-current='step'] > span {
   border-color: var(--accent);
   background: var(--accent);
-  box-shadow: 0 0 0 3px #050505, 0 0 0 5px var(--accent);
+  box-shadow: 0 0 0 3px var(--text-h), 0 0 0 5px var(--accent);
 }
 
 .generator,
@@ -271,7 +273,7 @@ input:focus-visible {
   padding: 0;
   border: 0;
   border-radius: 0;
-  background: #ffffff;
+  background: var(--code-bg);
   box-shadow: none;
   text-align: left;
 }
@@ -292,15 +294,15 @@ input:focus-visible {
 
 .plan-intro p {
   max-width: 42ch;
-  color: #454545;
+  color: var(--text);
   font-size: var(--type-body);
 }
 
 .slider-container {
   margin: 0;
   padding: 28px clamp(22px, 7vw, 52px) 36px;
-  border-block: 2px solid #101010;
-  background: #ffffff;
+  border-block: 2px solid var(--border);
+  background: var(--code-bg);
 }
 
 .slider-container label {
@@ -309,13 +311,13 @@ input:focus-visible {
   justify-content: space-between;
   gap: 16px;
   margin: 0 0 28px;
-  color: #101010;
+  color: var(--border);
   font-weight: 700;
 }
 
 .slider-value {
   float: none;
-  color: #101010;
+  color: var(--border);
   font-size: var(--type-value-hero);
   letter-spacing: -0.04em;
   line-height: 0.8;
@@ -328,7 +330,7 @@ input:focus-visible {
 
 .slider {
   height: 44px;
-  accent-color: #050505;
+  accent-color: var(--text-h);
 }
 
 .groups-container {
@@ -339,21 +341,21 @@ input:focus-visible {
 
 .groups-container summary {
   cursor: pointer;
-  color: #101010;
+  color: var(--border);
   font-size: var(--type-title);
   font-weight: 700;
 }
 
 .groups-container h3 {
   margin: 0 0 6px;
-  color: #101010;
+  color: var(--border);
   font-size: var(--type-title);
   font-weight: 700;
 }
 
 .groups-container > p {
   margin-bottom: 22px;
-  color: #454545;
+  color: var(--text);
 }
 
 .checkbox-grid {
@@ -365,10 +367,10 @@ input:focus-visible {
   min-height: 48px;
   box-sizing: border-box;
   padding: 10px 12px;
-  border: 1px solid #101010;
+  border: 1px solid var(--border);
   border-radius: 0;
-  background: #ffffff;
-  color: #101010;
+  background: var(--code-bg);
+  color: var(--border);
   font-weight: 700;
 }
 
@@ -377,14 +379,14 @@ input:focus-visible {
 }
 
 .checkbox-label:hover {
-  border-color: #101010;
+  border-color: var(--border);
   background: var(--accent-bg);
 }
 
 .checkbox-label input[type='checkbox'] {
   width: 22px;
   height: 22px;
-  accent-color: #050505;
+  accent-color: var(--text-h);
 }
 
 .leg-day-choice {
@@ -396,7 +398,7 @@ input:focus-visible {
 
 .leg-day-choice p {
   margin: 0 0 8px;
-  color: #101010;
+  color: var(--border);
   font-weight: 700;
 }
 
@@ -404,10 +406,10 @@ input:focus-visible {
 .remaining-work summary,
 .summary-remaining summary {
   min-height: 44px;
-  border: 1px solid #101010;
+  border: 1px solid var(--border);
   border-radius: 0;
-  background: #ffffff;
-  color: #101010;
+  background: var(--code-bg);
+  color: var(--border);
   cursor: pointer;
   font-weight: 700;
 }
@@ -415,7 +417,7 @@ input:focus-visible {
 .leg-day-choice button:first-of-type,
 .early-finish-confirmation .return-to-workout {
   background: var(--accent);
-  color: #050505;
+  color: var(--text-h);
 }
 
 .generate-btn,
@@ -431,7 +433,7 @@ input:focus-visible {
   border: 0;
   border-radius: 0;
   background: var(--accent);
-  color: #050505;
+  color: var(--text-h);
   font-size: var(--type-headline);
   font-weight: 700;
   line-height: 1;
@@ -460,7 +462,7 @@ input:focus-visible {
 .start-btn:hover,
 .finish-btn:hover,
 .set-row.ready .set-timing button:hover {
-  background: #050505;
+  background: var(--text-h);
   color: var(--accent);
   box-shadow: none;
   transform: none;
@@ -502,8 +504,8 @@ input:focus-visible {
   min-width: 100px;
   place-items: center;
   padding: 10px;
-  background: #050505;
-  color: #ffffff;
+  background: var(--text-h);
+  color: var(--code-bg);
   font: 700 var(--type-timer)/1 var(--heading);
   font-variant-numeric: tabular-nums;
 }
@@ -511,8 +513,8 @@ input:focus-visible {
 .workout-help {
   margin: 0;
   padding: 16px clamp(22px, 7vw, 52px);
-  background: #050505;
-  color: #ffffff;
+  background: var(--text-h);
+  color: var(--code-bg);
   font-size: var(--type-body);
   line-height: 1.5;
   letter-spacing: .01em;
@@ -526,7 +528,7 @@ input:focus-visible {
   margin: 0;
   padding: 24px clamp(22px, 7vw, 52px) 10px;
   background: var(--bg);
-  color: #101010;
+  color: var(--border);
   font-size: var(--type-label);
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -542,8 +544,8 @@ input:focus-visible {
 .workout-checklist li,
 .workout-checklist li:hover {
   padding: 0;
-  border-bottom: 1px solid #101010;
-  background: #ffffff;
+  border-bottom: 1px solid var(--border);
+  background: var(--code-bg);
 }
 
 .exercise-toggle {
@@ -555,8 +557,8 @@ input:focus-visible {
   padding: 12px clamp(16px, 5vw, 32px);
   border: 0;
   border-radius: 0;
-  background: #ffffff;
-  color: #101010;
+  background: var(--code-bg);
+  color: var(--border);
 }
 
 .exercise-toggle:hover,
@@ -565,17 +567,17 @@ input:focus-visible {
 }
 
 .selected > .exercise-toggle {
-  background: #050505;
-  color: #ffffff;
+  background: var(--text-h);
+  color: var(--code-bg);
 }
 
 .selected > .exercise-toggle:hover,
 .selected > .exercise-toggle:focus-visible {
-  background: #050505;
+  background: var(--text-h);
 }
 
 .exercise-number {
-  color: #101010;
+  color: var(--border);
   font-size: var(--type-exercise-number);
   font-weight: 700;
   letter-spacing: -0.04em;
@@ -606,13 +608,13 @@ input:focus-visible {
 
 .exercise-status {
   max-width: 18ch;
-  color: #454545;
+  color: var(--text);
   font-size: var(--type-metadata);
   text-align: right;
 }
 
 .selected .exercise-status {
-  color: #ffffff;
+  color: var(--code-bg);
 }
 
 .set-list {
@@ -625,12 +627,12 @@ input:focus-visible {
 }
 
 .deferred-set-details details {
-  border-bottom: 1px solid #101010;
+  border-bottom: 1px solid var(--border);
 }
 
 .deferred-set-details summary {
   padding: 16px clamp(22px, 7vw, 52px);
-  color: #101010;
+  color: var(--border);
   cursor: pointer;
   font-family: var(--heading);
   font-weight: 700;
@@ -641,7 +643,7 @@ input:focus-visible {
   border: 0;
   border-bottom: 1px solid var(--social-bg);
   border-radius: 0;
-  background: #ffffff;
+  background: var(--code-bg);
 }
 
 .set-row.locked {
@@ -651,14 +653,14 @@ input:focus-visible {
 }
 
 .set-row.active-work {
-  border-color: #101010;
-  background: #050505;
-  color: #ffffff;
+  border-color: var(--border);
+  background: var(--text-h);
+  color: var(--code-bg);
   box-shadow: none;
 }
 
 .set-row.active-work :is(strong, .set-input, .recommendation-reason) {
-  color: #ffffff;
+  color: var(--code-bg);
 }
 
 .set-row-heading {
@@ -675,10 +677,10 @@ input:focus-visible {
 .set-input input {
   width: 100%;
   min-height: 58px;
-  border: 1px solid #101010;
+  border: 1px solid var(--border);
   border-radius: 0;
-  background: #ffffff;
-  color: #101010;
+  background: var(--code-bg);
+  color: var(--border);
   font-size: var(--type-set-value);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -695,8 +697,8 @@ input:focus-visible {
 
 .set-row.ready .set-timing > span {
   padding: 12px 16px;
-  background: #050505;
-  color: #ffffff;
+  background: var(--text-h);
+  color: var(--code-bg);
 }
 
 .set-row.ready .set-timing button {
@@ -715,23 +717,23 @@ input:focus-visible {
 }
 
 .active-work .set-timing button {
-  border: 1px solid #ffffff;
+  border: 1px solid var(--code-bg);
   border-radius: 0;
-  background: #050505;
-  color: #ffffff;
+  background: var(--text-h);
+  color: var(--code-bg);
 }
 
 .active-work .set-timing button:first-of-type {
   background: var(--accent);
-  color: #050505;
+  color: var(--text-h);
 }
 
 .set-row.ready.active-work .set-timing button:not(:first-of-type) {
   min-height: 44px;
   padding: 12px 16px;
-  border: 1px solid #ffffff;
-  background: #050505;
-  color: #ffffff;
+  border: 1px solid var(--code-bg);
+  background: var(--text-h);
+  color: var(--code-bg);
   font-size: var(--type-body);
   text-align: center;
   text-transform: none;
@@ -742,8 +744,8 @@ input:focus-visible {
 }
 
 .set-row.ready.active-work .set-timing button:not(:first-of-type):hover {
-  background: #ffffff;
-  color: #050505;
+  background: var(--code-bg);
+  color: var(--text-h);
 }
 
 .phase-performance > .summary-actions,
@@ -756,10 +758,10 @@ input:focus-visible {
 .phase-performance > .summary-actions > .finish-btn {
   min-height: 52px;
   padding: 12px 16px;
-  border: 1px solid #101010;
+  border: 1px solid var(--border);
   border-radius: 0;
   background: transparent;
-  color: #101010;
+  color: var(--border);
   font-size: var(--type-body);
   text-transform: none;
 }
@@ -771,28 +773,28 @@ input:focus-visible {
 .early-finish-confirmation {
   flex-basis: 100%;
   padding: 22px;
-  background: #050505;
-  color: #ffffff;
+  background: var(--text-h);
+  color: var(--code-bg);
 }
 
 .early-finish-confirmation h2 {
-  color: #ffffff;
+  color: var(--code-bg);
 }
 
 .early-finish-confirmation button {
   min-height: 44px;
   margin-right: 8px;
-  border: 1px solid #ffffff;
+  border: 1px solid var(--code-bg);
   border-radius: 0;
   background: transparent;
-  color: #ffffff;
+  color: var(--code-bg);
   font-weight: 700;
 }
 
 .early-finish-confirmation .return-to-workout {
   border-color: var(--accent);
   background: var(--accent);
-  color: #050505;
+  color: var(--text-h);
 }
 
 .phase-cooldown .summary-actions {
@@ -802,7 +804,7 @@ input:focus-visible {
 .phase-cooldown .summary-actions > button:not(.finish-btn) {
   border: 0;
   background: transparent;
-  color: #101010;
+  color: var(--border);
 }
 
 .phase-cooldown .finish-btn {
@@ -823,7 +825,7 @@ input:focus-visible {
   padding: clamp(28px, 8vw, 52px);
   border: 0;
   border-radius: 0;
-  background: #ffffff;
+  background: var(--code-bg);
 }
 
 .workout-summary h2 {
@@ -837,7 +839,7 @@ input:focus-visible {
 
 .workout-summary > ul {
   padding: 18px 0 18px 24px;
-  border-block: 1px solid #101010;
+  border-block: 1px solid var(--border);
 }
 
 .summary-remaining {
@@ -860,7 +862,7 @@ input:focus-visible {
 .workout-history-section {
   margin: 0;
   padding: 28px clamp(22px, 7vw, 52px);
-  border-top: 1px solid #101010;
+  border-top: 1px solid var(--border);
   background: var(--bg);
 }
 
@@ -872,10 +874,10 @@ input:focus-visible {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border: 1px solid #101010;
+  border: 1px solid var(--border);
   border-radius: 0;
-  background: #ffffff;
-  color: #101010;
+  background: var(--code-bg);
+  color: var(--border);
   font-weight: 700;
 }
 
@@ -884,12 +886,12 @@ input:focus-visible {
   height: 16px;
   content: '';
   background:
-    linear-gradient(#101010 0 0) center / 100% 2px no-repeat,
-    linear-gradient(#101010 0 0) center / 2px 100% no-repeat;
+    linear-gradient(var(--border) 0 0) center / 100% 2px no-repeat,
+    linear-gradient(var(--border) 0 0) center / 2px 100% no-repeat;
 }
 
 .history-disclosure[aria-expanded='true']::after {
-  background: linear-gradient(#101010 0 0) center / 100% 2px no-repeat;
+  background: linear-gradient(var(--border) 0 0) center / 100% 2px no-repeat;
 }
 
 .history-list {
@@ -899,9 +901,9 @@ input:focus-visible {
 
 .history-card {
   padding: 16px;
-  border-color: #101010;
+  border-color: var(--border);
   border-radius: 0;
-  background: #ffffff;
+  background: var(--code-bg);
   box-shadow: none;
 }
 
@@ -917,7 +919,7 @@ input:focus-visible {
 .history-recommendation,
 .history-set-performance,
 .history-set-timing {
-  color: #454545;
+  color: var(--text);
 }
 
 .history-card-heading > p,
@@ -928,16 +930,16 @@ input:focus-visible {
 }
 
 .history-exercise {
-  border-color: #101010;
+  border-color: var(--border);
 }
 
 .history-set-row {
   border-radius: 0;
-  background: #f0eee7;
+  background: var(--bg);
 }
 
 .history-set-row strong {
-  color: #101010;
+  color: var(--border);
 }
 
 .history-phase-durations {
@@ -945,7 +947,7 @@ input:focus-visible {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-top: 14px;
-  color: #454545;
+  color: var(--text);
 }
 
 .history-phase-durations p {
@@ -954,9 +956,9 @@ input:focus-visible {
 
 .workout-history-section .error-message {
   margin-top: 12px;
-  border: 1px solid #101010;
-  background: #ffffff;
-  color: #101010;
+  border: 1px solid var(--border);
+  background: var(--code-bg);
+  color: var(--border);
 }
 
 @media (max-width: 600px) {
@@ -972,8 +974,8 @@ input:focus-visible {
 
 .error-message {
   padding: 12px 14px;
-  background: #721c24;
-  color: #ffffff;
+  background: var(--error);
+  color: var(--code-bg);
 }
 
 /* Nudge recovery and uncertainty — TREK-234 */
@@ -989,13 +991,13 @@ input:focus-visible {
   width: min(100%, 42rem);
   box-sizing: border-box;
   padding: clamp(28px, 8vw, 52px);
-  border-top: 8px solid #050505;
-  background: #ffffff;
+  border-top: 8px solid var(--text-h);
+  background: var(--code-bg);
 }
 
 .recovery-panel h2 {
   margin: 0 0 20px;
-  color: #050505;
+  color: var(--text-h);
   font-size: var(--type-display);
   font-weight: 700;
   letter-spacing: -0.04em;
@@ -1007,9 +1009,9 @@ input:focus-visible {
 .recovery-feedback {
   margin: 0;
   padding: 16px;
-  border-left: 4px solid #050505;
+  border-left: 4px solid var(--text-h);
   background: var(--accent-bg);
-  color: #101010;
+  color: var(--border);
 }
 
 .workout-summary .recovery-feedback {
@@ -1026,7 +1028,7 @@ input:focus-visible {
 .recovery-secondary {
   min-height: 52px;
   padding: 12px 16px;
-  border: 1px solid #101010;
+  border: 1px solid var(--border);
   border-radius: 0;
   font-size: var(--type-body);
   text-align: left;
@@ -1034,17 +1036,17 @@ input:focus-visible {
 
 .recovery-primary {
   background: var(--accent);
-  color: #050505;
+  color: var(--text-h);
 }
 
 .recovery-primary:hover {
-  background: #050505;
+  background: var(--text-h);
   color: var(--accent);
 }
 
 .recovery-secondary {
-  background: #ffffff;
-  color: #101010;
+  background: var(--code-bg);
+  color: var(--border);
 }
 
 .recovery-secondary:hover {
@@ -1134,7 +1136,7 @@ input:focus-visible {
   padding: 0;
   border: 0;
   box-shadow: none;
-  background: #ffffff;
+  background: var(--code-bg);
 }
 
 .settings-view :is(button, input, select) {
@@ -1152,7 +1154,7 @@ input:focus-visible {
   margin: 0;
   padding: 16px clamp(22px, 5vw, 52px);
   border-bottom: 2px solid var(--border);
-  background: #050505;
+  background: var(--text-h);
 }
 
 .settings-header h2,
@@ -1166,7 +1168,7 @@ input:focus-visible {
 }
 
 .settings-header h2 {
-  color: #ffffff;
+  color: var(--code-bg);
   font-size: var(--type-display);
   line-height: .94;
 }
@@ -1178,8 +1180,8 @@ input:focus-visible {
 .add-btn.is-neutral {
   border-color: var(--border);
   border-radius: 0;
-  background: #ffffff;
-  color: #050505;
+  background: var(--code-bg);
+  color: var(--text-h);
   box-shadow: none;
 }
 
@@ -1201,7 +1203,7 @@ input:focus-visible {
 .add-exercise h3,
 .catalog-list h3 {
   margin-bottom: 16px;
-  color: #050505;
+  color: var(--text-h);
   font-size: var(--type-headline);
   line-height: 1;
 }
@@ -1216,7 +1218,7 @@ input:focus-visible {
 
 .setting-group label,
 .tracking-field {
-  color: #050505;
+  color: var(--text-h);
   font-size: var(--type-body);
 }
 
@@ -1241,14 +1243,14 @@ input:focus-visible {
 .edit-form select {
   border-color: var(--border);
   border-radius: 0;
-  background: #ffffff;
-  color: #050505;
+  background: var(--code-bg);
+  color: var(--text-h);
   padding: 10px 12px;
   box-sizing: border-box;
 }
 
 .add-exercise {
-  background: #ffffff;
+  background: var(--code-bg);
 }
 
 .add-form,
@@ -1277,8 +1279,8 @@ input:focus-visible {
 .save-btn {
   border: 1px solid var(--border);
   border-radius: 0;
-  background: #ffd400;
-  color: #050505;
+  background: var(--accent);
+  color: var(--text-h);
   box-shadow: none;
 }
 
@@ -1286,7 +1288,7 @@ input:focus-visible {
 .save-btn:hover {
   transform: none;
   box-shadow: none;
-  background: #ffd400;
+  background: var(--accent);
 }
 
 .catalog-list {
@@ -1330,7 +1332,7 @@ input:focus-visible {
 
 .item-info strong {
   flex-basis: 100%;
-  color: #050505;
+  color: var(--text-h);
   font-size: var(--type-title);
 }
 
@@ -1339,13 +1341,13 @@ input:focus-visible {
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #454545;
+  color: var(--text);
   padding: 0;
   font-size: var(--type-label);
 }
 
 .status-badge {
-  color: #050505;
+  color: var(--text-h);
   font-weight: 700;
 }
 
@@ -1359,7 +1361,7 @@ input:focus-visible {
 .cancel-btn:hover {
   border-color: var(--border);
   background: var(--social-bg);
-  color: #050505;
+  color: var(--text-h);
 }
 
 .item-actions,
@@ -1371,10 +1373,10 @@ input:focus-visible {
 .catalog-form-error {
   flex: 1 1 100%;
   padding: 10px 12px;
-  border-color: #721c24;
+  border-color: var(--error);
   border-radius: 0;
-  background: #ffffff;
-  color: #721c24;
+  background: var(--code-bg);
+  color: var(--error);
 }
 
 .settings-load-error {
@@ -1385,7 +1387,7 @@ input:focus-visible {
 }
 
 .settings-view :is(button, input, select):focus-visible {
-  outline: 4px solid #1261a0;
+  outline: 4px solid var(--focus);
   outline-offset: 3px;
 }
 
