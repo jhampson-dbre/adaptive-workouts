@@ -1009,7 +1009,7 @@ input:focus-visible {
 .recovery-feedback {
   margin: 0;
   padding: 16px;
-  border-left: 4px solid var(--text-h);
+  border: 1px solid var(--text-h);
   background: var(--accent-bg);
   color: var(--border);
 }

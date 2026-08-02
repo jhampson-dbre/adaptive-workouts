@@ -374,3 +374,23 @@ the safe method attempted and the best available alternative.
 - Observed result: Root tokens resolve to the exact approved hex values. White, ink, line, concrete, graphite, signal-yellow, focus-blue, and error-red surfaces compute to their unchanged RGB values. Keyboard focus remains a solid 4px `rgb(18, 97, 160)` outline; the Settings validation message remains `rgb(114, 28, 36)` on white, and the primary Add action remains yellow with ink text. Desktop and phone client/scroll widths remain equal (1267px and 390px), and Chrome reports no warnings or errors.
 - Rendered evidence: Chrome DevTools MCP accessibility snapshots, computed-style measurements, and an inline phone screenshot of the real Add validation state.
 - Material limitation: This bounded pass samples representative palette states rather than every selector; the focused source contract separately proves that each of the 11 palette literals appears only once in `:root` and all downstream uses resolve through its matching token. Chromium evidence does not replace physical-device or assistive-technology testing.
+
+---
+
+## 2026-08-02 - TREK-283 final polish integration pass
+
+## Planning
+
+- Classification: `required`
+- Rationale: Final integrated Clear Signal quality pass; preserve approved Nudge identity and behavior while removing only verified system drift.
+- Approved scenario or artifact: `DESIGN.md` and `.impeccable/surfaces/src-app-jsx.md`.
+
+## Changed scenario
+
+- Scenario: Verify private access, active-work timing, and recovery feedback at desktop and phone widths.
+- Build / commit: `codex/epic-14-audit-remediation` working tree for TREK-283 before task commit.
+- Viewport and starting state: Chrome DevTools MCP at 1280 x 900 Login, the canonical seeded Plan and Settings paths at desktop and emulated 390 x 844 phone widths, and the Timing harness C-05 synthetic recovery fixture.
+- Actions: Inspect landmarks, initial focus, keyboard-sized controls, document containment, console diagnostics, the complete seeded Settings catalog, and the production `WorkoutView` recovery message after replacing its 4px side stripe with a structural 1px rule.
+- Observed result: Login has one labelled main landmark and focused Nudge heading. The canonical Plan and Settings paths load successfully; phone Plan has 390px client/scroll widths, 44px labelled checkbox targets and slider, a 116px primary action, visible 4px focus blue, and no console warnings or errors. The phone recovery fixture remains assertive and actionable with a uniform 1px ink border and no horizontal overflow. The official Impeccable detector is clean.
+- Rendered evidence: Chrome DevTools MCP accessibility snapshots, computed-style inspection, and an inline phone screenshot of the canonical Plan state.
+- Material limitation: The timing fixture is synthetic and does not prove storage, locks, server reconciliation, or routing; targeted tests cover those mechanics. Chromium evidence does not replace physical-device or assistive-technology testing.
