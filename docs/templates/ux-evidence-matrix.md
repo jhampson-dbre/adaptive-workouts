@@ -274,3 +274,43 @@ the safe method attempted and the best available alternative.
 - Observed result: The workout list computes to `list-style: none`, zero inline-start padding, and zero horizontal overflow. Disabled and locked states use existing design tokens. Settings retains its hierarchy with no horizontal overflow at either width. The load error presents one alert and a full-width 44px Retry action; field-save alerts remain visibly adjacent and Leg Day exposes a direct Retry control; a catalog-toggle alert stays inside its triggering phone row even near the end of the 15-item list. Focused tests separately verify each real failure, rollback, dirty-state, and retry lifecycle. Chrome reported no warnings or errors.
 - Rendered evidence: Chrome DevTools MCP screenshots inspected inline for workout phone, Settings phone and desktop, the phone load error, default-rest/Leg Day errors, and a deep phone catalog-row error.
 - Material limitation: Failure screenshots use transient DOM layout probes with exact production classes and insertion points; focused component tests prove the production state transitions and retry behavior. Chromium emulation does not replace physical-device or screen-reader testing.
+
+---
+
+## 2026-08-02 - Focus, validation, and Login accessibility hardening
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-279 changes visible keyboard focus, field-validation feedback, initial focus order, and the primary landmark on Plan, Settings, and private Login surfaces.
+- Approved scenario or artifact: Preserve the `DESIGN.md` Clear Signal focus-blue treatment, Settings form hierarchy, Login copy, and authentication behavior while correcting the two audit P1 findings and aligning Login with the established private-access entry pattern.
+
+## Changed scenario
+
+- Scenario: Verify shared programmatic heading focus on Plan and Settings at phone width.
+- Build / commit: `codex/epic-14-audit-remediation` working tree for TREK-279 based on `c203c9667328891b815dc7cdd86bbd300a4bbedd` before task commit.
+- Viewport and starting state: Chrome DevTools MCP at 390 x 844; canonical synthetic emulator baseline on Plan, followed by Manage Catalog.
+- Actions: Wait for each lazy destination to settle, inspect the accessibility tree and computed style of the active heading, and measure document containment.
+- Observed result: Plan focused `How much time do you have?` and Settings focused `Settings` as `h2[tabindex="-1"]`. Both computed to a solid 4px `rgb(18, 97, 160)` outline with the authored 3px offset, and each surface retained equal 390px client/scroll widths.
+- Rendered evidence: Chrome DevTools MCP accessibility snapshots and inline rendered inspection for Plan and Settings at 390 x 844.
+- Material limitation: Chromium reports the authored 3px outline offset as 2.66667px under the emulated device metrics. Screenshot-file persistence was denied by the MCP workspace-path guard, so rendered captures were inspected inline. Physical-device and screen-reader behavior remain outside this pass.
+
+## Changed scenario
+
+- Scenario: Verify empty exercise-name validation and recovery at phone width.
+- Build / commit: Same TREK-279 working tree.
+- Viewport and starting state: Chrome DevTools MCP at 390 x 844; canonical synthetic Settings catalog with an empty Exercise name.
+- Actions: Activate Add, inspect the alert and field accessibility properties, verify unrelated rest/tracking controls remain valid, then enter `Row` in Exercise name.
+- Observed result: Add produced one visible assertive alert, `Exercise name is required.` The Exercise name textbox alone exposed `invalid=true` and used that alert as its accessible description; unrelated controls remained unmarked. Entering a name immediately removed the alert and invalid state without mutating the catalog. The rendered error stayed within the form and the document retained no horizontal overflow.
+- Rendered evidence: Chrome DevTools MCP accessibility snapshot plus inline screenshot of the production Settings form and recovery transition at 390 x 844.
+- Material limitation: Chrome surfaced an existing autofill advisory because 11 Settings fields lack id/name attributes; their explicit wrapping labels remain accessible, and the advisory predates this field-error change. Chromium evidence does not replace assistive-technology certification.
+
+## Changed scenario
+
+- Scenario: Verify signed-out Login landmark, entry focus, and unchanged action hierarchy.
+- Build / commit: Same TREK-279 working tree.
+- Viewport and starting state: Chrome DevTools MCP at 390 x 844; isolated signed-out local development origin with no identity session.
+- Actions: Load Login, inspect the main landmark and accessibility tree, then measure active focus, overflow, and console diagnostics.
+- Observed result: Login rendered as one `main.access-surface` labelled by the Nudge heading. The heading, not the sign-in button, received initial focus and the approved solid 4px focus-blue outline; the button had no autofocus attribute. Copy and the Google sign-in action were unchanged, client/scroll widths both measured 390px, and Chrome reported no warnings or errors.
+- Rendered evidence: Chrome DevTools MCP accessibility snapshot and inline rendered inspection of signed-out Login at 390 x 844.
+- Material limitation: The isolated local state proves presentation, landmark, and focus behavior only; it does not perform a production identity-provider round trip. Screenshot-file persistence was denied by the MCP workspace-path guard.

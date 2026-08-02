@@ -141,6 +141,7 @@ export default function Settings({ onClose, onDirtyChange }) {
   const [newRestSeconds, setNewRestSeconds] = useState('');
   const [addError, setAddError] = useState('');
   const [addErrorIsValidation, setAddErrorIsValidation] = useState(false);
+  const isNameRequiredError = addError === 'Exercise name is required.';
   const [isAdding, setIsAdding] = useState(false);
   const addSaveInFlight = useRef(false);
   
@@ -410,7 +411,11 @@ export default function Settings({ onClose, onDirtyChange }) {
     if (addSaveInFlight.current || catalogMutationInFlight.current) return;
     setAddError('');
     setAddErrorIsValidation(false);
-    if (!newName.trim()) return;
+    if (!newName.trim()) {
+      setAddError('Exercise name is required.');
+      setAddErrorIsValidation(true);
+      return;
+    }
 
     const currentT1Groups = getTier1Groups(catalog);
     if (Number(newTier) === 1) {
@@ -593,7 +598,7 @@ export default function Settings({ onClose, onDirtyChange }) {
         <form onSubmit={handleAdd} className="add-form" noValidate>
           <label className="tracking-field">
             Exercise name
-            <input type="text" placeholder="Exercise Name" value={newName} onChange={(e) => setNewName(e.target.value)} required />
+            <input type="text" placeholder="Exercise Name" value={newName} onChange={(e) => { setNewName(e.target.value); if (isNameRequiredError) { setAddError(''); setAddErrorIsValidation(false); } }} required aria-invalid={isNameRequiredError || undefined} aria-describedby={isNameRequiredError ? 'add-tracking-error' : undefined} />
           </label>
           <label className="tracking-field">
             Muscle group
@@ -635,8 +640,8 @@ export default function Settings({ onClose, onDirtyChange }) {
               step="1"
               value={newRestSeconds}
               onChange={event => setNewRestSeconds(event.target.value)}
-              aria-invalid={addErrorIsValidation || undefined}
-              aria-describedby={addErrorIsValidation ? 'add-tracking-error' : undefined}
+              aria-invalid={addErrorIsValidation && !isNameRequiredError || undefined}
+              aria-describedby={addErrorIsValidation && !isNameRequiredError ? 'add-tracking-error' : undefined}
             />
           </label>
           <span> (blank uses default)</span>
@@ -649,8 +654,8 @@ export default function Settings({ onClose, onDirtyChange }) {
                 setAddError('');
                 setAddErrorIsValidation(false);
               }}
-              aria-invalid={addErrorIsValidation || undefined}
-              aria-describedby={addErrorIsValidation ? 'add-tracking-error' : undefined}
+              aria-invalid={addErrorIsValidation && !isNameRequiredError || undefined}
+              aria-describedby={addErrorIsValidation && !isNameRequiredError ? 'add-tracking-error' : undefined}
             >
               <option value="simple">Simple completion</option>
               <option value="weighted">Weighted sets</option>
@@ -661,7 +666,7 @@ export default function Settings({ onClose, onDirtyChange }) {
             mode={newTrackingMode}
             values={{ startingWeight: newStartingWeight, targetReps: newTargetReps, floorReps: newFloorReps, weightStep: newWeightStep }}
             setters={{ setStartingWeight: setNewStartingWeight, setTargetReps: setNewTargetReps, setFloorReps: setNewFloorReps, setWeightStep: setNewWeightStep }}
-            invalid={addErrorIsValidation}
+            invalid={addErrorIsValidation && !isNameRequiredError}
             errorId="add-tracking-error"
           />
           {newGroup === 'Legs' && String(newTier) === '3' ? (

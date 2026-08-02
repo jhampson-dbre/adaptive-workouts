@@ -8,9 +8,9 @@
   overflow-wrap: anywhere;
 }
 
-.baseline-bootstrap h2:focus,
 .baseline-bootstrap:focus,
-.baseline-focus-target:focus {
+.baseline-focus-target:focus,
+:is(h1, h2, h3, h4, h5, h6)[tabindex="-1"]:focus {
   outline: 4px solid #1261a0;
   outline-offset: 3px;
 }
@@ -24,7 +24,6 @@
 }
 
 .access-surface { box-sizing: border-box; max-width: 42rem; min-height: 100vh; min-height: 100dvh; margin: 0 auto; padding: 2rem 1.25rem; overflow-wrap: anywhere; }
-.access-surface h1:focus { outline: 4px solid #1261a0; outline-offset: 3px; }
 .access-identity { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: .5rem 1rem; }
 .access-identity :is(dt, dd) { min-inline-size: 0; overflow-wrap: anywhere; }
 .access-identity dd { margin: 0; user-select: text; }

@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { signInWithGoogle } from '../utils/auth';
 
 export default function Login() {
   const [error, setError] = useState(null);
+  const headingRef = useRef(null);
+
+  useEffect(() => { headingRef.current?.focus(); }, []);
 
   const handleSignIn = async () => {
     setError(null);
@@ -16,13 +19,13 @@ export default function Login() {
   };
 
   return (
-    <div className="login-container" style={{ padding: '2rem', textAlign: 'center' }}>
-      <h1>Nudge</h1>
+    <main className="login-container access-surface" style={{ padding: '2rem', textAlign: 'center' }} aria-labelledby="login-heading">
+      <h1 id="login-heading" ref={headingRef} tabIndex="-1">Nudge</h1>
       <p>Please sign in to access your workouts across devices.</p>
-      <button autoFocus onClick={handleSignIn} style={{ padding: '10px 20px' }}>
+      <button onClick={handleSignIn} style={{ padding: '10px 20px' }}>
         Sign in with Google
       </button>
       {error && <p className="error-message" role="alert" style={{ marginTop: '1rem' }}>{error}</p>}
-    </div>
+    </main>
   );
 }

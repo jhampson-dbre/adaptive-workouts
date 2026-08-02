@@ -22,6 +22,7 @@ describe('private access gate', () => {
     const gate = await mountGate({ signIn: vi.fn(async () => { throw { code: 'auth/network-request-failed' }; }) });
     await gate.emit(null);
     const signIn = await screen.findByRole('button', { name: 'Sign in with Google' });
+    signIn.focus();
     fireEvent.click(signIn);
 
     const error = await screen.findByRole('alert');
@@ -179,7 +180,7 @@ describe('private access gate', () => {
     await gate.emit(approved);
     fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
     expect(confirm).not.toHaveBeenCalled(); expect(signOut).toHaveBeenCalledOnce();
-    const login = await screen.findByRole('button', { name: 'Sign in with Google' });
+    const login = await screen.findByRole('heading', { name: 'Nudge' });
     expect(document.activeElement).toBe(login);
   });
 
@@ -215,7 +216,7 @@ describe('private access gate', () => {
     await gate.emit(null); await act(async () => {});
     const checking = screen.getByRole('heading', { name: 'Checking access' }); expect(document.activeElement).toBe(checking); expect(screen.queryByRole('button', { name: 'Sign in with Google' })).toBeNull();
     finishSignOut(); await act(async () => {});
-    expect(document.activeElement).toBe(await screen.findByRole('button', { name: 'Sign in with Google' }));
+    expect(document.activeElement).toBe(await screen.findByRole('heading', { name: 'Nudge' }));
   });
 
   it('suppresses null token events until a rejected manual sign out reaches focused recovery', async () => {
@@ -259,7 +260,7 @@ describe('private access gate', () => {
     gate.emitSync(approved); const checking = screen.getByRole('heading', { name: 'Checking access' }); expect(document.activeElement).toBe(checking);
     await gate.emit(approved); resolve({ claims: { approved: false } }); await act(async () => {});
     const title = await screen.findByRole('heading', { name: 'How much time do you have?' }); await waitFor(() => expect(document.activeElement).toBe(title));
-    await gate.emit(null); expect(document.activeElement).toBe(await screen.findByRole('button', { name: 'Sign in with Google' }));
+    await gate.emit(null); expect(document.activeElement).toBe(await screen.findByRole('heading', { name: 'Nudge' }));
   });
 
   it('focuses error and refocuses the current pending destination once after another pending evaluation', async () => {

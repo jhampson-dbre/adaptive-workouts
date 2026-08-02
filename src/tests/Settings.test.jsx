@@ -48,6 +48,30 @@ describe('Settings tracking configuration', () => {
     expect(screen.getByRole('status').textContent).toBe('Loading...');
   });
 
+  it('shows a field-associated error when the required exercise name is empty', async () => {
+    renderSettings();
+    const name = await screen.findByLabelText('Exercise name');
+    const rest = screen.getByLabelText('Rest override seconds');
+    const trackingMode = screen.getByLabelText('Tracking mode');
+    fireEvent.change(trackingMode, { target: { value: 'bodyweight' } });
+    const targetReps = screen.getByLabelText('Target reps');
+
+    expect(name.validity.valueMissing).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Exercise name is required.');
+    expect(name.getAttribute('aria-invalid')).toBe('true');
+    expect(name.getAttribute('aria-describedby')).toBe('add-tracking-error');
+    for (const field of [rest, trackingMode, targetReps]) {
+      expect(field.getAttribute('aria-invalid')).toBeNull();
+      expect(field.getAttribute('aria-describedby')).toBeNull();
+    }
+    expect(storage.saveCatalogItem).not.toHaveBeenCalled();
+
+    fireEvent.change(name, { target: { value: 'Row' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(name.getAttribute('aria-invalid')).toBeNull();
+  });
+
   it('blocks Settings after an initial load failure and retries both reads', async () => {
     storage.getCatalog.mockResolvedValueOnce([exercise]).mockResolvedValueOnce([exercise]);
     storage.getSettings.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ defaultRestSeconds: 90 });

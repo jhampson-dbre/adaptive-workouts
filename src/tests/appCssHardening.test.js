@@ -6,14 +6,15 @@ const declarationsFor = selector => css.match(new RegExp(`${selector.replace(/[.
 
 describe('baseline and private-access CSS hardening', () => {
   it('keeps programmatic focus aligned with the approved focus treatment', () => {
-    const baselineFocus = declarationsFor('.baseline-bootstrap h2:focus,\n.baseline-bootstrap:focus,\n.baseline-focus-target:focus');
+    const baselineFocus = declarationsFor('.baseline-bootstrap:focus,\n.baseline-focus-target:focus,\n:is(h1, h2, h3, h4, h5, h6)[tabindex="-1"]:focus');
 
     expect(baselineFocus).toMatch(/outline:\s*4px solid #1261a0/i);
     expect(baselineFocus).not.toMatch(/var\(--accent/i);
     expect(baselineFocus).toMatch(/outline-offset:\s*3px/i);
-    const accessFocus = declarationsFor('.access-surface h1:focus');
-    expect(accessFocus).toMatch(/outline:\s*4px solid #1261a0/i);
-    expect(accessFocus).not.toMatch(/var\(--accent/i);
+    const focusedHeading = declarationsFor(':is(h1, h2, h3, h4, h5, h6)[tabindex="-1"]:focus');
+    expect(focusedHeading).toMatch(/outline:\s*4px solid #1261a0/i);
+    expect(focusedHeading).not.toMatch(/var\(--accent/i);
+    expect(focusedHeading).toMatch(/outline-offset:\s*3px/i);
   });
 
   it('keeps baseline and access surfaces contained in dynamic viewports', () => {
