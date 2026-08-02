@@ -224,3 +224,33 @@ the safe method attempted and the best available alternative.
 - Observed result: At normal size, Settings uses a 50.4px display heading, 34.2px section heading, 18px labels, 26.1px catalog titles, and 12.96px badges with no horizontal overflow. At 200% text scaling, the Settings header wraps its action below the title, the Close label retains its full intrinsic width (79px client and scroll widths), title and action do not overlap, and the document has no horizontal overflow. Private access also retains readable wrapping and no horizontal overflow at 200% scaling; its sign-in action computes to 18px at normal size. Font loading remained stable.
 - Rendered evidence: Chrome DevTools MCP screenshots inspected inline for Settings phone, Settings at 200% text scaling, private access phone, and private access at 200% text scaling.
 - Material limitation: The temporary root-size override exercises text scaling and reflow in the emulated target because Chrome keyboard zoom does not alter the DevTools-emulated viewport. Screenshot-file persistence was denied, and the signed-out surface does not prove a production identity-provider round trip.
+
+---
+
+## 2026-08-02 - Baseline and private-access CSS hardening
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-277 changes focus visibility, viewport containment, identity wrapping, and recovery-action sizing on baseline and private-access states.
+- Approved scenario or artifact: Preserve the approved Clear Signal presentation and private-access behavior while hardening `src/App.css` for long content, RTL flow, narrow viewports, dynamic viewport height, and 200% text scaling.
+
+## Changed scenario
+
+- Scenario: Verify pending private access at phone and desktop widths, then stress it with 200% text, RTL direction, long translated labels, and long unbroken identity values.
+- Build / commit: `codex/epic-14-audit-remediation` working tree for TREK-277 before task commit.
+- Viewport and starting state: Chrome DevTools MCP at 390 x 844 and 1280 x 900; isolated canonical `UX-10-02` pending-access scenario with synthetic identity.
+- Actions: Inspect the focused Awaiting approval heading, identity grid, and recovery actions at normal size; then temporarily set the root to 36px, set document direction to RTL, and replace identity/action text with long German, Arabic, emoji, and unbroken synthetic values.
+- Observed result: The focused heading uses the approved 4px `rgb(18, 97, 160)` outline. Normal phone and desktop states retain two identity columns, clear action hierarchy, at least 44px targets, and no horizontal overflow. The first stress pass exposed a `max-content` label track collapsing values to 0px; remediation changed the grid to bounded 1:2 tracks. The confirmation pass measured 88px and 176px tracks, equal client/scroll widths for every identity term and action, and a 390px document client/scroll width with no horizontal overflow.
+- Rendered evidence: Chrome DevTools MCP screenshots inspected inline for pending access at phone and desktop widths and for the final 200%/RTL/long-content confirmation.
+- Material limitation: The extreme text was a transient synthetic DOM stress probe and does not assert authorization behavior. Chrome DevTools MCP screenshots were inspected inline rather than persisted; Chromium does not prove physical-device Safari font metrics.
+
+## Changed scenario
+
+- Scenario: Verify the baseline-unavailable recovery surface at normal size and under 200% text, RTL, long diagnostics, and a long retry label.
+- Build / commit: Same TREK-277 working tree.
+- Viewport and starting state: Chrome DevTools MCP at 390 x 844; exact baseline Vite build pointed at intentionally unavailable local emulator ports.
+- Actions: Wait for the classified Baseline unavailable state, inspect focus and Retry baseline sizing, then apply the same transient text/RTL stress with long German and Arabic/unbroken synthetic content.
+- Observed result: Baseline unavailable receives the approved 4px focus-blue outline, the retry control measures 128.5 x 50.8px at normal size, and the surface fills the 844px dynamic viewport without horizontal overflow. Under stress, the long heading, 280-character diagnostic, and retry action remain contained; document and surface client/scroll widths remain 390px and the action retains its 44px logical minimum.
+- Rendered evidence: Chrome DevTools MCP screenshots inspected inline for the normal baseline error and the 200%/RTL/long-content confirmation.
+- Material limitation: Unavailable emulator ports deterministically prove the baseline failure presentation and recovery affordance, not a successful authorization transition or physical-device viewport behavior.
