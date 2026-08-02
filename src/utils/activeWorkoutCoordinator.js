@@ -1,4 +1,5 @@
 import { createRecoveryDraft, migrateRecoveryDraftV1ToV2, readRecoveryDraftAsync, recoveryLockName, recoveryStorageKey, validateRecoveryDraft, verifyRecoveryDraftV2, hydrateRecoveryDraft, isValidRecoveryIdentity } from './activeWorkoutRecovery';
+import { canonicalizeWorkoutV4 } from './workoutFingerprint';
 
 const DEFAULT_TIMEOUT_MS = 8_000;
 const validExpected = expected => expected && typeof expected.draftId === 'string' && expected.draftId.length > 0 && Number.isSafeInteger(expected.ownershipGeneration) && expected.ownershipGeneration >= 1;
@@ -144,7 +145,6 @@ export function createActiveWorkoutCoordinator({ storage, locks, handoffTranspor
         if (current.draft.pendingSave !== null) {
           const before = current.draft.pendingSave;
           const after = draft.pendingSave;
-          const { canonicalizeWorkoutV4 } = await import('./workoutFingerprint');
           let immutableMatch = after
             && before.workoutId === after.workoutId
             && before.fingerprint.canonicalization === after.fingerprint?.canonicalization

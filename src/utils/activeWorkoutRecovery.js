@@ -1,5 +1,6 @@
 const PHASES = ['warmup', 'performance', 'cooldown'];
 import { isValidV4WorkoutDocument } from './workoutSchema';
+import { buildCanonicalV4WorkoutDocument, canonicalizeWorkoutV4, fingerprintWorkoutV4 } from './workoutFingerprint';
 const ACTIVE_PHASES = [...PHASES, 'review'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const UUID_V4_LOWERCASE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -213,9 +214,7 @@ export function readRecoveryDraft({ storage, projectId, uid, nowEpochMs, staleAf
 export async function verifyRecoveryDraftV2(draft, options = {}) {
   if (!validateRecoveryDraft(draft) || draft.version !== 2) return { status: 'malformed' };
   if (draft.pendingSave === null) return { status: 'verified' };
-  let fingerprintWorkoutV4;
   try {
-    const { buildCanonicalV4WorkoutDocument, canonicalizeWorkoutV4, fingerprintWorkoutV4: digest } = await import('./workoutFingerprint');
     const candidate = buildCanonicalV4WorkoutDocument({
       workoutId: draft.pendingSave.workoutId,
       finishRequestedAtEpochMs: draft.activeWorkout.phaseCandidate.finishRequestedAtEpochMs,
@@ -224,7 +223,6 @@ export async function verifyRecoveryDraftV2(draft, options = {}) {
       exercises: draft.activeWorkout.exercises,
     });
     if (canonicalizeWorkoutV4(candidate) !== canonicalizeWorkoutV4(draft.pendingSave.candidate)) return { status: 'malformed' };
-    fingerprintWorkoutV4 = digest;
   } catch { return { status: 'malformed' }; }
   try {
     const fingerprint = await fingerprintWorkoutV4(draft.pendingSave.candidate, options);
