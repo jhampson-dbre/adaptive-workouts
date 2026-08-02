@@ -5,6 +5,13 @@ const css = readFileSync('src/index.css', 'utf8');
 const login = readFileSync('src/components/Login.jsx', 'utf8');
 
 describe('Nudge typography roles', () => {
+  it('inherits the approved body typography for every Settings select', () => {
+    const settings = readFileSync('src/components/Settings.jsx', 'utf8');
+
+    expect(settings).toMatch(/<select\b/);
+    expect(css).toMatch(/button,\s*input,\s*select\s*\{\s*font:\s*inherit;/);
+  });
+
   it('defines and applies the approved display, headline, body, label, metadata, and numeric roles', () => {
     expect(css).toMatch(/--type-display:\s*clamp\(2\.8rem,\s*11vw,\s*5rem\)/);
     expect(css).toMatch(/--type-headline:\s*clamp\(1\.9rem,\s*8vw,\s*3rem\)/);

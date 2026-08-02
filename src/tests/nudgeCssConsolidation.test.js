@@ -25,5 +25,6 @@ describe('Nudge CSS consolidation', () => {
 
   it('keeps the live Settings tracking field layout', () => {
     expect(indexCss).toMatch(/\.tracking-fields\s*\{[^}]*display:\s*flex[^}]*flex:\s*1\s+1\s+100%[^}]*gap:\s*12px[^}]*flex-wrap:\s*wrap[^}]*align-items:\s*end/s);
+    expect(indexCss).toMatch(/\.add-form \.tracking-field:has\(select\),\s*\.edit-form \.tracking-field:has\(select\)\s*\{[^}]*flex:\s*1\s+1\s+200px/s);
   });
 });

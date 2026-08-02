@@ -130,7 +130,8 @@ button {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -1225,6 +1226,11 @@ input:focus-visible {
   min-width: 0;
   flex-direction: column;
   gap: 5px;
+}
+
+.add-form .tracking-field:has(select),
+.edit-form .tracking-field:has(select) {
+  flex: 1 1 200px;
 }
 
 .setting-group input,

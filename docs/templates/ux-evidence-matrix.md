@@ -314,3 +314,23 @@ the safe method attempted and the best available alternative.
 - Observed result: Login rendered as one `main.access-surface` labelled by the Nudge heading. The heading, not the sign-in button, received initial focus and the approved solid 4px focus-blue outline; the button had no autofocus attribute. Copy and the Google sign-in action were unchanged, client/scroll widths both measured 390px, and Chrome reported no warnings or errors.
 - Rendered evidence: Chrome DevTools MCP accessibility snapshot and inline rendered inspection of signed-out Login at 390 x 844.
 - Material limitation: The isolated local state proves presentation, landmark, and focus behavior only; it does not perform a production identity-provider round trip. Screenshot-file persistence was denied by the MCP workspace-path guard.
+
+---
+
+## 2026-08-02 - Settings select typography
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-280 changes the rendered font metrics and wrapping space of every native select in Settings.
+- Approved scenario or artifact: Preserve the `DESIGN.md` Settings Field body role, Clear Signal hierarchy, existing options and behavior, and the 44px minimum target.
+
+## Changed scenario
+
+- Scenario: Verify General defaults plus Add/Edit catalog selects at phone and desktop widths, including the longest selected priority and tracking labels.
+- Build / commit: `codex/epic-14-audit-remediation` working tree for TREK-280 before task commit.
+- Viewport and starting state: Chrome DevTools MCP at 390 x 844 and 1280 x 900; canonical synthetic Settings baseline, with Back Squat opened for editing.
+- Actions: Inspect computed font, target height, loaded-font state, option visibility, and document containment for Leg Day, Add, and Edit selects. The first desktop pass exposed clipping after inheriting the approved body font; the existing wrapping fields were then given a larger flexible basis and rechecked.
+- Observed result: Every inspected select computes to 18px Atkinson Hyperlegible at weight 400 and 45.3px high. At phone width, Add and Edit selects use the full 346px content width. At desktop width, Add fields render at 227.3px or 294px and Edit fields at 227.3px or 656px; `Tier 3 (Standard)`, `Simple completion`, and `Tier 3 (Primary Leg Day)` are fully visible. Fonts report loaded, and client/scroll widths remain equal at both viewports (390px phone; 1265px desktop).
+- Rendered evidence: Chrome DevTools MCP accessibility snapshots, computed-style measurements, and inline screenshots inspected for phone Add/Edit and desktop Add/Edit/Leg Day states.
+- Material limitation: Native select arrow metrics are Chromium-specific; this pass does not replace physical-device Safari or assistive-technology testing. Screenshots were inspected inline rather than persisted.
