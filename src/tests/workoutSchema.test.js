@@ -17,6 +17,7 @@ import {
   isValidV3ExerciseOccurrence,
   isValidV3WorkoutDocument,
   isValidV4WorkoutDocument,
+  isValidV5WorkoutDocument,
   normalizeCatalogExercise,
   normalizeWorkoutSettings,
   wasPerformed,
@@ -147,7 +148,26 @@ const validV4Workout = {
   actualDurationSeconds: 125,
 };
 
+const validV5Workout = {
+  ...validV4Workout,
+  schemaVersion: 5,
+  exercises: [v3SimpleExercise, { ...v3SimpleExercise, id: 'side-plank', occurrenceId: 'side-plank:3', name: 'Side Plank' }],
+  supersets: [{ occurrenceIds: ['plank:2', 'side-plank:3'], restPlacement: 'AFTER_ROUND' }],
+};
+
 describe('workout schema', () => {
+  it('accepts only durable v5 supersets with contiguous equal-set members', () => {
+    expect(isValidV5WorkoutDocument(validV5Workout)).toBe(true);
+    expect(classifyWorkoutDocument(validV5Workout)).toBe('valid-v5');
+    expect(isValidV5WorkoutDocument({ ...validV5Workout, supersets: [] })).toBe(false);
+    expect(isValidV5WorkoutDocument({ ...validV5Workout, supersets: [{ occurrenceIds: ['bench:0', 'bench:0'], restPlacement: 'AFTER_ROUND' }] })).toBe(false);
+    expect(isValidV5WorkoutDocument({ ...validV5Workout, supersets: [{ occurrenceIds: ['side-plank:3', 'plank:2'], restPlacement: 'AFTER_ROUND' }] })).toBe(false);
+    expect(classifyWorkoutDocument({ ...validV5Workout, supersets: [{ occurrenceIds: null, restPlacement: 'AFTER_ROUND' }] })).toBe('malformed-versioned');
+    expect(classifyWorkoutDocument({ ...validV5Workout, exercises: [null] })).toBe('malformed-versioned');
+    const unfinishedTerminal = structuredClone(validV5Workout);
+    unfinishedTerminal.exercises[1].setRecords[1] = { ...unfinishedTerminal.exercises[1].setRecords[1], completed: false, workDurationSeconds: null, plannedRestSeconds: 60, actualRestSeconds: 0 };
+    expect(isValidV5WorkoutDocument(unfinishedTerminal)).toBe(false);
+  });
   it('classifies wholly valid v4 documents, including zero phase durations', () => {
     expect(isValidV4WorkoutDocument(validV4Workout)).toBe(true);
     expect(classifyWorkoutDocument(validV4Workout)).toBe('valid-v4');

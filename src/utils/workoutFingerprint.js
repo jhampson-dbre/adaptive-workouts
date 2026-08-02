@@ -1,4 +1,4 @@
-import { isValidV4WorkoutDocument } from './workoutSchema';
+import { isValidV4WorkoutDocument, isValidV5WorkoutDocument } from './workoutSchema';
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
@@ -56,13 +56,13 @@ function copyExercise(source) {
   return result;
 }
 
-export function buildCanonicalV4WorkoutDocument({ workoutId, finishRequestedAtEpochMs, phaseTargets, phaseActualSeconds, exercises }) {
+function buildCanonicalWorkoutDocument({ workoutId, finishRequestedAtEpochMs, phaseTargets, phaseActualSeconds, exercises }, schemaVersion, supersets) {
   if (!UUID_V4.test(workoutId) || !Number.isSafeInteger(finishRequestedAtEpochMs) || !isObject(phaseTargets)
     || !isObject(phaseActualSeconds) || !Array.isArray(exercises)) throw new TypeError('Invalid canonical v4 input');
   const date = new Date(finishRequestedAtEpochMs).toISOString();
   if (!exactIso(date)) throw new TypeError('Invalid finish timestamp');
   const document = {
-    id: workoutId, schemaVersion: 4, status: 'completed', date,
+    id: workoutId, schemaVersion, status: 'completed', date,
     actualDurationSeconds: phaseActualSeconds.warmup + phaseActualSeconds.performance + phaseActualSeconds.cooldown,
     phaseDurations: {
       warmup: { plannedSeconds: phaseTargets.warmupSeconds, actualSeconds: phaseActualSeconds.warmup },
@@ -71,8 +71,17 @@ export function buildCanonicalV4WorkoutDocument({ workoutId, finishRequestedAtEp
     },
     exercises: exercises.map(copyExercise),
   };
-  if (!isValidV4WorkoutDocument(document)) throw new TypeError('Invalid canonical v4 workout');
+  if (schemaVersion === 5) document.supersets = supersets?.map(group => ({ occurrenceIds: [...group.occurrenceIds], restPlacement: group.restPlacement }));
+  if (!(schemaVersion === 4 ? isValidV4WorkoutDocument(document) : isValidV5WorkoutDocument(document))) throw new TypeError(`Invalid canonical v${schemaVersion} workout`);
   return freeze(document);
+}
+
+export function buildCanonicalV4WorkoutDocument(input) {
+  return buildCanonicalWorkoutDocument(input, 4);
+}
+
+export function buildCanonicalV5WorkoutDocument({ supersets, ...input }) {
+  return buildCanonicalWorkoutDocument(input, 5, supersets);
 }
 
 function orderedCandidate(candidate) {
@@ -99,12 +108,23 @@ export function canonicalizeWorkoutV4(candidate) {
   return json;
 }
 
+export function canonicalizeWorkoutV5(candidate) {
+  if (!isValidV5WorkoutDocument(candidate) || !UUID_V4.test(candidate.id) || !exactIso(candidate.date)) throw new TypeError('Invalid canonical v5 candidate');
+  return JSON.stringify({ ...orderedCandidate(candidate), supersets: candidate.supersets.map(group => ({ occurrenceIds: [...group.occurrenceIds], restPlacement: group.restPlacement })) });
+}
+
 export async function fingerprintWorkoutV4(candidate, { subtle = globalThis.crypto?.subtle, TextEncoderImpl = TextEncoder } = {}) {
   if (!subtle?.digest) throw new Error('SHA-256 capability unavailable');
   const bytes = new TextEncoderImpl().encode(canonicalizeWorkoutV4(candidate));
   const digest = await subtle.digest('SHA-256', bytes);
   const hex = [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
   return { canonicalization: 'workout-v4-json-v1', algorithm: 'SHA-256', hex };
+}
+
+export async function fingerprintWorkoutV5(candidate, { subtle = globalThis.crypto?.subtle, TextEncoderImpl = TextEncoder } = {}) {
+  if (!subtle?.digest) throw new Error('SHA-256 capability unavailable');
+  const digest = await subtle.digest('SHA-256', new TextEncoderImpl().encode(canonicalizeWorkoutV5(candidate)));
+  return { canonicalization: 'workout-v5-json-v1', algorithm: 'SHA-256', hex: [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('') };
 }
 
 export function isCanonicalWorkoutId(value) {

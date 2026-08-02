@@ -4,6 +4,7 @@ import {
   isValidV3ExerciseOccurrence,
   isValidV3WorkoutDocument,
   isValidV4WorkoutDocument,
+  isValidV5WorkoutDocument,
   isValidWeightedCatalogConfig,
 } from './workoutSchema';
 
@@ -35,11 +36,11 @@ function validateCurrentExercise(exercise) {
 }
 
 function isEligibleProgressionWorkout(workout) {
-  return isValidV2WorkoutEnvelope(workout) || isValidV3WorkoutDocument(workout) || isValidV4WorkoutDocument(workout);
+  return isValidV2WorkoutEnvelope(workout) || isValidV3WorkoutDocument(workout) || isValidV4WorkoutDocument(workout) || isValidV5WorkoutDocument(workout);
 }
 
 function isValidProgressionOccurrence(workout, occurrence) {
-  return workout.schemaVersion === 3 || workout.schemaVersion === 4
+  return workout.schemaVersion === 3 || workout.schemaVersion === 4 || workout.schemaVersion === 5
     ? isValidV3ExerciseOccurrence(occurrence)
     : isValidV2ExerciseOccurrence(occurrence);
 }

@@ -33,6 +33,26 @@ service cloud.firestore {
           + request.resource.data.phaseDurations.cooldown.actualSeconds;
     }
 
+    function canonicalV5(workoutId) {
+      return request.resource.data.keys().hasOnly([
+          'id', 'schemaVersion', 'status', 'date', 'actualDurationSeconds', 'phaseDurations', 'exercises', 'supersets'
+        ])
+        && request.resource.data.keys().hasAll([
+          'id', 'schemaVersion', 'status', 'date', 'actualDurationSeconds', 'phaseDurations', 'exercises', 'supersets'
+        ])
+        && request.resource.data.schemaVersion == 5
+        && request.resource.data.supersets is list && request.resource.data.supersets.size() > 0
+        && request.resource.data.id == workoutId
+        && workoutId.matches('^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
+        && request.resource.data.status == 'completed' && request.resource.data.date is string
+        && request.resource.data.actualDurationSeconds is int && request.resource.data.actualDurationSeconds >= 0
+        && request.resource.data.exercises is list && request.resource.data.exercises.size() > 0
+        && request.resource.data.phaseDurations.keys().hasOnly(['warmup', 'performance', 'cooldown'])
+        && request.resource.data.phaseDurations.keys().hasAll(['warmup', 'performance', 'cooldown'])
+        && validPhase(request.resource.data.phaseDurations.warmup) && validPhase(request.resource.data.phaseDurations.performance) && validPhase(request.resource.data.phaseDurations.cooldown)
+        && request.resource.data.actualDurationSeconds == request.resource.data.phaseDurations.warmup.actualSeconds + request.resource.data.phaseDurations.performance.actualSeconds + request.resource.data.phaseDurations.cooldown.actualSeconds;
+    }
+
     function validPhase(phase) {
       return phase.keys().hasOnly(['plannedSeconds', 'actualSeconds'])
         && phase.keys().hasAll(['plannedSeconds', 'actualSeconds'])
@@ -53,7 +73,7 @@ service cloud.firestore {
 
     match /users/{userId}/history/{workoutId} {
       allow read: if owner(userId);
-      allow create: if owner(userId) && (canonicalV4(workoutId) || legacyCompatibleHistory());
+      allow create: if owner(userId) && (canonicalV4(workoutId) || canonicalV5(workoutId) || legacyCompatibleHistory());
       allow update: if owner(userId) && request.resource.data == resource.data;
       allow delete: if false;
     }

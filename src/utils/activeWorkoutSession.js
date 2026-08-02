@@ -1,6 +1,6 @@
 import { activeWorkoutReducer, initializeActiveWorkout } from './activeWorkout';
 import { projectActiveWorkoutForRecovery } from './activeWorkoutRecovery';
-import { buildCanonicalV4WorkoutDocument } from './workoutFingerprint';
+import { buildCanonicalV4WorkoutDocument, buildCanonicalV5WorkoutDocument } from './workoutFingerprint';
 import { createImmutableWorkoutId, createSaveOperationToken, executeImmutableSave, prepareImmutableSave } from './immutableWorkoutSave';
 
 const empty = Object.freeze({ status: 'idle', activeWorkout: null, phaseTargets: null, snapshot: null, pendingSave: null, error: null, blocked: false });
@@ -119,7 +119,10 @@ export function createActiveWorkoutSession({ coordinator, projectId, saveImmutab
       try {
         if (!pending) {
           const workoutId = createImmutableWorkoutId(createUuid);
-          const candidate = buildCanonicalV4WorkoutDocument({ workoutId, finishRequestedAtEpochMs: state.activeWorkout.phaseCandidate.finishRequestedAtEpochMs, phaseTargets: state.phaseTargets, phaseActualSeconds: state.activeWorkout.phaseCandidate.phaseActualSeconds, exercises: state.activeWorkout.exercises });
+          const candidateInput = { workoutId, finishRequestedAtEpochMs: state.activeWorkout.phaseCandidate.finishRequestedAtEpochMs, phaseTargets: state.phaseTargets, phaseActualSeconds: state.activeWorkout.phaseCandidate.phaseActualSeconds, exercises: state.activeWorkout.exercises };
+          const candidate = state.activeWorkout.supersets?.length
+            ? buildCanonicalV5WorkoutDocument({ ...candidateInput, supersets: state.activeWorkout.supersets })
+            : buildCanonicalV4WorkoutDocument(candidateInput);
           pending = await prepareImmutableSave({ workoutId, candidate });
           const operationToken = createSaveOperationToken({ ...expected(), pendingSave: pending });
           const persisted = await coordinator.persistPendingSave({ projectId, uid: identity.uid, expected: expected(), operationToken, pendingSave: pending });

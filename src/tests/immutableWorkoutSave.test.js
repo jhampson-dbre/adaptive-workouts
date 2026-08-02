@@ -82,6 +82,7 @@ describe('immutable save protocol', () => {
     expect(isValidPendingSave({ ...prepared, fingerprint: { ...prepared.fingerprint, extra: true } })).toBe(false);
     const missingFingerprintKey = { ...prepared.fingerprint }; delete missingFingerprintKey.algorithm;
     expect(isValidPendingSave({ ...prepared, fingerprint: missingFingerprintKey })).toBe(false);
+    expect(isValidPendingSave({ ...prepared, fingerprint: { ...prepared.fingerprint, canonicalization: 'workout-v5-json-v1' } })).toBe(false);
   });
 
   it('retains write-pending evidence when cleanup fails after direct or reconciled success', async () => {

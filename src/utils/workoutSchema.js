@@ -406,6 +406,58 @@ export function isValidV4WorkoutDocument(workout) {
     && new Set(occurrenceIds).size === occurrenceIds.length;
 }
 
+function isValidSavedSupersets(supersets, exercises) {
+  if (!Array.isArray(supersets) || supersets.length < 1) return false;
+  const byOccurrence = new Map(exercises.map((exercise, index) => [exercise?.occurrenceId, { exercise, index }]));
+  const assigned = new Set();
+  return supersets.every(group => {
+    if (!isObject(group) || Object.keys(group).length !== 2 || !Array.isArray(group.occurrenceIds)
+      || group.occurrenceIds.length < 2 || !Object.values(SUPERSET_REST_PLACEMENT).includes(group.restPlacement)
+      || new Set(group.occurrenceIds).size !== group.occurrenceIds.length) return false;
+    const members = group.occurrenceIds.map(id => byOccurrence.get(id));
+    if (members.some(member => !member?.exercise || assigned.has(member.exercise.occurrenceId))) return false;
+    members.forEach(member => assigned.add(member.exercise.occurrenceId));
+    return members.every((member, index) => member.index === members[0].index + index)
+      && new Set(members.map(member => member.exercise.prescribedSetCount)).size === 1;
+  });
+}
+
+function groupCompletionRestOccurrences(supersets, exercises) {
+  const byOccurrence = new Map(exercises.map(exercise => [exercise?.occurrenceId, exercise]));
+  const completed = new Set();
+  for (const group of supersets) {
+    const members = group?.occurrenceIds?.map(id => byOccurrence.get(id));
+    if (!members?.every(exercise => Array.isArray(exercise?.setRecords))) return null;
+    const allComplete = members.every(exercise => exercise.setRecords.every(record => record.completed));
+    const zeroRests = members.filter(exercise => {
+      const record = exercise.setRecords.at(-1);
+      return record?.plannedRestSeconds !== null && record?.actualRestSeconds === 0;
+    });
+    if (zeroRests.length && !allComplete || (allComplete && zeroRests.length !== 1)) return null;
+    zeroRests.forEach(exercise => completed.add(exercise.occurrenceId));
+  }
+  return completed;
+}
+
+export function isValidV5WorkoutDocument(workout) {
+  const { supersets, ...v4 } = workout ?? {};
+  if (!Array.isArray(supersets) || !Array.isArray(workout?.exercises)) return false;
+  const terminalIds = groupCompletionRestOccurrences(supersets, workout.exercises);
+  if (!terminalIds) return false;
+  const normalizedExercises = Array.isArray(workout?.exercises) ? workout.exercises.map(exercise => {
+    if (!terminalIds.has(exercise?.occurrenceId)) return exercise;
+    const index = exercise?.setRecords?.length - 1;
+    const record = exercise?.setRecords?.[index];
+    if (record?.plannedRestSeconds === null) return exercise;
+    if (!record?.completed || !isValidPlannedRestSeconds(record.plannedRestSeconds) || record.actualRestSeconds !== 0) return exercise;
+    return { ...exercise, setRecords: exercise.setRecords.map((item, itemIndex) => itemIndex === index ? { ...item, plannedRestSeconds: null, actualRestSeconds: null } : item) };
+  }) : workout?.exercises;
+  return hasOnlyFields(workout, new Set([...V4_DOCUMENT_FIELDS, 'supersets']))
+    && workout.schemaVersion === 5
+    && isValidV4WorkoutDocument({ ...v4, schemaVersion: 4, exercises: normalizedExercises })
+    && isValidSavedSupersets(supersets, workout.exercises);
+}
+
 export function isMalformedV2WorkoutDocument(workout) {
   return isObject(workout)
     && hasOwn(workout, 'schemaVersion')
@@ -417,6 +469,7 @@ export function classifyWorkoutDocument(workout) {
   if (isValidV2WorkoutDocument(workout)) return 'valid-v2';
   if (isValidV3WorkoutDocument(workout)) return 'valid-v3';
   if (isValidV4WorkoutDocument(workout)) return 'valid-v4';
+  if (isValidV5WorkoutDocument(workout)) return 'valid-v5';
   return 'malformed-versioned';
 }
 
@@ -434,8 +487,8 @@ export function wasPerformed(workout, occurrence) {
   if (isLegacyWorkoutDocument(workout)) {
     return occurrence !== null && typeof occurrence === 'object' && !Array.isArray(occurrence);
   }
-  if (workout?.schemaVersion === 3 || workout?.schemaVersion === 4) {
-    return (workout.schemaVersion === 3 ? isValidV3WorkoutDocument(workout) : isValidV4WorkoutDocument(workout))
+  if (workout?.schemaVersion === 3 || workout?.schemaVersion === 4 || workout?.schemaVersion === 5) {
+    return (workout.schemaVersion === 3 ? isValidV3WorkoutDocument(workout) : workout.schemaVersion === 4 ? isValidV4WorkoutDocument(workout) : isValidV5WorkoutDocument(workout))
       && isValidV3ExerciseOccurrence(occurrence)
       && occurrence.setRecords.some(record => record.completed === true);
   }

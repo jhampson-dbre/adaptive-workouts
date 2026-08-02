@@ -1,9 +1,9 @@
-import { canonicalizeWorkoutV4, fingerprintWorkoutV4, isCanonicalWorkoutId } from './workoutFingerprint';
+import { canonicalizeWorkoutV4, canonicalizeWorkoutV5, fingerprintWorkoutV4, fingerprintWorkoutV5, isCanonicalWorkoutId } from './workoutFingerprint';
 
-const FINGERPRINT = Object.freeze({ canonicalization: 'workout-v4-json-v1', algorithm: 'SHA-256' });
-
-const sameFingerprint = (left, right) => left?.canonicalization === FINGERPRINT.canonicalization
-  && left?.algorithm === FINGERPRINT.algorithm && left?.hex === right?.hex;
+const sameFingerprint = (left, right) => left?.canonicalization === right?.canonicalization
+  && left?.algorithm === 'SHA-256' && right?.algorithm === 'SHA-256' && left?.hex === right?.hex;
+const canonicalizeCandidate = candidate => candidate?.schemaVersion === 5 ? canonicalizeWorkoutV5(candidate) : canonicalizeWorkoutV4(candidate);
+const fingerprintCandidate = (candidate, options) => candidate?.schemaVersion === 5 ? fingerprintWorkoutV5(candidate, options) : fingerprintWorkoutV4(candidate, options);
 const PENDING_KEYS = ['state', 'workoutId', 'fingerprint', 'candidate', 'attemptCount', 'lastAttemptAtEpochMs', 'lastReconciliationAtEpochMs'];
 const exact = (value, keys) => value && typeof value === 'object' && !Array.isArray(value)
   && Reflect.ownKeys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
@@ -31,10 +31,10 @@ function isValidOperationToken(token, pendingSave) {
 export function isValidPendingSave(pending) {
   if (!exact(pending, PENDING_KEYS) || !isCanonicalWorkoutId(pending.workoutId)
     || !exact(pending.fingerprint, ['canonicalization', 'algorithm', 'hex'])
-    || pending.candidate?.id !== pending.workoutId || !sameFingerprint(pending.fingerprint, pending.fingerprint)
+    || pending.candidate?.id !== pending.workoutId || pending.fingerprint.canonicalization !== (pending.candidate?.schemaVersion === 5 ? 'workout-v5-json-v1' : 'workout-v4-json-v1') || !sameFingerprint(pending.fingerprint, pending.fingerprint)
     || !/^[0-9a-f]{64}$/.test(pending.fingerprint?.hex)
     || !Number.isSafeInteger(pending.attemptCount) || pending.attemptCount < 0) return false;
-  try { canonicalizeWorkoutV4(pending.candidate); } catch { return false; }
+  try { canonicalizeCandidate(pending.candidate); } catch { return false; }
   if (!['prepared', 'write-pending', 'retryable-absent', 'reconcile-indeterminate', 'blocked-conflict'].includes(pending.state)) return false;
   if (pending.state === 'prepared') return pending.attemptCount === 0
     && pending.lastAttemptAtEpochMs === null && pending.lastReconciliationAtEpochMs === null;
@@ -46,14 +46,14 @@ export function isValidPendingSave(pending) {
 
 export async function prepareImmutableSave({ workoutId, candidate }) {
   if (!isCanonicalWorkoutId(workoutId) || candidate?.id !== workoutId) throw new TypeError('Invalid immutable workout identity');
-  const fingerprint = await fingerprintWorkoutV4(candidate);
+  const fingerprint = await fingerprintCandidate(candidate);
   return freeze({ state: 'prepared', workoutId, fingerprint, candidate, attemptCount: 0, lastAttemptAtEpochMs: null, lastReconciliationAtEpochMs: null });
 }
 
 export async function reconcileImmutableSave({ pendingSave, getDocFromServer, now = () => Date.now(), subtle }) {
   if (!isValidPendingSave(pendingSave)) return { status: 'invalid-pending-save' };
   try {
-    const fingerprint = await fingerprintWorkoutV4(pendingSave.candidate, { subtle });
+    const fingerprint = await fingerprintCandidate(pendingSave.candidate, { subtle });
     if (!sameFingerprint(fingerprint, pendingSave.fingerprint)) return { status: 'invalid-pending-save' };
   } catch (error) { return { status: 'fingerprint-error', pendingSave, error }; }
   const reconciledAt = Math.max(pendingSave.lastReconciliationAtEpochMs ?? 0, now());
@@ -62,8 +62,8 @@ export async function reconcileImmutableSave({ pendingSave, getDocFromServer, no
     if (!snapshot.exists()) return { status: 'absent', pendingSave: { ...pendingSave, state: 'retryable-absent', lastReconciliationAtEpochMs: reconciledAt } };
     const server = snapshot.data();
     let serverBytes;
-    try { serverBytes = canonicalizeWorkoutV4(server); } catch { return { status: 'conflict', pendingSave: { ...pendingSave, state: 'blocked-conflict', lastReconciliationAtEpochMs: reconciledAt } }; }
-    if (serverBytes === canonicalizeWorkoutV4(pendingSave.candidate)) return { status: 'matching' };
+    try { serverBytes = canonicalizeCandidate(server); } catch { return { status: 'conflict', pendingSave: { ...pendingSave, state: 'blocked-conflict', lastReconciliationAtEpochMs: reconciledAt } }; }
+    if (serverBytes === canonicalizeCandidate(pendingSave.candidate)) return { status: 'matching' };
     return { status: 'conflict', pendingSave: { ...pendingSave, state: 'blocked-conflict', lastReconciliationAtEpochMs: reconciledAt } };
   } catch (error) {
     return { status: 'indeterminate', pendingSave: { ...pendingSave, state: 'reconcile-indeterminate', lastReconciliationAtEpochMs: reconciledAt }, error };
@@ -110,7 +110,7 @@ export async function executeImmutableSave({ pendingSave, persist, clear, setDoc
     pendingSave = reconciliation.pendingSave;
   }
   let fingerprint;
-  try { fingerprint = await fingerprintWorkoutV4(pendingSave.candidate, { subtle }); }
+  try { fingerprint = await fingerprintCandidate(pendingSave.candidate, { subtle }); }
   catch (error) { return current() ? { status: 'fingerprint-error', pendingSave, error } : { status: 'stale-operation' }; }
   if (!current()) return { status: 'stale-operation' };
   if (!sameFingerprint(fingerprint, pendingSave.fingerprint)) return { status: 'invalid-pending-save' };

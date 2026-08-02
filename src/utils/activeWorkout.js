@@ -78,12 +78,18 @@ function closePriorRest(state, exerciseIndex, setIndex, timestamp) {
   if (superset) {
     for (let currentExerciseIndex = 0; currentExerciseIndex < state.exercises.length; currentExerciseIndex += 1) {
       const recordIndex = state.exercises[currentExerciseIndex].setRecords
-        ?.findIndex(record => record._activeGroupRest?.occurrenceIds === superset.occurrenceIds);
+        ?.findIndex(record => sameSuperset(record._activeGroupRest, superset));
       if (recordIndex >= 0) return closeRest(state, currentExerciseIndex, recordIndex, timestamp);
     }
   }
   if (setIndex === 0) return state;
   return closeRest(state, exerciseIndex, setIndex - 1, timestamp);
+}
+
+function sameSuperset(left, right) {
+  return left?.restPlacement === right?.restPlacement
+    && left.occurrenceIds?.length === right.occurrenceIds?.length
+    && left.occurrenceIds.every((id, index) => id === right.occurrenceIds[index]);
 }
 
 function closeRest(state, exerciseIndex, setIndex, timestamp) {
@@ -486,7 +492,7 @@ export function activeWorkoutReducer(state, action) {
         exercises: updated.exercises.map(currentExercise => ({
           ...currentExercise,
           setRecords: currentExercise.setRecords.map(current => (
-            current._activeGroupRest?.occurrenceIds === superset.occurrenceIds && groupHasWorkRemaining(updated, superset, -1, -1)
+            sameSuperset(current._activeGroupRest, superset) && groupHasWorkRemaining(updated, superset, -1, -1)
               ? (() => { const { _activeRest, _activeGroupRest, ...rest } = current; return { ...rest, actualRestSeconds: null }; })()
               : current
           )),

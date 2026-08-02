@@ -1,6 +1,6 @@
 const PHASES = ['warmup', 'performance', 'cooldown'];
-import { isValidV4WorkoutDocument } from './workoutSchema';
-import { buildCanonicalV4WorkoutDocument, canonicalizeWorkoutV4, fingerprintWorkoutV4 } from './workoutFingerprint';
+import { isValidV4WorkoutDocument, isValidV5WorkoutDocument } from './workoutSchema';
+import { buildCanonicalV4WorkoutDocument, buildCanonicalV5WorkoutDocument, canonicalizeWorkoutV4, canonicalizeWorkoutV5, fingerprintWorkoutV4, fingerprintWorkoutV5 } from './workoutFingerprint';
 const ACTIVE_PHASES = [...PHASES, 'review'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const UUID_V4_LOWERCASE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -29,6 +29,7 @@ function persistedRecord(record) {
   const common = ['index', 'completed', 'plannedRestSeconds', 'workDurationSeconds', 'actualRestSeconds'];
   const result = Object.fromEntries(common.map(key => [key, record[key]]));
   result.activeRest = record._activeRest ? { id: record._activeRest.id, startedAtEpochMs: record._activeRest.startedAt } : null;
+  if (record._activeGroupRest) result.activeGroupRest = clone(record._activeGroupRest);
   if (Object.hasOwn(record, 'targetWeight')) Object.assign(result, { targetWeight: record.targetWeight, targetReps: record.targetReps, actualWeight: record.actualWeight, actualReps: record.actualReps, recommendationReason: clone(record.recommendationReason), inputDirty: clone(record._activeDirty) });
   else if (Object.hasOwn(record, 'fullReps')) Object.assign(result, { targetReps: record.targetReps, fullReps: record.fullReps, assistedReps: record.assistedReps, eccentricReps: record.eccentricReps });
   return result;
@@ -45,7 +46,7 @@ function persistedExercise(exercise) {
   return result;
 }
 export function projectActiveWorkoutForRecovery(state) {
-  return {
+  const projected = {
     phase: state.phase,
     workoutStartedAtEpochMs: state.workoutStartedAt,
     activeWorkTimer: state.activeWorkTimer && {
@@ -60,10 +61,13 @@ export function projectActiveWorkoutForRecovery(state) {
     cooldownUndoTarget: state._cooldownUndoTarget && clone(state._cooldownUndoTarget),
     exercises: state.exercises.map(persistedExercise),
   };
+  if (state.supersets?.length) projected.supersets = clone(state.supersets);
+  return projected;
 }
 export function createRecoveryDraft({ projectId, uid, draftId, ownershipGeneration, lastMutationAtEpochMs, phaseTargets, activeWorkout }) {
   if (!isValidRecoveryIdentity({ projectId, uid })) throw new TypeError('Recovery identity must contain nonempty strings');
-  return { version: 1, projectId, uid, draftId, ownershipGeneration, lastMutationAtEpochMs, phaseTargets: clone(phaseTargets), activeWorkout: projectActiveWorkoutForRecovery(activeWorkout), pendingSave: null };
+  const projected = projectActiveWorkoutForRecovery(activeWorkout);
+  return { version: projected.supersets ? 3 : 1, projectId, uid, draftId, ownershipGeneration, lastMutationAtEpochMs, phaseTargets: clone(phaseTargets), activeWorkout: projected, pendingSave: null };
 }
 
 function validLedger(ledger, phase) {
@@ -76,15 +80,18 @@ function validLedger(ledger, phase) {
     ? ledger.openPhase === null && ledger.openedAtEpochMs === null
     : ledger.openPhase === phase && integer(ledger.openedAtEpochMs) && ledger.openedAtEpochMs <= ledger.lastAcceptedEpochMs;
 }
-function validRecord(record, exercise, index, nextTimerId) {
+function validRecord(record, exercise, index, nextTimerId, version) {
   const common = ['index', 'completed', 'plannedRestSeconds', 'workDurationSeconds', 'actualRestSeconds', 'activeRest'];
   const mode = exercise.trackingMode;
   const additional = mode === 'weighted' ? ['targetWeight', 'targetReps', 'actualWeight', 'actualReps', 'recommendationReason', 'inputDirty'] : mode === 'bodyweight' ? ['targetReps', 'fullReps', 'assistedReps', 'eccentricReps'] : [];
-  if (!exact(record, [...common, ...additional]) || record.index !== index || typeof record.completed !== 'boolean') return false;
-  if ((index === exercise.sets - 1) !== (record.plannedRestSeconds === null) || (record.plannedRestSeconds !== null && (!integer(record.plannedRestSeconds) || record.plannedRestSeconds < 5 || record.plannedRestSeconds > 600))) return false;
+  const groupKeys = Object.hasOwn(record, 'activeGroupRest') ? ['activeGroupRest'] : [];
+  if (!exact(record, [...common, ...additional, ...groupKeys]) || record.index !== index || typeof record.completed !== 'boolean') return false;
+  const groupFinalRest = version === 3 && record.activeGroupRest && index === exercise.sets - 1;
+  if ((!groupFinalRest && (index === exercise.sets - 1) !== (record.plannedRestSeconds === null)) || (record.plannedRestSeconds !== null && (!integer(record.plannedRestSeconds) || record.plannedRestSeconds < 5 || record.plannedRestSeconds > 600))) return false;
   if ((!record.completed && (record.workDurationSeconds !== null || record.actualRestSeconds !== null)) || (record.completed && !nonnegative(record.workDurationSeconds))) return false;
   if (record.activeRest !== null && (!exact(record.activeRest, ['id', 'startedAtEpochMs']) || !/^rest-[1-9]\d*$/.test(record.activeRest.id) || !integer(record.activeRest.startedAtEpochMs) || Number(record.activeRest.id.slice(5)) >= nextTimerId)) return false;
-  if (record.activeRest !== null && (record.actualRestSeconds !== null || !record.completed || index === exercise.sets - 1)) return false;
+  if (record.activeRest !== null && (record.actualRestSeconds !== null || !record.completed || (index === exercise.sets - 1 && !groupFinalRest))) return false;
+  if (record.activeGroupRest && (version !== 3 || !exact(record.activeGroupRest, ['occurrenceIds', 'restPlacement']) || !Array.isArray(record.activeGroupRest.occurrenceIds) || !['AFTER_ROUND', 'BETWEEN_EXERCISES'].includes(record.activeGroupRest.restPlacement))) return false;
   if (record.actualRestSeconds !== null && !nonnegative(record.actualRestSeconds)) return false;
   if (record.completed && index !== exercise.sets - 1 && !((record.actualRestSeconds !== null && record.activeRest === null) || (record.actualRestSeconds === null && record.activeRest !== null))) return false;
   const actualCount = value => value === '' || nonnegative(value);
@@ -112,7 +119,7 @@ function validRecord(record, exercise, index, nextTimerId) {
   if (mode === 'bodyweight') return integer(record.targetReps) && record.targetReps > 0 && ['fullReps', 'assistedReps', 'eccentricReps'].every(key => actualCount(record[key]));
   return true;
 }
-function validExercise(exercise, nextTimerId) {
+function validExercise(exercise, nextTimerId, version) {
   const common = ['id', 'occurrenceId', 'name', 'muscleGroup', 'tier', 'trackingMode', 'sets', 'prescribedSetCount', 'setRecords'];
   const extra = exercise.trackingMode === 'simple' ? ['completed'] : exercise.trackingMode === 'weighted' ? ['startingWeight', 'targetReps', 'floorReps', 'weightStep'] : exercise.trackingMode === 'bodyweight' ? ['targetReps'] : [];
   const optional = ['linkedTo', 'isActive'].filter(key => Object.hasOwn(exercise, key));
@@ -122,7 +129,7 @@ function validExercise(exercise, nextTimerId) {
   if (exercise.trackingMode === 'weighted' && (!Number.isFinite(exercise.startingWeight) || exercise.startingWeight < 0 || !integer(exercise.targetReps) || exercise.targetReps < 1 || !integer(exercise.floorReps) || exercise.floorReps < 0 || exercise.floorReps >= exercise.targetReps || !Number.isFinite(exercise.weightStep) || exercise.weightStep <= 0)) return false;
   if (exercise.trackingMode === 'bodyweight' && (!integer(exercise.targetReps) || exercise.targetReps < 1)) return false;
   let seenOpen = false;
-  if (!exercise.setRecords.every((record, index) => { if (seenOpen && record.completed) return false; if (!record.completed) seenOpen = true; return validRecord(record, exercise, index, nextTimerId) && (exercise.trackingMode === 'simple' || record.targetReps === exercise.targetReps); })) return false;
+  if (!exercise.setRecords.every((record, index) => { if (seenOpen && record.completed) return false; if (!record.completed) seenOpen = true; return validRecord(record, exercise, index, nextTimerId, version) && (exercise.trackingMode === 'simple' || record.targetReps === exercise.targetReps); })) return false;
   if (exercise.trackingMode === 'simple' && exercise.completed !== exercise.setRecords.some(record => record.completed)) return false;
   const rests = exercise.setRecords.map((record, index) => ({ record, index })).filter(item => item.record.activeRest);
   return rests.length <= 1 && (!rests.length || rests[0].index === exercise.setRecords.filter(record => record.completed).length - 1);
@@ -136,8 +143,9 @@ function validCooldownUndoTarget(workout) {
   const record = exercise?.setRecords?.[target.setIndex];
   return record?.completed === true && target.setIndex === exercise.setRecords.length - 1;
 }
-function validWorkout(workout) {
-  if (!exact(workout, ['phase', 'workoutStartedAtEpochMs', 'activeWorkTimer', 'nextTimerId', 'phaseLedger', 'phaseCandidate', 'cooldownUndoTarget', 'exercises']) || !ACTIVE_PHASES.includes(workout.phase) || !integer(workout.workoutStartedAtEpochMs) || !integer(workout.nextTimerId) || workout.nextTimerId < 1 || !validLedger(workout.phaseLedger, workout.phase) || !Array.isArray(workout.exercises) || !workout.exercises.length || new Set(workout.exercises.map(x => x.occurrenceId)).size !== workout.exercises.length || !workout.exercises.every(exercise => validExercise(exercise, workout.nextTimerId))) return false;
+function validWorkout(workout, version) {
+  const keys = ['phase', 'workoutStartedAtEpochMs', 'activeWorkTimer', 'nextTimerId', 'phaseLedger', 'phaseCandidate', 'cooldownUndoTarget', 'exercises', ...(version === 3 ? ['supersets'] : [])];
+  if (!exact(workout, keys) || !ACTIVE_PHASES.includes(workout.phase) || !integer(workout.workoutStartedAtEpochMs) || !integer(workout.nextTimerId) || workout.nextTimerId < 1 || !validLedger(workout.phaseLedger, workout.phase) || !Array.isArray(workout.exercises) || !workout.exercises.length || new Set(workout.exercises.map(x => x.occurrenceId)).size !== workout.exercises.length || !workout.exercises.every(exercise => validExercise(exercise, workout.nextTimerId, version)) || (version === 3 && !Array.isArray(workout.supersets))) return false;
   if (workout.activeWorkTimer !== null && (!exact(workout.activeWorkTimer, ['id', 'occurrenceId', 'exerciseIndex', 'setIndex', 'startedAtEpochMs']) || !/^work-[1-9]\d*$/.test(workout.activeWorkTimer.id) || Number(workout.activeWorkTimer.id.slice(5)) >= workout.nextTimerId || !integer(workout.activeWorkTimer.startedAtEpochMs) || !nonnegative(workout.activeWorkTimer.exerciseIndex) || !nonnegative(workout.activeWorkTimer.setIndex))) return false;
   const records = workout.exercises.flatMap(exercise => exercise.setRecords);
   const timerIds = records.filter(record => record.activeRest).map(record => record.activeRest.id);
@@ -150,6 +158,8 @@ function validWorkout(workout) {
     if (!record || exercise.occurrenceId !== timer.occurrenceId || record.completed || exercise.setRecords.slice(0, timer.setIndex).some(item => !item.completed)) return false;
   }
   const hasRest = records.some(record => record.activeRest !== null);
+  const groupRests = records.filter(record => record.activeGroupRest);
+  if (version === 3 && (groupRests.length > 1 || groupRests.some(record => !workout.supersets.some(group => JSON.stringify(group) === JSON.stringify(record.activeGroupRest))))) return false;
   const completed = records.filter(record => record.completed);
   if (workout.phase === 'warmup') return workout.activeWorkTimer === null && !completed.length && !hasRest && workout.phaseCandidate === null && workout.cooldownUndoTarget === null;
   if (workout.phase === 'performance') return workout.phaseCandidate === null && workout.cooldownUndoTarget === null;
@@ -165,7 +175,7 @@ function validWorkout(workout) {
 }
 function validateRecoveryDraftUnsafe(draft) {
   if (!exact(draft, ['version', 'projectId', 'uid', 'draftId', 'ownershipGeneration', 'lastMutationAtEpochMs', 'phaseTargets', 'activeWorkout', 'pendingSave'])) return false;
-  const common = (draft.version === 1 || draft.version === 2) && nonempty(draft.projectId) && nonempty(draft.uid) && UUID.test(draft.draftId) && integer(draft.ownershipGeneration) && draft.ownershipGeneration >= 1 && integer(draft.lastMutationAtEpochMs) && exact(draft.phaseTargets, ['warmupSeconds', 'performanceSeconds', 'cooldownSeconds']) && integer(draft.phaseTargets.warmupSeconds) && draft.phaseTargets.warmupSeconds >= 0 && draft.phaseTargets.warmupSeconds <= 3600 && draft.phaseTargets.warmupSeconds % 60 === 0 && nonnegative(draft.phaseTargets.performanceSeconds) && integer(draft.phaseTargets.cooldownSeconds) && draft.phaseTargets.cooldownSeconds >= 0 && draft.phaseTargets.cooldownSeconds <= 3600 && draft.phaseTargets.cooldownSeconds % 60 === 0 && validWorkout(draft.activeWorkout);
+  const common = (draft.version === 1 || draft.version === 2 || draft.version === 3) && nonempty(draft.projectId) && nonempty(draft.uid) && UUID.test(draft.draftId) && integer(draft.ownershipGeneration) && draft.ownershipGeneration >= 1 && integer(draft.lastMutationAtEpochMs) && exact(draft.phaseTargets, ['warmupSeconds', 'performanceSeconds', 'cooldownSeconds']) && integer(draft.phaseTargets.warmupSeconds) && draft.phaseTargets.warmupSeconds >= 0 && draft.phaseTargets.warmupSeconds <= 3600 && draft.phaseTargets.warmupSeconds % 60 === 0 && nonnegative(draft.phaseTargets.performanceSeconds) && integer(draft.phaseTargets.cooldownSeconds) && draft.phaseTargets.cooldownSeconds >= 0 && draft.phaseTargets.cooldownSeconds <= 3600 && draft.phaseTargets.cooldownSeconds % 60 === 0 && validWorkout(draft.activeWorkout, draft.version);
   if (!common) return false;
   if (draft.version === 1) return draft.pendingSave === null;
   return draft.pendingSave === null || validPendingSave(draft.pendingSave, draft.activeWorkout);
@@ -175,8 +185,8 @@ function validPendingSave(pendingSave, activeWorkout) {
   if (!exact(pendingSave, ['state', 'workoutId', 'fingerprint', 'candidate', 'attemptCount', 'lastAttemptAtEpochMs', 'lastReconciliationAtEpochMs'])
     || !PENDING_STATES.has(pendingSave.state) || !UUID_V4_LOWERCASE.test(pendingSave.workoutId)
     || !exact(pendingSave.fingerprint, ['canonicalization', 'algorithm', 'hex'])
-    || pendingSave.fingerprint.canonicalization !== 'workout-v4-json-v1' || pendingSave.fingerprint.algorithm !== 'SHA-256'
-    || !/^[0-9a-f]{64}$/.test(pendingSave.fingerprint.hex) || !isValidV4WorkoutDocument(pendingSave.candidate) || pendingSave.candidate?.id !== pendingSave.workoutId
+    || pendingSave.fingerprint.canonicalization !== (pendingSave.candidate?.schemaVersion === 5 ? 'workout-v5-json-v1' : 'workout-v4-json-v1') || pendingSave.fingerprint.algorithm !== 'SHA-256'
+    || !/^[0-9a-f]{64}$/.test(pendingSave.fingerprint.hex) || !(isValidV4WorkoutDocument(pendingSave.candidate) || isValidV5WorkoutDocument(pendingSave.candidate)) || pendingSave.candidate?.id !== pendingSave.workoutId
     || !integer(pendingSave.attemptCount) || pendingSave.attemptCount < 0 || activeWorkout.phase !== 'review') return false;
   if (pendingSave.state === 'prepared') return pendingSave.attemptCount === 0 && pendingSave.lastAttemptAtEpochMs === null && pendingSave.lastReconciliationAtEpochMs === null;
   return pendingSave.attemptCount >= 1 && nonnegative(pendingSave.lastAttemptAtEpochMs)
@@ -191,7 +201,7 @@ export function hydrateRecoveryDraft(draft) {
   workout._nextTimerId = workout.nextTimerId; delete workout.nextTimerId;
   workout._cooldownUndoTarget = workout.cooldownUndoTarget; delete workout.cooldownUndoTarget;
   if (workout.activeWorkTimer) { workout.activeWorkTimer.startedAt = workout.activeWorkTimer.startedAtEpochMs; delete workout.activeWorkTimer.startedAtEpochMs; }
-  workout.exercises.forEach(exercise => exercise.setRecords.forEach(record => { record._activeRest = record.activeRest && { id: record.activeRest.id, startedAt: record.activeRest.startedAtEpochMs }; delete record.activeRest; if (record.inputDirty) { record._activeDirty = record.inputDirty; delete record.inputDirty; } }));
+  workout.exercises.forEach(exercise => exercise.setRecords.forEach(record => { record._activeRest = record.activeRest && { id: record.activeRest.id, startedAt: record.activeRest.startedAtEpochMs }; delete record.activeRest; if (record.activeGroupRest) { record._activeGroupRest = record.activeGroupRest; delete record.activeGroupRest; } if (record.inputDirty) { record._activeDirty = record.inputDirty; delete record.inputDirty; } }));
   workout._phaseTimingEnabled = true;
   return freeze(workout);
 }
@@ -212,20 +222,26 @@ export function readRecoveryDraft({ storage, projectId, uid, nowEpochMs, staleAf
 }
 
 export async function verifyRecoveryDraftV2(draft, options = {}) {
-  if (!validateRecoveryDraft(draft) || draft.version !== 2) return { status: 'malformed' };
+  if (!validateRecoveryDraft(draft) || (draft.version !== 2 && draft.version !== 3)) return { status: 'malformed' };
   if (draft.pendingSave === null) return { status: 'verified' };
   try {
-    const candidate = buildCanonicalV4WorkoutDocument({
+    const input = {
       workoutId: draft.pendingSave.workoutId,
       finishRequestedAtEpochMs: draft.activeWorkout.phaseCandidate.finishRequestedAtEpochMs,
       phaseTargets: draft.phaseTargets,
       phaseActualSeconds: draft.activeWorkout.phaseCandidate.phaseActualSeconds,
       exercises: draft.activeWorkout.exercises,
-    });
-    if (canonicalizeWorkoutV4(candidate) !== canonicalizeWorkoutV4(draft.pendingSave.candidate)) return { status: 'malformed' };
+    };
+    const candidate = draft.activeWorkout.supersets?.length
+      ? buildCanonicalV5WorkoutDocument({ ...input, supersets: draft.activeWorkout.supersets })
+      : buildCanonicalV4WorkoutDocument(input);
+    const canonicalize = candidate.schemaVersion === 5 ? canonicalizeWorkoutV5 : canonicalizeWorkoutV4;
+    if (canonicalize(candidate) !== canonicalize(draft.pendingSave.candidate)) return { status: 'malformed' };
   } catch { return { status: 'malformed' }; }
   try {
-    const fingerprint = await fingerprintWorkoutV4(draft.pendingSave.candidate, options);
+    const fingerprint = draft.pendingSave.candidate.schemaVersion === 5
+      ? await fingerprintWorkoutV5(draft.pendingSave.candidate, options)
+      : await fingerprintWorkoutV4(draft.pendingSave.candidate, options);
     return fingerprint.hex === draft.pendingSave.fingerprint.hex ? { status: 'verified' } : { status: 'malformed' };
   } catch (error) { return { status: 'fingerprint-error', error }; }
 }
@@ -239,13 +255,13 @@ export async function readRecoveryDraftAsync(options) {
   let draft; try { draft = JSON.parse(raw); } catch { return { status: 'malformed' }; }
   if (!draft || typeof draft !== 'object' || Array.isArray(draft) || !Object.hasOwn(draft, 'version')) return { status: 'malformed' };
   if (draft.version === 1) return readRecoveryDraft(options);
-  if (draft.version !== 2) return { status: 'unsupported-version' };
+  if (draft.version !== 2 && draft.version !== 3) return { status: 'unsupported-version' };
   if (!nonempty(draft.projectId) || !nonempty(draft.uid)) return { status: 'malformed' };
   if (draft.projectId !== projectId) return { status: 'wrong-project' };
   if (draft.uid !== uid) return { status: 'wrong-user' };
   if (!validateRecoveryDraft(draft)) return { status: 'malformed' };
   if (!integer(nowEpochMs) || !integer(staleAfterMs) || staleAfterMs <= 0) throw new TypeError('Recovery clock policy must use safe integers');
-  const verification = await verifyRecoveryDraftV2(draft, options);
+  const verification = draft.version === 3 ? await verifyRecoveryDraftV2(draft, options) : await verifyRecoveryDraftV2(draft, options);
   if (verification.status !== 'verified') return { status: verification.status };
   if (nowEpochMs - draft.lastMutationAtEpochMs > staleAfterMs) return { status: 'stale', draft: freeze(clone(draft)) };
   const clean = freeze(clone(draft)); return { status: 'resumable', draft: clean, hydrated: hydrateRecoveryDraft(clean) };

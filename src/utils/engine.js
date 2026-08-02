@@ -201,7 +201,7 @@ function isTier4QuotaOpen(history, catalogMap, requiredTier3Groups) {
         const time = new Date(session.date).getTime();
         for (const occurrence of session.exercises) {
             if (!wasPerformed(session, occurrence)) continue;
-            const classification = session.schemaVersion === 2 || session.schemaVersion === 3 || session.schemaVersion === 4
+            const classification = session.schemaVersion === 2 || session.schemaVersion === 3 || session.schemaVersion === 4 || session.schemaVersion === 5
                 ? occurrence
                 : catalogMap.get(occurrence.id);
             if (!classification) continue;

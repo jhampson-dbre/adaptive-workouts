@@ -30,6 +30,31 @@ test('stages locally, then persists exactly the Warmup projection on first Start
   expect(session.getState()).toMatchObject({ status: 'owned', activeWorkout: { phase: 'warmup', workoutStartedAt: 1234 } });
 });
 
+test('saves a completed AFTER_ROUND superset as a truthful v5 document', async () => {
+  const coordinator = createActiveWorkoutCoordinator({ storage: memory(), locks: locks(), staleAfterMs: 1_000_000, now: () => 1_000, createUuid: () => '123e4567-e89b-42d3-a456-426614174000' });
+  const saveImmutableWorkout = vi.fn(async () => {});
+  const plan = Object.assign([exercise, { ...exercise, id: 'row', occurrenceId: 'row:1', name: 'Row' }], { supersets: [{ occurrenceIds: ['x:0', 'row:1'], restPlacement: 'AFTER_ROUND' }] });
+  const session = createActiveWorkoutSession({ coordinator, projectId: 'p', createUuid: () => '123e4567-e89b-42d3-a456-426614174001', saveImmutableWorkout, readImmutableWorkoutFromServer: async () => ({ exists: () => false }) });
+  await session.bootstrap({ uid: 'u' }); await session.stageGenerated(plan, { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 });
+  for (const action of [{ type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 2000 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 3000 }, { type: 'startSet', exerciseIndex: 1, setIndex: 0, timestamp: 4000 }, { type: 'confirmSet', exerciseIndex: 1, setIndex: 0, timestamp: 5000 }, { type: 'finishWorkout', timestamp: 6000 }]) await session.action(action);
+  await session.save();
+  expect(saveImmutableWorkout).toHaveBeenCalledWith('u', '123e4567-e89b-42d3-a456-426614174001', expect.objectContaining({ schemaVersion: 5, supersets: plan.supersets }));
+  expect(saveImmutableWorkout.mock.calls[0][2].exercises[1].setRecords[0]).toMatchObject({ plannedRestSeconds: 60, actualRestSeconds: 0 });
+});
+
+test('saves the reverse-order AFTER_ROUND finisher as the sole v5 zero-rest record', async () => {
+  const coordinator = createActiveWorkoutCoordinator({ storage: memory(), locks: locks(), staleAfterMs: 1_000_000, now: () => 1_000, createUuid: () => '123e4567-e89b-42d3-a456-426614174000' });
+  const saveImmutableWorkout = vi.fn(async () => {});
+  const plan = Object.assign([exercise, { ...exercise, id: 'row', occurrenceId: 'row:1', name: 'Row' }], { supersets: [{ occurrenceIds: ['x:0', 'row:1'], restPlacement: 'AFTER_ROUND' }] });
+  const session = createActiveWorkoutSession({ coordinator, projectId: 'p', createUuid: () => '123e4567-e89b-42d3-a456-426614174001', saveImmutableWorkout, readImmutableWorkoutFromServer: async () => ({ exists: () => false }) });
+  await session.bootstrap({ uid: 'u' }); await session.stageGenerated(plan, { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 });
+  for (const action of [{ type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex: 1, setIndex: 0, timestamp: 2000 }, { type: 'confirmSet', exerciseIndex: 1, setIndex: 0, timestamp: 3000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 4000 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 5000 }, { type: 'finishWorkout', timestamp: 6000 }]) await session.action(action);
+  await session.save();
+  const saved = saveImmutableWorkout.mock.calls[0][2];
+  expect(saved.exercises[0].setRecords[0]).toMatchObject({ plannedRestSeconds: 60, actualRestSeconds: 0 });
+  expect(saved.exercises[1].setRecords[0]).toMatchObject({ plannedRestSeconds: null, actualRestSeconds: null });
+});
+
 test('does not reset a same-UID session when authorization is re-established', async () => {
   const inspect = vi.fn(async () => ({ status: 'missing' }));
   const session = createActiveWorkoutSession({ coordinator: { inspect }, projectId: 'p', saveImmutableWorkout: async () => {}, readImmutableWorkoutFromServer: async () => ({ exists: () => false }) });
