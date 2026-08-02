@@ -53,7 +53,7 @@ describe('touch target stylesheet contract', () => {
 
   it('wraps the active Workout phase header at narrow viewports so its elapsed timer stays contained', () => {
     const narrowHeader = css.match(/@media\s*\(max-width:\s*420px\)\s*\{[\s\S]*?\.workout-header\s*\{([^}]*)\}/i)?.[1] ?? '';
-    const narrowHeading = css.match(/@media\s*\(max-width:\s*420px\)\s*\{[\s\S]*?\.workout-header h1\s*\{([^}]*)\}/i)?.[1] ?? '';
+    const narrowHeading = css.match(/@media\s*\(max-width:\s*420px\)\s*\{[\s\S]*?\.workout-header \.workout-title\s*\{([^}]*)\}/i)?.[1] ?? '';
 
     expect(narrowHeader).toMatch(/flex-wrap:\s*wrap/i);
     expect(narrowHeading).toMatch(/flex-basis:\s*100%/i);
