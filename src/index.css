@@ -1188,6 +1188,7 @@ input:focus-visible {
 .close-btn { flex-shrink: 0; }
 
 .general-defaults,
+.supersets,
 .add-exercise,
 .catalog-list {
   margin: 0;
@@ -1197,6 +1198,62 @@ input:focus-visible {
 
 .general-defaults {
   background: var(--social-bg);
+}
+
+.supersets {
+  background: var(--code-bg);
+}
+
+.supersets h3,
+.superset-editor h4 {
+  margin: 0 0 16px;
+  color: var(--text-h);
+  font-family: var(--heading);
+  font-size: var(--type-headline);
+}
+
+.superset-group,
+.superset-editor {
+  display: grid;
+  gap: 10px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.superset-summary:focus-visible {
+  outline: 4px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.superset-member,
+.superset-editor > label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+  color: var(--text-h);
+}
+
+.superset-member label {
+  display: grid;
+  flex: 1 1 220px;
+  gap: 5px;
+}
+
+.superset-editor select {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--code-bg);
+  color: var(--text-h);
+  padding: 10px 12px;
+}
+
+.superset-rest {
+  color: var(--text-h);
+  font-size: var(--type-label);
+  font-weight: 700;
 }
 
 .general-defaults h3,
@@ -1397,7 +1454,11 @@ input:focus-visible {
   }
 
   .add-form > :is(input, select, button, .tracking-field, .tracking-fields),
-  .edit-form > :is(input, select, .tracking-field, .tracking-fields) {
+  .edit-form > :is(input, select, .tracking-field, .tracking-fields),
+  .superset-member label,
+  .superset-member button,
+  .superset-editor > button,
+  .superset-editor > label {
     flex: 0 0 100%;
     width: 100%;
   }

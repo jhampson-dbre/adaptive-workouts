@@ -35,6 +35,181 @@ describe('Settings tracking configuration', () => {
 
   afterEach(cleanup);
 
+  it('creates an ordered superset with native member selects and saves it with settings', async () => {
+    renderSettings([
+      { ...exercise, id: 'bench', name: 'Bench Press', sets: 3 },
+      { ...exercise, id: 'row', name: 'Row', sets: 3 },
+    ], { supersets: [] });
+    await screen.findByRole('heading', { name: 'Supersets' });
+    fireEvent.click(screen.getByRole('button', { name: 'Add superset' }));
+    fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench' } });
+    fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save superset' }));
+    await waitFor(() => expect(storage.saveSettings).toHaveBeenCalledWith('user-1', {
+      supersets: [{ exerciseIds: ['bench', 'row'], restPlacement: 'AFTER_ROUND' }],
+    }));
+  });
+
+  it('returns ordinary create Cancel focus to the remounted Add superset button', async () => {
+    renderSettings([exercise], { supersets: [] });
+    const originalAdd = await screen.findByRole('button', { name: 'Add superset' });
+    fireEvent.click(originalAdd);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    const remountedAdd = await screen.findByRole('button', { name: 'Add superset' });
+    expect(remountedAdd).not.toBe(originalAdd);
+    await waitFor(() => expect(document.activeElement).toBe(remountedAdd));
+  });
+
+  it('returns failed create-save Cancel focus to the remounted Add superset button', async () => {
+    storage.saveSettings.mockRejectedValueOnce(new Error('offline'));
+    renderSettings([exercise, { ...exercise, id: 'row', name: 'Row' }], { supersets: [] });
+    const originalAdd = await screen.findByRole('button', { name: 'Add superset' });
+    fireEvent.click(originalAdd);
+    fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench-press' } });
+    fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save superset' }));
+    await screen.findByRole('alert');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cancel' })[0]);
+    const remountedAdd = await screen.findByRole('button', { name: 'Add superset' });
+    expect(remountedAdd).not.toBe(originalAdd);
+    await waitFor(() => expect(document.activeElement).toBe(remountedAdd));
+  });
+
+  it('keeps failed superset removal recoverable and restores the invoking control on cancel', async () => {
+    storage.saveSettings.mockRejectedValueOnce(new Error('offline'));
+    renderSettings([exercise, { ...exercise, id: 'row', name: 'Row' }], { supersets: [{ exerciseIds: ['bench-press', 'row'], restPlacement: 'AFTER_ROUND' }] });
+    const remove = await screen.findByRole('button', { name: 'Remove superset' });
+    fireEvent.click(remove);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Remove superset' })[1]);
+    const retry = await screen.findByRole('button', { name: 'Retry' });
+    await waitFor(() => expect(document.activeElement).toBe(retry));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep superset' }));
+    expect(document.activeElement).toBe(remove);
+    expect(screen.getByText('Bench Press, Row')).toBeTruthy();
+  });
+
+  it('moves focus into direct superset removal confirmation', async () => {
+    renderSettings([exercise, { ...exercise, id: 'row', name: 'Row' }], { supersets: [{ exerciseIds: ['bench-press', 'row'], restPlacement: 'AFTER_ROUND' }] });
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove superset' }));
+    const keep = await screen.findByRole('button', { name: 'Keep superset' });
+    await waitFor(() => expect(document.activeElement).toBe(keep));
+  });
+
+  it('keeps paused reactivation recoverable and returns focus to the group on success', async () => {
+    storage.saveCatalogItem.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce();
+    renderSettings([{ ...exercise, isActive: false }, { ...exercise, id: 'row', name: 'Row' }], { supersets: [{ exerciseIds: ['bench-press', 'row'], restPlacement: 'AFTER_ROUND' }] });
+    fireEvent.click(await screen.findByRole('button', { name: 'Reactivate Bench Press' }));
+    const retry = await screen.findByRole('button', { name: 'Retry' });
+    await waitFor(() => expect(document.activeElement).toBe(retry));
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Reactivate Bench Press' })).toBeNull());
+    await waitFor(() => expect(document.activeElement?.className).toContain('superset-group'));
+    expect(document.activeElement?.className).toContain('superset-summary');
+    expect(document.activeElement?.getAttribute('tabindex')).toBe('-1');
+    expect(screen.getByText('Superset active.')).toBeTruthy();
+  });
+
+  it('returns reactivation failure Cancel focus to the remounted Reactivate button', async () => {
+    storage.saveCatalogItem.mockRejectedValueOnce(new Error('offline'));
+    renderSettings([{ ...exercise, isActive: false }, { ...exercise, id: 'row', name: 'Row' }], { supersets: [{ exerciseIds: ['bench-press', 'row'], restPlacement: 'AFTER_ROUND' }] });
+    const originalReactivate = await screen.findByRole('button', { name: 'Reactivate Bench Press' });
+    fireEvent.click(originalReactivate);
+    await screen.findByRole('button', { name: 'Retry' });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    const remountedReactivate = await screen.findByRole('button', { name: 'Reactivate Bench Press' });
+    expect(remountedReactivate).not.toBe(originalReactivate);
+    await waitFor(() => expect(document.activeElement).toBe(remountedReactivate));
+  });
+
+  it('focuses the existing group that takes a removed group’s index', async () => {
+    renderSettings([exercise, { ...exercise, id: 'cable', name: 'Cable Row' }, { ...exercise, id: 'romanian', name: 'Romanian Deadlift' }, { ...exercise, id: 'barbell-curl', name: 'Barbell Curl' }, { ...exercise, id: 'hammer-curl', name: 'Hammer Curl' }], { supersets: [
+      { exerciseIds: ['bench-press', 'cable', 'romanian'], restPlacement: 'AFTER_ROUND' },
+      { exerciseIds: ['barbell-curl', 'hammer-curl'], restPlacement: 'AFTER_ROUND' },
+    ] });
+    const remainingSummary = (await screen.findByText('Barbell Curl, Hammer Curl')).closest('.superset-summary');
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Remove superset' }))[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Remove superset' })[1]);
+    await waitFor(() => expect(document.activeElement).toBe(remainingSummary));
+  });
+
+  it('blocks mismatched set edits without writing and focuses the associated Sets field', async () => {
+    renderSettings([exercise, { ...exercise, id: 'row', name: 'Row' }], { supersets: [{ exerciseIds: ['bench-press', 'row'], restPlacement: 'AFTER_ROUND' }] });
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Edit' }))[0]);
+    const sets = screen.getByLabelText('Edit sets');
+    fireEvent.change(sets, { target: { value: '4' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect((await screen.findByRole('alert')).textContent).toMatch(/cannot save sets.*bench press \(4\).*row \(3\)/i);
+    expect(sets.getAttribute('aria-invalid')).toBe('true');
+    expect(sets.getAttribute('aria-describedby')).toMatch(/edit-tracking-error/);
+    await waitFor(() => expect(document.activeElement).toBe(sets));
+    expect(storage.saveCatalogItem).not.toHaveBeenCalled();
+  });
+
+  it('moves focus with the exercise and announces its new position', async () => {
+    renderSettings([exercise, { ...exercise, id: 'row', name: 'Row' }], { supersets: [{ exerciseIds: ['bench-press', 'row'], restPlacement: 'AFTER_ROUND' }] });
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit superset' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Move down' })[0]);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Superset member 2')));
+    expect(screen.getByText('Moved Bench Press to position 2 of 2')).toBeTruthy();
+  });
+
+  it('keeps focus with an unselected member while it moves', async () => {
+    renderSettings([exercise], { supersets: [] });
+    fireEvent.click(await screen.findByRole('button', { name: 'Add superset' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Move down' })[0]);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Superset member 2')));
+  });
+
+  it('guards duplicate superset saves while one is pending', async () => {
+    let resolveSave;
+    storage.saveSettings.mockReturnValueOnce(new Promise(resolve => { resolveSave = resolve; }));
+    renderSettings([exercise, { ...exercise, id: 'row', name: 'Row' }], { supersets: [] });
+    fireEvent.click(await screen.findByRole('button', { name: 'Add superset' }));
+    fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench-press' } });
+    fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
+    const save = screen.getByRole('button', { name: 'Save superset' });
+    fireEvent.click(save); fireEvent.click(save);
+    expect(storage.saveSettings).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Saving superset…' }).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Cancel' }).disabled).toBe(true);
+    resolveSave();
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Saving superset…' })).toBeNull());
+  });
+
+  it('guards atomic pair deactivation and presents the correct pair and three-member choices', async () => {
+    let resolveBatch;
+    storage.saveSettingsAndCatalogItem.mockReturnValue(new Promise(resolve => { resolveBatch = resolve; }));
+    renderSettings([exercise, { ...exercise, id: 'row', name: 'Row' }], { supersets: [{ exerciseIds: ['bench-press', 'row'], restPlacement: 'AFTER_ROUND' }] });
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Deactivate' }))[0]);
+    const pause = screen.getByRole('button', { name: 'Deactivate and pause' });
+    await waitFor(() => expect(document.activeElement).toBe(pause));
+    expect(screen.getByRole('button', { name: 'Remove and deactivate' })).toBeTruthy();
+    fireEvent.click(pause); fireEvent.click(pause);
+    expect(storage.saveSettingsAndCatalogItem).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Deactivating…')).toBeTruthy();
+    resolveBatch();
+    await waitFor(() => expect(screen.queryByText('Deactivating…')).toBeNull());
+    cleanup();
+
+    renderSettings([exercise, { ...exercise, id: 'row', name: 'Row' }, { ...exercise, id: 'press', name: 'Press' }], { supersets: [{ exerciseIds: ['bench-press', 'row', 'press'], restPlacement: 'AFTER_ROUND' }] });
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Deactivate' }))[0]);
+    expect(screen.getAllByRole('button', { name: 'Remove and deactivate' })[0]).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Deactivate and pause' })).toBeTruthy();
+  });
+
+  it('keeps atomic deactivation recoverable after a batch failure', async () => {
+    storage.saveSettingsAndCatalogItem.mockRejectedValueOnce(new Error('offline'));
+    renderSettings([exercise, { ...exercise, id: 'row', name: 'Row' }], { supersets: [{ exerciseIds: ['bench-press', 'row'], restPlacement: 'AFTER_ROUND' }] });
+    const deactivate = (await screen.findAllByRole('button', { name: 'Deactivate' }))[0];
+    fireEvent.click(deactivate);
+    fireEvent.click(screen.getByRole('button', { name: 'Deactivate and pause' }));
+    const retry = await screen.findByRole('button', { name: 'Retry' });
+    await waitFor(() => expect(document.activeElement).toBe(retry));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep active' }));
+    expect(document.activeElement).toBe(deactivate);
+    expect(screen.getByText('Bench Press, Row')).toBeTruthy();
+  });
+
   it('announces the initial catalog and settings load once', () => {
     storage.getCatalog.mockReturnValue(new Promise(() => {}));
     storage.getSettings.mockReturnValue(new Promise(() => {}));
