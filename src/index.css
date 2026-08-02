@@ -1230,6 +1230,14 @@ input:focus-visible {
   align-items: end;
 }
 
+.tracking-fields {
+  display: flex;
+  flex: 1 1 100%;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+
 .add-form > :is(input, select),
 .edit-form > :is(input, select) {
   flex: 1 1 140px;

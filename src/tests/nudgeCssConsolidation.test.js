@@ -22,4 +22,8 @@ describe('Nudge CSS consolidation', () => {
     expect(indexCss).toMatch(/\.catalog-list ul\s*\{[^}]*list-style:\s*none[^}]*padding:\s*0[^}]*margin:\s*0/s);
     expect(indexCss).toMatch(/\.item-display\s*\{[^}]*display:\s*flex[^}]*justify-content:\s*space-between[^}]*align-items:\s*center[^}]*flex-wrap:\s*wrap[^}]*gap:\s*12px/s);
   });
+
+  it('keeps the live Settings tracking field layout', () => {
+    expect(indexCss).toMatch(/\.tracking-fields\s*\{[^}]*display:\s*flex[^}]*flex:\s*1\s+1\s+100%[^}]*gap:\s*12px[^}]*flex-wrap:\s*wrap[^}]*align-items:\s*end/s);
+  });
 });
