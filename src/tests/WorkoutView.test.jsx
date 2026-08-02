@@ -662,9 +662,18 @@ test('Finish uses a fresh reducer snapshot after Back and saves coherent v4 timi
   await act(async () => {});
   fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Plan another workout' })).toBeDefined());
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Back to plan' })).toBeDefined());
   expect(screen.getByRole('heading', { level: 2, name: 'Workout saved' })).toBe(document.activeElement);
-  fireEvent.click(screen.getByRole('button', { name: 'Plan another workout' }));
+  expect(screen.getByRole('status').textContent).toBe('This workout is complete.');
+  expect(screen.queryByText('Plan another workout')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Back to plan' }).closest('[role="status"]')).toBeNull();
+  const history = screen.getByRole('button', { name: 'Workout history' });
+  expect(history.getAttribute('aria-expanded')).toBe('false');
+  expect(history.closest('[role="status"]')).toBeNull();
+  expect(storage.getHistoryPage).not.toHaveBeenCalled();
+  fireEvent.click(history);
+  await waitFor(() => expect(storage.getHistoryPage).toHaveBeenCalledWith('test-user-id', { cursor: null, pageSize: 20 }));
+  fireEvent.click(screen.getByRole('button', { name: 'Back to plan' }));
   expect(onFinish).toHaveBeenCalledOnce();
   expect(view.api.save).toHaveBeenCalledOnce();
   expect(view.api.save.mock.calls[0][0].actualDurationSeconds).toBeGreaterThanOrEqual(0);
@@ -678,8 +687,8 @@ test('A8 saves a strict v4 document with frozen phase durations instead of the l
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Plan another workout' })).toBeDefined());
-  fireEvent.click(screen.getByRole('button', { name: 'Plan another workout' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Back to plan' })).toBeDefined());
+  fireEvent.click(screen.getByRole('button', { name: 'Back to plan' }));
   expect(onFinish).toHaveBeenCalledOnce();
   expect(view.api.save).toHaveBeenCalledOnce();
   expect(view.api.save.mock.calls[0][0]).toMatchObject({ actualDurationSeconds: 0, phaseActualSeconds: expect.any(Object) });
@@ -1091,11 +1100,11 @@ test('duplicate Save clicks share one in-flight request and disable summary navi
 
   await waitFor(() => expect(resolveSave).toBeTypeOf('function'));
   resolveSave();
-  await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Workout saved/));
+  await waitFor(() => expect(screen.getByRole('status').textContent).toBe('This workout is complete.'));
   await new Promise(resolve => setTimeout(resolve, 550));
   expect(onFinish).not.toHaveBeenCalled();
   expect(screen.queryByRole('button', { name: 'Save workout' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Plan another workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Back to plan' }));
   expect(onFinish).toHaveBeenCalledOnce();
   expect(view.api.save).toHaveBeenCalledTimes(1);
 });
@@ -1138,8 +1147,8 @@ test('session account conflict keeps Review and permits a retry after recovery',
   const failedCandidate = view.api.save.mock.calls[0][0];
   expect(screen.getByRole('region', { name: 'Workout summary' })).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Plan another workout' })).toBeDefined());
-  fireEvent.click(screen.getByRole('button', { name: 'Plan another workout' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Back to plan' })).toBeDefined());
+  fireEvent.click(screen.getByRole('button', { name: 'Back to plan' }));
   expect(onFinish).toHaveBeenCalledOnce();
   expect(view.api.save.mock.calls[1][0]).toBe(failedCandidate);
 });
@@ -1155,8 +1164,8 @@ test('history fetch failure stays separate while a timed workout saves successfu
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Plan another workout' })).toBeDefined());
-  fireEvent.click(screen.getByRole('button', { name: 'Plan another workout' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Back to plan' })).toBeDefined());
+  fireEvent.click(screen.getByRole('button', { name: 'Back to plan' }));
   expect(onFinish).toHaveBeenCalledOnce();
   expect(view.api.save).toHaveBeenCalledOnce();
 });
