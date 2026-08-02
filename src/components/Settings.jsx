@@ -534,7 +534,7 @@ export default function Settings({ onClose, onDirtyChange }) {
           </select>
         </label>
         {legDayOfWeek !== 'None' && catalog.filter(ex => ex.muscleGroup === 'Legs' && ex.tier === 3).length === 0 && (
-          <div className="alert-warning" style={{ color: 'red', marginTop: '5px' }}>
+          <div className="alert-warning error-message" style={{ marginTop: '5px' }}>
             You must add at least one Tier 3 Leg Exercise to the catalog to use Leg Day.
           </div>
         )}

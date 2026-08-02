@@ -84,3 +84,33 @@ the safe method attempted and the best available alternative.
 - Observed result: Edit exercise name, muscle group, priority tier, sets, rest override, tracking mode, and mode-specific fields have visible native labels and matching accessible names; controls stack full-width and document `scrollWidth` equals `clientWidth` at 375px.
 - Rendered evidence: `.impeccable/evidence/trek-268-settings-labels-edit-mobile.png`.
 - Material limitation: Chromium rendering does not prove physical-device Safari font metrics.
+
+---
+
+## 2026-08-02 — Settings and Login error contrast
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-269 changes the visible semantic error treatment on the Settings Leg Day warning and Login sign-in failure.
+- Approved scenario or artifact: Preserve the Nudge Settings and access surfaces, copy, and triggering behavior while reusing DESIGN.md `error-red` for blocking feedback.
+
+## Changed scenario
+
+- Scenario: Render the Settings Leg Day warning with no Tier 3 leg exercise.
+- Build / commit: `codex/epic-14-audit-remediation` working tree for TREK-269 before task commit.
+- Viewport and starting state: In-app Browser at 390 × 844; canonical synthetic emulator catalog temporarily staged with no Tier 3 leg exercise.
+- Actions: Open Manage Catalog and select Monday for Leg Day Schedule.
+- Observed result: The unchanged warning renders white (`rgb(255, 255, 255)`) on Nudge error red (`rgb(114, 28, 36)`), a computed 11.012:1 contrast ratio. Synthetic catalog tiers and Leg Day Schedule were restored after capture.
+- Rendered evidence: `.impeccable/evidence/trek-269-settings-warning-mobile.png`.
+- Material limitation: Chromium rendering does not prove physical-device Safari font metrics.
+
+## Changed scenario
+
+- Scenario: Render the Login sign-in failure.
+- Build / commit: Same TREK-269 working tree.
+- Viewport and starting state: In-app Browser at 390 × 844; signed-out local emulator state.
+- Actions: Select Sign in with Google while the browser blocks the local emulator popup.
+- Observed result: The unchanged `Sign-in failed. Please try again.` copy renders white (`rgb(255, 255, 255)`) on Nudge error red (`rgb(114, 28, 36)`), a computed 11.012:1 contrast ratio.
+- Rendered evidence: `.impeccable/evidence/trek-269-login-error-mobile.png`.
+- Material limitation: The failure is a deterministic local popup-blocking path; production identity-provider behavior was not exercised.
