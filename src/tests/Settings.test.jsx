@@ -52,6 +52,29 @@ describe('Settings tracking configuration', () => {
     ));
   });
 
+  it('gives every Settings catalog control a visible accessible name', async () => {
+    renderSettings([{ ...exercise, trackingMode: 'simple' }]);
+    await screen.findByRole('heading', { name: 'Add exercise' });
+
+    expect(screen.getByRole('combobox', { name: 'Leg Day Schedule' })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Exercise name' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Muscle group' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Priority tier' })).toBeTruthy();
+    expect(screen.getByRole('spinbutton', { name: 'Sets' })).toBeTruthy();
+    expect(screen.getByRole('spinbutton', { name: 'Rest override seconds' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Tracking mode' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Linked exercise' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByRole('textbox', { name: 'Edit exercise name' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Edit muscle group' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Edit priority tier' })).toBeTruthy();
+    expect(screen.getByRole('spinbutton', { name: 'Edit sets' })).toBeTruthy();
+    expect(screen.getByRole('spinbutton', { name: 'Edit rest override seconds' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Edit tracking mode' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Edit linked exercise' })).toBeTruthy();
+  });
+
   it('reports unsaved settings edits until their save succeeds', async () => {
     let resolveSave; storage.saveSettings.mockReturnValue(new Promise(resolve => { resolveSave = resolve; }));
     const onDirtyChange = vi.fn(); renderSettings([], { defaultRestSeconds: 60 }, onDirtyChange);

@@ -54,3 +54,33 @@ the safe method attempted and the best available alternative.
 - Observed result: At 568px the actions stack into one 487.2px column, “Confirm attempt” clears the arrow by 76.1px, and document overflow is 0px. At 760px the actions retain two 322.3px columns with 15.8px arrow clearance and 0px document overflow.
 - Rendered evidence: `.impeccable/evidence/mobile-confirm-arrow-landscape-568.png` and `.impeccable/evidence/mobile-confirm-arrow-two-column-760.png`; existing portrait capture remains at `.impeccable/evidence/mobile-confirm-arrow-fixed.png`.
 - Material limitation: Device emulation verifies Chromium layout and font metrics, not physical-device Safari rendering.
+
+---
+
+## 2026-08-02 — Settings catalog control labels
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-268 changes visible form labels and accessible names across the Settings add and edit flows.
+- Approved scenario or artifact: `.impeccable/surfaces/src-components-settings-jsx.md`; preserve the mobile-first Settings hierarchy, persistence, validation, ordering, and Close/Cancel behavior.
+
+## Changed scenario
+
+- Scenario: Verify every add-catalog control remains visibly labeled and full-width at phone size.
+- Build / commit: `codex/epic-14-audit-remediation` working tree for TREK-268 before task commit.
+- Viewport and starting state: In-app Browser at 390 × 844 (375px document viewport); canonical synthetic emulator baseline.
+- Actions: Open Manage Catalog and inspect the complete Add exercise form after the label-wrapper remediation.
+- Observed result: Exercise name, Muscle group, Priority tier, Sets, Rest override seconds, Tracking mode, and Linked exercise have visible native labels and matching accessible names; controls stack full-width and document `scrollWidth` equals `clientWidth` at 375px.
+- Rendered evidence: `.impeccable/evidence/trek-268-settings-labels-add-mobile.png`.
+- Material limitation: Chromium rendering does not prove physical-device Safari font metrics.
+
+## Changed scenario
+
+- Scenario: Verify every edit-catalog control remains visibly labeled and full-width at phone size.
+- Build / commit: Same TREK-268 working tree.
+- Viewport and starting state: In-app Browser at 390 × 844 (375px document viewport); canonical synthetic Back Squat catalog row.
+- Actions: Select Edit on Back Squat and inspect the edit form.
+- Observed result: Edit exercise name, muscle group, priority tier, sets, rest override, tracking mode, and mode-specific fields have visible native labels and matching accessible names; controls stack full-width and document `scrollWidth` equals `clientWidth` at 375px.
+- Rendered evidence: `.impeccable/evidence/trek-268-settings-labels-edit-mobile.png`.
+- Material limitation: Chromium rendering does not prove physical-device Safari font metrics.
