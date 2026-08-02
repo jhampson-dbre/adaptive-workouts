@@ -174,3 +174,23 @@ the safe method attempted and the best available alternative.
 - Observed result: Slider height is 44px at every viewport; `appearance: auto` and the ink accent preserve the native track; ArrowLeft changes 70 to 65 and ArrowRight restores 70; the blue 4px focus outline remains visible; there is no horizontal overflow or console warning/error.
 - Rendered evidence: `.impeccable/evidence/trek-273-plan-slider-mobile.png` and `.impeccable/evidence/trek-273-plan-slider-desktop.png`.
 - Material limitation: Chromium emulation verifies layout, keyboard behavior, and computed hit area, not physical-device Safari touch acquisition.
+
+---
+
+## 2026-08-02 - Workout state heading hierarchy
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-274 hardens the production page outline so the global Nudge heading remains the sole `h1` while WorkoutView state headings use the next semantic level.
+- Approved scenario or artifact: `.impeccable/surfaces/src-app-jsx.md`; preserve active-workout, Review, recovery, and saved presentation, copy, focus transitions, and session behavior.
+
+## Changed scenario
+
+- Scenario: Verify the top-level heading and focus lifecycle across active, Review, recovery, and saved WorkoutView states.
+- Build / commit: `codex/epic-14-audit-remediation` working tree for TREK-274 before task commit.
+- Viewport and starting state: Chrome DevTools at 390 x 844; canonical synthetic emulator baseline with generated workout data.
+- Actions: Generate and start a workout, confirm one set, finish early through Cooldown and Review, save, then start another workout and reload to exercise recovery before resuming.
+- Observed result: Every state retained exactly one page-level `h1` named Nudge. Warmup/Performance, Review, Resume workout?, and Workout saved rendered as focused `h2` headings with unchanged actions. The confirmation pass measured the active title as ink `rgb(5, 5, 5)`, `text-transform: none`, 45.12px at 390px, and no horizontal overflow after removing a conflicting dormant `h2` rule.
+- Rendered evidence: `.impeccable/evidence/trek-274-workout-active-mobile.png`, `.impeccable/evidence/trek-274-workout-review-mobile.png`, `.impeccable/evidence/trek-274-workout-recovery-mobile.png`, and `.impeccable/evidence/trek-274-workout-saved-mobile.png`.
+- Material limitation: Chromium accessibility snapshots and keyboard focus prove semantic hierarchy and focus behavior; they do not replace physical-device screen-reader testing.

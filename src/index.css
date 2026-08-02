@@ -47,7 +47,7 @@ p { margin: 0; }
 
 @media (max-width: 420px) {
   .workout-header { flex-wrap: wrap; }
-  .workout-header h1 { flex-basis: 100%; }
+  .workout-header .workout-title { flex-basis: 100%; }
 }
 
 /* Nudge core journey — TREK-233 */
@@ -467,23 +467,13 @@ input:focus-visible {
   padding: 30px clamp(22px, 7vw, 52px) 28px;
 }
 
-.workout-header h1 {
+.workout-header .workout-title {
   grid-column: 1;
   margin: 0;
   font-size: clamp(2.8rem, 11vw, 4.8rem);
   font-weight: 700;
   letter-spacing: -0.04em;
   line-height: 0.94;
-}
-
-.workout-header h2 {
-  grid-row: 1;
-  grid-column: 1;
-  margin: 0 0 4px;
-  color: #454545;
-  font-size: 0.9rem;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
 }
 
 .timer {
@@ -811,7 +801,7 @@ input:focus-visible {
   background: #ffffff;
 }
 
-.workout-summary h1 {
+.workout-summary h2 {
   margin: 0 0 28px;
   font-size: clamp(3rem, 12vw, 5rem);
   font-weight: 700;
@@ -970,7 +960,7 @@ input:focus-visible {
   background: #ffffff;
 }
 
-.recovery-panel h1 {
+.recovery-panel h2 {
   margin: 0 0 20px;
   color: #050505;
   font-size: clamp(2.7rem, 11vw, 4.8rem);
@@ -1077,7 +1067,7 @@ input:focus-visible {
     grid-template-columns: minmax(0, 1fr) 84px;
   }
 
-  .workout-header h1 {
+  .workout-header .workout-title {
     font-size: clamp(2rem, 9vw, 3rem);
   }
 
