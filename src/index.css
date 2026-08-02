@@ -468,8 +468,8 @@ input:focus-visible {
 .generate-btn:disabled,
 .start-btn:disabled,
 .set-row.ready .set-timing button:disabled {
-  background: #d0cdc4;
-  color: #5f5d57;
+  background: var(--social-bg);
+  color: var(--text);
   cursor: wait;
 }
 
@@ -533,6 +533,8 @@ input:focus-visible {
 
 .workout-checklist {
   margin: 0;
+  padding: 0;
+  list-style: none;
   background: var(--bg);
 }
 
@@ -594,7 +596,7 @@ input:focus-visible {
 }
 
 .exercise-name small {
-  color: #5a5a5a;
+  color: var(--text);
 }
 
 .selected .exercise-name small {
@@ -636,7 +638,7 @@ input:focus-visible {
 .set-row {
   padding: 18px clamp(22px, 7vw, 52px);
   border: 0;
-  border-bottom: 1px solid #b8b5ad;
+  border-bottom: 1px solid var(--social-bg);
   border-radius: 0;
   background: #ffffff;
 }
@@ -644,7 +646,7 @@ input:focus-visible {
 .set-row.locked {
   opacity: 1;
   background: #eceae3;
-  color: #5a5a5a;
+  color: var(--text);
 }
 
 .set-row.active-work {
@@ -1367,6 +1369,13 @@ input:focus-visible {
   border-radius: 0;
   background: #ffffff;
   color: #721c24;
+}
+
+.settings-load-error {
+  display: grid;
+  gap: 16px;
+  padding: 28px clamp(22px, 5vw, 52px);
+  background: var(--social-bg);
 }
 
 .settings-view :is(button, input, select):focus-visible {

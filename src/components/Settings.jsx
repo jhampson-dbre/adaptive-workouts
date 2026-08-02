@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import React, { useState, useEffect, useContext, useRef, useCallback } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { getCatalog, saveCatalogItem, getSettings, saveSettings } from '../utils/storage';
 import { isValidCatalogExercise, normalizeCatalogExercise, TRACKING_MODES } from '../utils/workoutSchema';
@@ -110,6 +110,7 @@ function TrackingFields({ prefix = '', mode, values, setters, invalid = false, e
 export default function Settings({ onClose, onDirtyChange }) {
   const user = useContext(AuthContext);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [catalog, setCatalog] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [isCatalogMutating, setIsCatalogMutating] = useState(false);
@@ -117,10 +118,14 @@ export default function Settings({ onClose, onDirtyChange }) {
   const [legDayOfWeek, setLegDayOfWeek] = useState('None');
   const [defaultRestSeconds, setDefaultRestSeconds] = useState('60');
   const [settingsError, setSettingsError] = useState('');
+  const [legDayError, setLegDayError] = useState('');
+  const [catalogError, setCatalogError] = useState(null);
   const [warmupMinutes, setWarmupMinutes] = useState('10');
   const [cooldownMinutes, setCooldownMinutes] = useState('5');
   const [savedSettings, setSavedSettings] = useState(null);
   const [phaseErrors, setPhaseErrors] = useState({ warmup: '', cooldown: '' });
+  const settingsSaveQueue = useRef({});
+  const settingsSaveVersion = useRef({});
   
   // New exercise state
   const [newName, setNewName] = useState('');
@@ -157,17 +162,17 @@ export default function Settings({ onClose, onDirtyChange }) {
   const [editDirty, setEditDirty] = useState(false);
   const editSaveInFlight = useRef(false);
 
-  useEffect(() => {
-    const loadData = async () => {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const fetchedCatalog = await getCatalog(user.uid);
-        setCatalog(fetchedCatalog);
-        
-        const currentSettings = await getSettings(user.uid);
+  const loadData = useCallback(async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setLoadError('');
+    try {
+      const fetchedCatalog = await getCatalog(user.uid);
+      const currentSettings = await getSettings(user.uid);
+      setCatalog(fetchedCatalog);
         setLegDayOfWeek(currentSettings.legDayOfWeek || 'None');
         setDefaultRestSeconds(String(currentSettings.defaultRestSeconds ?? 60));
         setWarmupMinutes(String((currentSettings.warmupSeconds ?? 600) / 60));
@@ -178,15 +183,15 @@ export default function Settings({ onClose, onDirtyChange }) {
           warmupMinutes: String((currentSettings.warmupSeconds ?? 600) / 60),
           cooldownMinutes: String((currentSettings.cooldownSeconds ?? 300) / 60),
         });
-      } catch (error) {
-        console.error("Failed to load data:", error);
-        setSavedSettings({ legDayOfWeek: 'None', defaultRestSeconds: '60', warmupMinutes: '10', cooldownMinutes: '5' });
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
+    } catch (error) {
+      console.error("Failed to load data:", error);
+      setLoadError('Could not load Settings. Try again.');
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const hasNewExercise = Boolean(newName || newGroup !== 'Chest' || Number(newTier) !== 3 || Number(newSets) !== 3 || newLink || newTrackingMode !== 'simple' || newStartingWeight || newTargetReps || newFloorReps || newWeightStep || newRestSeconds);
   const hasChangedSettings = savedSettings && (legDayOfWeek !== savedSettings.legDayOfWeek || defaultRestSeconds !== savedSettings.defaultRestSeconds || warmupMinutes !== savedSettings.warmupMinutes || cooldownMinutes !== savedSettings.cooldownMinutes);
@@ -195,25 +200,56 @@ export default function Settings({ onClose, onDirtyChange }) {
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   const handleSaveSettings = async (updates) => {
-    try {
-      await saveSettings(user.uid, updates);
+    const field = Object.keys(updates)[0];
+    const version = (settingsSaveVersion.current[field] || 0) + 1;
+    settingsSaveVersion.current[field] = version;
+    const previousSave = settingsSaveQueue.current[field];
+    const save = (async () => {
+      if (previousSave) await previousSave;
+      try {
+        await saveSettings(user.uid, updates);
+        return true;
+      } catch (error) {
+        console.error("Failed to save settings:", error);
+        return false;
+      }
+    })();
+    settingsSaveQueue.current[field] = save;
+    const saved = await save;
+    if (version !== settingsSaveVersion.current[field]) return null;
+    if (saved) {
       setSavedSettings(current => ({ ...current,
         ...(Object.hasOwn(updates, 'legDayOfWeek') ? { legDayOfWeek: updates.legDayOfWeek } : {}),
         ...(Object.hasOwn(updates, 'defaultRestSeconds') ? { defaultRestSeconds: String(updates.defaultRestSeconds) } : {}),
+        ...(Object.hasOwn(updates, 'warmupSeconds') ? { warmupMinutes: String(updates.warmupSeconds / 60) } : {}),
+        ...(Object.hasOwn(updates, 'cooldownSeconds') ? { cooldownMinutes: String(updates.cooldownSeconds / 60) } : {}),
       }));
-    } catch (error) {
-      console.error("Failed to save settings:", error);
     }
+    return saved;
   };
 
-  const handleDefaultRestBlur = () => {
+  const handleDefaultRestBlur = async () => {
     const value = Number(defaultRestSeconds);
     if (!isValidRestSeconds(value)) {
       setSettingsError('Default rest must be a whole number from 5 through 600 seconds.');
       return;
     }
-    setSettingsError('');
-    handleSaveSettings({ defaultRestSeconds: value });
+    const saved = await handleSaveSettings({ defaultRestSeconds: value });
+    if (saved === true) {
+      setSettingsError('');
+    } else if (saved === false) {
+      setSettingsError('Could not save default rest. Try again.');
+    }
+  };
+
+  const handleLegDayChange = async (value) => {
+    setLegDayOfWeek(value);
+    const saved = await handleSaveSettings({ legDayOfWeek: value });
+    if (saved === true) {
+      setLegDayError('');
+    } else if (saved === false) {
+      setLegDayError('Could not save Leg Day. Try again.');
+    }
   };
 
   const handlePhaseBlur = async (phase, minutes) => {
@@ -232,12 +268,10 @@ export default function Settings({ onClose, onDirtyChange }) {
       }));
       return;
     }
-    setPhaseErrors(current => ({ ...current, [phase]: '' }));
-    try {
-      await saveSettings(user.uid, { [`${phase}Seconds`]: value * 60 });
-      setSavedSettings(current => ({ ...current, [`${phase}Minutes`]: String(value) }));
-    } catch (error) {
-      console.error('Failed to save phase setting:', error);
+    const saved = await handleSaveSettings({ [`${phase}Seconds`]: value * 60 });
+    if (saved === true) {
+      setPhaseErrors(current => ({ ...current, [phase]: '' }));
+    } else if (saved === false) {
       setPhaseErrors(current => ({
         ...current,
         [phase]: `Could not save ${phase === 'warmup' ? 'Warmup' : 'Cooldown'}. Try again.`,
@@ -251,6 +285,7 @@ export default function Settings({ onClose, onDirtyChange }) {
         await saveCatalogItem(user.uid, changedItem);
       }
       setCatalog(newCatalog);
+      setCatalogError(null);
     } catch (error) {
       console.error("Failed to save catalog item:", error);
       throw error;
@@ -275,6 +310,7 @@ export default function Settings({ onClose, onDirtyChange }) {
       // Rollback the optimistic UI update
       console.error('Failed to toggle exercise active state:', error);
       setCatalog(catalog);
+      setCatalogError({ id, message: 'Could not update the catalog. Try again.' });
     } finally {
       catalogMutationInFlight.current = false;
       setIsCatalogMutating(false);
@@ -456,6 +492,19 @@ export default function Settings({ onClose, onDirtyChange }) {
     </div>
   );
 
+  if (loadError) return (
+    <div className="settings-view">
+      <div className="settings-header">
+        <h2>Settings</h2>
+        <button className="close-btn" onClick={onClose}>Close</button>
+      </div>
+      <div className="settings-load-error">
+        <div className="catalog-form-error" role="alert">{loadError}</div>
+        <button className="save-btn" onClick={loadData}>Retry</button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="settings-view">
       <div className="settings-header">
@@ -524,15 +573,13 @@ export default function Settings({ onClose, onDirtyChange }) {
       <div className="setting-group">
         <label>
           Leg Day Schedule
-          <select value={legDayOfWeek} onChange={(e) => {
-            setLegDayOfWeek(e.target.value);
-            handleSaveSettings({ legDayOfWeek: e.target.value });
-          }}>
+          <select value={legDayOfWeek} onChange={e => handleLegDayChange(e.target.value)} aria-invalid={legDayError ? true : undefined} aria-describedby={legDayError ? 'leg-day-error' : undefined}>
             {['None', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
               <option key={day} value={day}>{day}</option>
             ))}
           </select>
         </label>
+        {legDayError && <div id="leg-day-error" className="catalog-form-error" role="alert">{legDayError} <button type="button" className="cancel-btn" onClick={() => handleLegDayChange(legDayOfWeek)}>Retry Leg Day</button></div>}
         {legDayOfWeek !== 'None' && catalog.filter(ex => ex.muscleGroup === 'Legs' && ex.tier === 3).length === 0 && (
           <div className="alert-warning error-message" style={{ marginTop: '5px' }}>
             You must add at least one Tier 3 Leg Exercise to the catalog to use Leg Day.
@@ -762,6 +809,7 @@ export default function Settings({ onClose, onDirtyChange }) {
                       {ex.isActive === false ? 'Reactivate' : 'Deactivate'}
                     </button>
                   </div>
+                  {catalogError?.id === ex.id && <div className="catalog-form-error" role="alert">{catalogError.message}</div>}
                 </div>
               )}
             </li>

@@ -254,3 +254,23 @@ the safe method attempted and the best available alternative.
 - Observed result: Baseline unavailable receives the approved 4px focus-blue outline, the retry control measures 128.5 x 50.8px at normal size, and the surface fills the 844px dynamic viewport without horizontal overflow. Under stress, the long heading, 280-character diagnostic, and retry action remain contained; document and surface client/scroll widths remain 390px and the action retains its 44px logical minimum.
 - Rendered evidence: Chrome DevTools MCP screenshots inspected inline for the normal baseline error and the 200%/RTL/long-content confirmation.
 - Material limitation: Unavailable emulator ports deterministically prove the baseline failure presentation and recovery affordance, not a successful authorization transition or physical-device viewport behavior.
+
+---
+
+## 2026-08-02 - Source polish and Settings recovery
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-278 changes visible Settings failure recovery and removes native list styling from the authored workout sequence.
+- Approved scenario or artifact: Preserve the Clear Signal identity, existing Settings hierarchy, workout behavior, and copy except concise failure guidance.
+
+## Changed scenario
+
+- Scenario: Verify workout list normalization and Settings at phone and desktop widths, including the blocking load-error presentation.
+- Build / commit: `codex/epic-14-audit-remediation` working tree for TREK-278 before task commit.
+- Viewport and starting state: Chrome DevTools MCP at 390 x 844 and 1280 x 900; canonical synthetic emulator workout and Settings data.
+- Actions: Generate a workout and inspect its authored exercise list plus disabled/locked rows; open Settings at both widths; render the exact production-class markup for load, default-rest, Leg Day, and deep-row catalog failures as transient layout probes at their production insertion points.
+- Observed result: The workout list computes to `list-style: none`, zero inline-start padding, and zero horizontal overflow. Disabled and locked states use existing design tokens. Settings retains its hierarchy with no horizontal overflow at either width. The load error presents one alert and a full-width 44px Retry action; field-save alerts remain visibly adjacent and Leg Day exposes a direct Retry control; a catalog-toggle alert stays inside its triggering phone row even near the end of the 15-item list. Focused tests separately verify each real failure, rollback, dirty-state, and retry lifecycle. Chrome reported no warnings or errors.
+- Rendered evidence: Chrome DevTools MCP screenshots inspected inline for workout phone, Settings phone and desktop, the phone load error, default-rest/Leg Day errors, and a deep phone catalog-row error.
+- Material limitation: Failure screenshots use transient DOM layout probes with exact production classes and insertion points; focused component tests prove the production state transitions and retry behavior. Chromium emulation does not replace physical-device or screen-reader testing.
