@@ -22,7 +22,7 @@ p { margin: 0; }
 
 .secondary-action { opacity: .75; }
 
-.recommendation-reason, .bodyweight-total { margin-top: 10px; font-size: 14px; }
+.recommendation-reason, .bodyweight-total { margin-top: 10px; font-size: var(--type-metadata); }
 
 .timer-overtime { color: #721c24; font-family: var(--mono); font-weight: 700; }
 
@@ -88,10 +88,25 @@ p { margin: 0; }
   --shadow: none;
   --sans: 'Atkinson Hyperlegible', sans-serif;
   --heading: 'Barlow Condensed', 'Atkinson Hyperlegible', sans-serif;
+  --type-display: clamp(2.8rem, 11vw, 5rem);
+  --type-headline: clamp(1.9rem, 8vw, 3rem);
+  --type-title: 1.45rem;
+  --type-body: 1rem;
+  --type-label: .72rem;
+  --type-metadata: .875rem;
+  --type-wordmark: clamp(2.4rem, 9vw, 3.4rem);
+  --type-value-hero: clamp(3.4rem, 14vw, 5.5rem);
+  --type-timer: clamp(1.7rem, 7vw, 2.6rem);
+  --type-timer-mobile: clamp(1.35rem, 6vw, 1.8rem);
+  --type-exercise-number: 2.5rem;
+  --type-set-value: 1.6rem;
+  --type-work-timer: 2rem;
   color-scheme: light;
   color: var(--text);
   background: var(--bg);
-  font: 18px/1.4 var(--sans);
+  font-family: var(--sans);
+  font-size: 112.5%;
+  line-height: 1.4;
   letter-spacing: 0;
 }
 
@@ -152,7 +167,7 @@ input:focus-visible {
 .app-header h1 {
   margin: 0;
   color: #050505;
-  font-size: clamp(2.4rem, 9vw, 3.4rem);
+  font-size: var(--type-wordmark);
   font-weight: 700;
   letter-spacing: -0.04em;
   line-height: 1;
@@ -204,7 +219,7 @@ input:focus-visible {
   justify-items: center;
   gap: 8px;
   color: #ffffff;
-  font-size: 0.72rem;
+  font-size: var(--type-label);
   font-weight: 700;
   letter-spacing: 0.03em;
   line-height: 1;
@@ -267,7 +282,7 @@ input:focus-visible {
 .plan-intro h2 {
   max-width: 11ch;
   margin: 0 0 18px;
-  font-size: clamp(2.7rem, 11vw, 5rem);
+  font-size: var(--type-display);
   font-weight: 700;
   letter-spacing: -0.04em;
   line-height: 0.94;
@@ -277,7 +292,7 @@ input:focus-visible {
 .plan-intro p {
   max-width: 42ch;
   color: #454545;
-  font-size: 1.05rem;
+  font-size: var(--type-body);
 }
 
 .slider-container {
@@ -300,7 +315,7 @@ input:focus-visible {
 .slider-value {
   float: none;
   color: #101010;
-  font-size: clamp(3.4rem, 14vw, 5.5rem);
+  font-size: var(--type-value-hero);
   letter-spacing: -0.04em;
   line-height: 0.8;
 }
@@ -324,14 +339,14 @@ input:focus-visible {
 .groups-container summary {
   cursor: pointer;
   color: #101010;
-  font-size: 1.45rem;
+  font-size: var(--type-title);
   font-weight: 700;
 }
 
 .groups-container h3 {
   margin: 0 0 6px;
   color: #101010;
-  font-size: 1.45rem;
+  font-size: var(--type-title);
   font-weight: 700;
 }
 
@@ -416,7 +431,7 @@ input:focus-visible {
   border-radius: 0;
   background: var(--accent);
   color: #050505;
-  font-size: clamp(1.9rem, 8vw, 3rem);
+  font-size: var(--type-headline);
   font-weight: 700;
   line-height: 1;
   text-align: left;
@@ -470,10 +485,12 @@ input:focus-visible {
 .workout-header .workout-title {
   grid-column: 1;
   margin: 0;
-  font-size: clamp(2.8rem, 11vw, 4.8rem);
+  font-size: var(--type-display);
   font-weight: 700;
   letter-spacing: -0.04em;
   line-height: 0.94;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
 }
 
 .timer {
@@ -486,7 +503,8 @@ input:focus-visible {
   padding: 10px;
   background: #050505;
   color: #ffffff;
-  font: 700 clamp(1.7rem, 7vw, 2.6rem)/1 var(--heading);
+  font: 700 var(--type-timer)/1 var(--heading);
+  font-variant-numeric: tabular-nums;
 }
 
 .workout-help {
@@ -494,7 +512,9 @@ input:focus-visible {
   padding: 16px clamp(22px, 7vw, 52px);
   background: #050505;
   color: #ffffff;
-  font-size: 0.9rem;
+  font-size: var(--type-body);
+  line-height: 1.5;
+  letter-spacing: .01em;
 }
 
 .start-btn {
@@ -506,7 +526,7 @@ input:focus-visible {
   padding: 24px clamp(22px, 7vw, 52px) 10px;
   background: var(--bg);
   color: #101010;
-  font-size: 1rem;
+  font-size: var(--type-label);
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -553,7 +573,7 @@ input:focus-visible {
 
 .exercise-number {
   color: #101010;
-  font-size: 2.5rem;
+  font-size: var(--type-exercise-number);
   font-weight: 700;
   letter-spacing: -0.04em;
   line-height: 1;
@@ -570,7 +590,7 @@ input:focus-visible {
 
 .exercise-name strong {
   overflow-wrap: anywhere;
-  font-size: 1.15rem;
+  font-size: var(--type-body);
 }
 
 .exercise-name small {
@@ -584,7 +604,7 @@ input:focus-visible {
 .exercise-status {
   max-width: 18ch;
   color: #454545;
-  font-size: 0.78rem;
+  font-size: var(--type-metadata);
   text-align: right;
 }
 
@@ -639,7 +659,7 @@ input:focus-visible {
 }
 
 .set-row-heading {
-  font-size: 1rem;
+  font-size: var(--type-body);
   text-transform: capitalize;
 }
 
@@ -656,12 +676,14 @@ input:focus-visible {
   border-radius: 0;
   background: #ffffff;
   color: #101010;
-  font-size: 1.6rem;
+  font-size: var(--type-set-value);
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .set-timing {
   margin-top: 18px;
+  font-variant-numeric: tabular-nums;
 }
 
 .set-row.ready .set-timing {
@@ -686,7 +708,7 @@ input:focus-visible {
 
 .active-work .work-timer {
   grid-column: 1 / -1;
-  font: 700 2rem/1 var(--sans);
+  font: 700 var(--type-work-timer)/1 var(--sans);
 }
 
 .active-work .set-timing button {
@@ -707,7 +729,7 @@ input:focus-visible {
   border: 1px solid #ffffff;
   background: #050505;
   color: #ffffff;
-  font-size: 1rem;
+  font-size: var(--type-body);
   text-align: center;
   text-transform: none;
 }
@@ -735,7 +757,7 @@ input:focus-visible {
   border-radius: 0;
   background: transparent;
   color: #101010;
-  font-size: 1rem;
+  font-size: var(--type-body);
   text-transform: none;
 }
 
@@ -803,10 +825,11 @@ input:focus-visible {
 
 .workout-summary h2 {
   margin: 0 0 28px;
-  font-size: clamp(3rem, 12vw, 5rem);
+  font-size: var(--type-display);
   font-weight: 700;
   letter-spacing: -0.04em;
   line-height: 0.9;
+  text-wrap: balance;
 }
 
 .workout-summary > ul {
@@ -894,6 +917,13 @@ input:focus-visible {
   color: #454545;
 }
 
+.history-card-heading > p,
+.history-set-timing,
+.history-phase-durations,
+.completed-set-details {
+  font-variant-numeric: tabular-nums;
+}
+
 .history-exercise {
   border-color: #101010;
 }
@@ -963,10 +993,11 @@ input:focus-visible {
 .recovery-panel h2 {
   margin: 0 0 20px;
   color: #050505;
-  font-size: clamp(2.7rem, 11vw, 4.8rem);
+  font-size: var(--type-display);
   font-weight: 700;
   letter-spacing: -0.04em;
   line-height: 0.94;
+  text-wrap: balance;
 }
 
 .recovery-message,
@@ -994,7 +1025,7 @@ input:focus-visible {
   padding: 12px 16px;
   border: 1px solid #101010;
   border-radius: 0;
-  font-size: 1rem;
+  font-size: var(--type-body);
   text-align: left;
 }
 
@@ -1056,7 +1087,7 @@ input:focus-visible {
   }
 
   .journey-progress li {
-    font-size: 0.65rem;
+    font-size: var(--type-label);
   }
 
   .checkbox-grid {
@@ -1067,13 +1098,9 @@ input:focus-visible {
     grid-template-columns: minmax(0, 1fr) 84px;
   }
 
-  .workout-header .workout-title {
-    font-size: clamp(2rem, 9vw, 3rem);
-  }
-
   .timer {
     min-width: 0;
-    font-size: clamp(1.35rem, 6vw, 1.8rem);
+    font-size: var(--type-timer-mobile);
   }
 
   .exercise-toggle {
@@ -1114,8 +1141,10 @@ input:focus-visible {
 
 .settings-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   min-height: 88px;
   margin: 0;
   padding: 16px clamp(22px, 5vw, 52px);
@@ -1135,7 +1164,7 @@ input:focus-visible {
 
 .settings-header h2 {
   color: #ffffff;
-  font-size: clamp(2.8rem, 11vw, 5rem);
+  font-size: var(--type-display);
   line-height: .94;
 }
 
@@ -1150,6 +1179,8 @@ input:focus-visible {
   color: #050505;
   box-shadow: none;
 }
+
+.close-btn { flex-shrink: 0; }
 
 .general-defaults,
 .add-exercise,
@@ -1168,7 +1199,7 @@ input:focus-visible {
 .catalog-list h3 {
   margin-bottom: 16px;
   color: #050505;
-  font-size: clamp(1.9rem, 8vw, 3rem);
+  font-size: var(--type-headline);
   line-height: 1;
 }
 
@@ -1183,7 +1214,7 @@ input:focus-visible {
 .setting-group label,
 .tracking-field {
   color: #050505;
-  font-size: 18px;
+  font-size: var(--type-body);
 }
 
 .tracking-field {
@@ -1292,7 +1323,7 @@ input:focus-visible {
 .item-info strong {
   flex-basis: 100%;
   color: #050505;
-  font-size: 1.45rem;
+  font-size: var(--type-title);
 }
 
 .badge,
@@ -1302,7 +1333,7 @@ input:focus-visible {
   background: transparent;
   color: #454545;
   padding: 0;
-  font-size: .72rem;
+  font-size: var(--type-label);
 }
 
 .status-badge {

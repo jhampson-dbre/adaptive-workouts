@@ -19,7 +19,7 @@ export default function Login() {
     <div className="login-container" style={{ padding: '2rem', textAlign: 'center' }}>
       <h1>Nudge</h1>
       <p>Please sign in to access your workouts across devices.</p>
-      <button autoFocus onClick={handleSignIn} style={{ padding: '10px 20px', fontSize: '1.2rem' }}>
+      <button autoFocus onClick={handleSignIn} style={{ padding: '10px 20px' }}>
         Sign in with Google
       </button>
       {error && <p className="error-message" role="alert" style={{ marginTop: '1rem' }}>{error}</p>}

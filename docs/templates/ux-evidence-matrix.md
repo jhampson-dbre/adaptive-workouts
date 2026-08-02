@@ -194,3 +194,33 @@ the safe method attempted and the best available alternative.
 - Observed result: Every state retained exactly one page-level `h1` named Nudge. Warmup/Performance, Review, Resume workout?, and Workout saved rendered as focused `h2` headings with unchanged actions. The confirmation pass measured the active title as ink `rgb(5, 5, 5)`, `text-transform: none`, 45.12px at 390px, and no horizontal overflow after removing a conflicting dormant `h2` rule.
 - Rendered evidence: `.impeccable/evidence/trek-274-workout-active-mobile.png`, `.impeccable/evidence/trek-274-workout-review-mobile.png`, `.impeccable/evidence/trek-274-workout-recovery-mobile.png`, and `.impeccable/evidence/trek-274-workout-saved-mobile.png`.
 - Material limitation: Chromium accessibility snapshots and keyboard focus prove semantic hierarchy and focus behavior; they do not replace physical-device screen-reader testing.
+
+---
+
+## 2026-08-02 - Nudge typography roles
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-276 changes typography across production surfaces, including hierarchy, reading size, wrapping, and numeric alignment.
+- Approved scenario or artifact: `DESIGN.md` Clear Signal direction and the Impeccable typeset brief; preserve copy, behavior, and the Barlow Condensed / Atkinson Hyperlegible families while establishing display, headline, title, body, label, metadata, and purpose-specific numeric roles.
+
+## Changed scenario
+
+- Scenario: Verify active workout and recovery typography at desktop and phone widths.
+- Build / commit: `codex/epic-14-audit-remediation` working tree for TREK-276 before task commit.
+- Viewport and starting state: Chrome DevTools MCP at 1280 x 900 and 390 x 844; canonical synthetic emulator workout in active and recovery states.
+- Actions: Resume the workout, inspect the wordmark, state heading, help copy, journey labels, status metadata, timer, wrapping, and recovery heading.
+- Observed result: The approved display/action family remains Barlow Condensed 700 and body family remains Atkinson Hyperlegible. At 390px, the active heading computes to 50.4px, body help to 18px/27px with 0.18px tracking, journey labels to 12.96px, status metadata to 15.75px, and the timer to 24.3px. The recovery heading wraps without clipping; desktop and phone have no horizontal overflow.
+- Rendered evidence: Chrome DevTools MCP screenshots inspected inline for active desktop, active phone, and recovery phone states; font loading reported both families available with `document.fonts.status = loaded`.
+- Material limitation: Chrome DevTools MCP denied screenshot-file persistence within the workspace, so rendered captures were inspected inline rather than saved. Chromium rendering does not prove physical-device Safari font metrics.
+
+## Changed scenario
+
+- Scenario: Verify Settings and private-access typography at phone width and 200% text scaling.
+- Build / commit: Same TREK-276 working tree.
+- Viewport and starting state: Chrome DevTools MCP at 390 x 844; Settings open on the canonical synthetic baseline and the signed-out local-emulator surface.
+- Actions: Inspect Settings hierarchy and catalog roles, then apply a temporary 200% root text-size override through DevTools to stress reflow; repeat on private access.
+- Observed result: At normal size, Settings uses a 50.4px display heading, 34.2px section heading, 18px labels, 26.1px catalog titles, and 12.96px badges with no horizontal overflow. At 200% text scaling, the Settings header wraps its action below the title, the Close label retains its full intrinsic width (79px client and scroll widths), title and action do not overlap, and the document has no horizontal overflow. Private access also retains readable wrapping and no horizontal overflow at 200% scaling; its sign-in action computes to 18px at normal size. Font loading remained stable.
+- Rendered evidence: Chrome DevTools MCP screenshots inspected inline for Settings phone, Settings at 200% text scaling, private access phone, and private access at 200% text scaling.
+- Material limitation: The temporary root-size override exercises text scaling and reflow in the emulated target because Chrome keyboard zoom does not alter the DevTools-emulated viewport. Screenshot-file persistence was denied, and the signed-out surface does not prove a production identity-provider round trip.
