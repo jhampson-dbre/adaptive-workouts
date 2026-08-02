@@ -9,6 +9,8 @@ import {
   isLegacyWorkoutDocument,
   isMalformedV2WorkoutDocument,
   isValidCatalogExercise,
+  isValidCatalogSupersetSettings,
+  isValidSupersetSettings,
   isValidV2ExerciseOccurrence,
   isValidV2WorkoutDocument,
   isValidV2WorkoutEnvelope,
@@ -219,6 +221,30 @@ describe('workout schema', () => {
     expect(normalizeWorkoutSettings({ defaultRestSeconds: 601 })).toMatchObject({ defaultRestSeconds: 60 });
     expect(normalizeWorkoutSettings({ defaultRestSeconds: 60.5 })).toMatchObject({ defaultRestSeconds: 60 });
     expect(normalizeWorkoutSettings({ defaultRestSeconds: 90 })).toMatchObject({ defaultRestSeconds: 90 });
+  });
+
+  it('keeps ordered superset settings and rejects malformed create/edit values', () => {
+    const supersets = [{ exerciseIds: ['row', 'press'], restPlacement: 'AFTER_ROUND' }];
+    expect(normalizeWorkoutSettings({ supersets }).supersets).toEqual(supersets);
+    expect(isValidSupersetSettings(supersets)).toBe(true);
+    expect(isValidSupersetSettings([{ exerciseIds: ['row', 'row'], restPlacement: 'AFTER_ROUND' }])).toBe(false);
+    expect(isValidSupersetSettings([{ exerciseIds: ['row', 'press'], restPlacement: 'afterRound' }])).toBe(false);
+    expect(isValidSupersetSettings([{ exerciseIds: ['row', 'press'], restPlacement: 'AFTER_ROUND', extra: true }])).toBe(false);
+
+    const catalog = [
+      { id: 'row', name: 'Row', muscleGroup: 'Back', tier: 3, sets: 2 },
+      { id: 'press', name: 'Press', muscleGroup: 'Chest', tier: 3, sets: 2 },
+      { id: 'core', name: 'Core', muscleGroup: 'Core', tier: 3, sets: 3 },
+    ];
+    expect(isValidCatalogSupersetSettings(supersets, catalog)).toBe(true);
+    expect(isValidCatalogSupersetSettings([{ exerciseIds: ['row', 'missing'], restPlacement: 'AFTER_ROUND' }], catalog)).toBe(false);
+    expect(isValidCatalogSupersetSettings([{ exerciseIds: ['row', 'press'], restPlacement: 'AFTER_ROUND' }], [
+      catalog[0], { ...catalog[1], isActive: false }, catalog[2],
+    ])).toBe(false);
+    expect(isValidCatalogSupersetSettings([{ exerciseIds: ['row', 'core'], restPlacement: 'AFTER_ROUND' }], catalog)).toBe(false);
+    expect(isValidCatalogSupersetSettings([
+      supersets[0], { exerciseIds: ['press', 'core'], restPlacement: 'BETWEEN_EXERCISES' },
+    ], catalog)).toBe(false);
   });
 
   it('normalizes canonical phase settings with legacy Warmup fallback and defaults', () => {

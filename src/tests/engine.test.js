@@ -449,6 +449,38 @@ describe('Generator Engine', () => {
                 .toEqual(['filtered-partner', 'chest-duplicate', 'mixed-tier3', 'mixed-tier4']);
         });
 
+        it('keeps a valid configured superset contiguous while ignoring an invalid persisted group', () => {
+            const catalog = [
+                exercise('row', 'Back', 3),
+                exercise('press', 'Chest', 3),
+                exercise('core', 'Core', 3),
+            ];
+            const generated = generateWorkout(5.25, [], false, catalog, [], {
+                staleThreshold: 5,
+                supersets: [
+                    { exerciseIds: ['press', 'row'], restPlacement: 'AFTER_ROUND' },
+                    { exerciseIds: ['core', 'missing'], restPlacement: 'BETWEEN_EXERCISES' },
+                ],
+            });
+            expect(ids(generated)).toEqual(['press', 'row', 'core']);
+            expect(generated.supersets).toEqual([{ occurrenceIds: ['press:0', 'row:1'], restPlacement: 'AFTER_ROUND' }]);
+        });
+
+        it('does not partially apply unequal or overlapping persisted groups', () => {
+            const catalog = [
+                exercise('row', 'Back', 3, 2), exercise('press', 'Chest', 3, 2), exercise('core', 'Core', 3),
+            ];
+            const generated = generateWorkout(8.75, [], false, catalog, [], {
+                staleThreshold: 5,
+                supersets: [
+                    { exerciseIds: ['row', 'core'], restPlacement: 'AFTER_ROUND' },
+                    { exerciseIds: ['press', 'core'], restPlacement: 'BETWEEN_EXERCISES' },
+                ],
+            });
+            expect(ids(generated)).toEqual(['row', 'press', 'core']);
+            expect(generated.supersets).toEqual([]);
+        });
+
         it('emits the chosen Tier 1 pivot before an earlier-catalog linked partner', () => {
             const catalog = [
                 exercise('partner', 'Chest', 3, 1, { linkedTo: 'pivot' }),

@@ -73,16 +73,47 @@ function canConfirmSet(exercise, record) {
 }
 
 function closePriorRest(state, exerciseIndex, setIndex, timestamp) {
+  const occurrenceId = state.exercises[exerciseIndex]?.occurrenceId;
+  const superset = state.supersets?.find(group => group.occurrenceIds.includes(occurrenceId));
+  if (superset) {
+    for (let currentExerciseIndex = 0; currentExerciseIndex < state.exercises.length; currentExerciseIndex += 1) {
+      const recordIndex = state.exercises[currentExerciseIndex].setRecords
+        ?.findIndex(record => record._activeGroupRest?.occurrenceIds === superset.occurrenceIds);
+      if (recordIndex >= 0) return closeRest(state, currentExerciseIndex, recordIndex, timestamp);
+    }
+  }
   if (setIndex === 0) return state;
-  const previous = state.exercises[exerciseIndex]?.setRecords?.[setIndex - 1];
+  return closeRest(state, exerciseIndex, setIndex - 1, timestamp);
+}
+
+function closeRest(state, exerciseIndex, setIndex, timestamp) {
+  const previous = state.exercises[exerciseIndex]?.setRecords?.[setIndex];
   if (!previous?._activeRest) return state;
-  return replaceRecord(state, exerciseIndex, setIndex - 1, record => {
+  return replaceRecord(state, exerciseIndex, setIndex, record => {
     const { _activeRest, ...rest } = record;
     return {
       ...rest,
       actualRestSeconds: calculateElapsedSeconds(_activeRest.startedAt, timestamp),
     };
   });
+}
+
+function supersetFor(state, exercise) {
+  return state.supersets?.find(group => group.occurrenceIds.includes(exercise.occurrenceId));
+}
+
+function groupHasWorkRemaining(state, group, exerciseIndex, setIndex) {
+  return group.occurrenceIds.some(occurrenceId => {
+    const currentExercise = state.exercises.find(item => item.occurrenceId === occurrenceId);
+    return currentExercise?.setRecords.some((record, index) => (
+      !record.completed && (currentExercise !== state.exercises[exerciseIndex] || index !== setIndex)
+    ));
+  });
+}
+
+function configuredGroupRestSeconds(state, group) {
+  const configuredFinal = state.exercises.find(exercise => exercise.occurrenceId === group.occurrenceIds.at(-1));
+  return configuredFinal?.setRecords.find(record => record.plannedRestSeconds !== null)?.plannedRestSeconds ?? 60;
 }
 
 function stripActiveFields(value) {
@@ -210,6 +241,7 @@ function relockImmediateNext(exercise, sourceIndex) {
 export function initializeActiveWorkout(exercises, { phaseTimingEnabled = false } = {}) {
   if (!Array.isArray(exercises)) throw new TypeError('Workout exercises must be an array');
   const cloned = structuredClone(exercises);
+  const supersets = Array.isArray(exercises.supersets) ? structuredClone(exercises.supersets) : [];
   for (const exercise of cloned) {
     if (!Object.hasOwn(exercise, 'trackingMode')) exercise.trackingMode = 'simple';
     if (exercise.trackingMode === 'simple') {
@@ -244,6 +276,7 @@ export function initializeActiveWorkout(exercises, { phaseTimingEnabled = false 
     phaseLedger: null,
     phaseCandidate: null,
     _cooldownUndoTarget: null,
+    supersets,
     _phaseTimingEnabled: phaseTimingEnabled,
   };
 }
@@ -372,18 +405,33 @@ export function activeWorkoutReducer(state, action) {
     }
 
     const isFinal = action.setIndex === exercise.setRecords.length - 1;
+    const superset = supersetFor(state, exercise);
+    const groupHasWork = superset && groupHasWorkRemaining(state, superset, action.exerciseIndex, action.setIndex);
+    const isGroupOwner = superset?.restPlacement === 'BETWEEN_EXERCISES'
+      || (superset?.restPlacement === 'AFTER_ROUND'
+        && superset.occurrenceIds.every(occurrenceId => occurrenceId === exercise.occurrenceId
+          || state.exercises.find(item => item.occurrenceId === occurrenceId)
+            ?.setRecords[action.setIndex]?.completed));
+    const startsGroupRest = isGroupOwner && groupHasWork;
+    const finishesGroup = isGroupOwner && !groupHasWork;
     const sequence = state._nextTimerId;
     let updated = replaceRecord(state, action.exerciseIndex, action.setIndex, current => ({
       ...current,
       completed: true,
       workDurationSeconds: calculateElapsedSeconds(timer.startedAt, action.timestamp),
-      actualRestSeconds: null,
-      ...(isFinal ? {} : {
+      plannedRestSeconds: (startsGroupRest || finishesGroup) && superset?.restPlacement === 'AFTER_ROUND'
+        ? configuredGroupRestSeconds(state, superset)
+        : (startsGroupRest || finishesGroup) && current.plannedRestSeconds === null
+          ? exercise.setRecords.find(record => record.plannedRestSeconds !== null)?.plannedRestSeconds ?? 60
+          : current.plannedRestSeconds,
+      actualRestSeconds: finishesGroup ? 0 : null,
+      ...(startsGroupRest || (!superset && !isFinal) ? {
         _activeRest: {
           id: timerId('rest', sequence),
           startedAt: action.timestamp,
         },
-      }),
+        ...(superset ? { _activeGroupRest: superset } : {}),
+      } : (finishesGroup ? { _activeGroupRest: superset } : {})),
     }));
     if (exercise.trackingMode === 'weighted') {
       updated = replaceExercise(
@@ -401,7 +449,7 @@ export function activeWorkoutReducer(state, action) {
     const result = {
       ...updated,
       activeWorkTimer: null,
-      _nextTimerId: isFinal ? sequence : sequence + 1,
+      _nextTimerId: startsGroupRest || (!superset && !isFinal) ? sequence + 1 : sequence,
     };
     if (!result._phaseTimingEnabled
       || result.phase !== 'performance'
@@ -419,11 +467,11 @@ export function activeWorkoutReducer(state, action) {
       : 0;
     if (!record?.completed
       || action.setIndex !== prefixLength - 1
-      || record.actualRestSeconds !== null) {
+      || (record.actualRestSeconds !== null && !record._activeGroupRest)) {
       return state;
     }
     let updated = replaceRecord(state, action.exerciseIndex, action.setIndex, current => {
-      const { _activeRest, ...rest } = current;
+      const { _activeRest, _activeGroupRest, ...rest } = current;
       return {
         ...rest,
         completed: false,
@@ -431,6 +479,20 @@ export function activeWorkoutReducer(state, action) {
         actualRestSeconds: null,
       };
     });
+    const superset = supersetFor(state, exercise);
+    if (superset) {
+      updated = {
+        ...updated,
+        exercises: updated.exercises.map(currentExercise => ({
+          ...currentExercise,
+          setRecords: currentExercise.setRecords.map(current => (
+            current._activeGroupRest?.occurrenceIds === superset.occurrenceIds && groupHasWorkRemaining(updated, superset, -1, -1)
+              ? (() => { const { _activeRest, _activeGroupRest, ...rest } = current; return { ...rest, actualRestSeconds: null }; })()
+              : current
+          )),
+        })),
+      };
+    }
     if (exercise.trackingMode === 'weighted') {
       updated = replaceExercise(
         updated,

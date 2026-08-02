@@ -1,5 +1,6 @@
 import {
     isValidCatalogExercise,
+    isValidCatalogSupersetSettings,
     isValidV2ExerciseOccurrence,
     normalizeCatalogExercise,
     normalizeWorkoutSettings,
@@ -119,19 +120,43 @@ function compareAtomicUnits(a, b) {
     return a.catalogIndex - b.catalogIndex;
 }
 
-function formAtomicUnits(candidates, lastDates, today, catalogIndexes) {
+function formAtomicUnits(candidates, lastDates, today, catalogIndexes, supersets = []) {
     const candidateMap = new Map(candidates.map(candidate => [candidate.id, candidate]));
     const assigned = new Set();
     const units = [];
 
+    const links = new Map(candidates.map(candidate => [candidate.id, new Set()]));
+    const link = (first, second) => {
+        if (!links.has(first) || !links.has(second)) return;
+        links.get(first).add(second);
+        links.get(second).add(first);
+    };
+    for (const candidate of candidates) if (candidate.linkedTo) link(candidate.id, candidate.linkedTo);
+    for (const superset of supersets) {
+        for (let index = 1; index < superset.exerciseIds.length; index += 1) {
+            link(superset.exerciseIds[index - 1], superset.exerciseIds[index]);
+        }
+    }
+
     for (const candidate of candidates.slice().sort((a, b) => catalogIndexes.get(a.id) - catalogIndexes.get(b.id))) {
         if (assigned.has(candidate.id)) continue;
-        const linked = candidate.linkedTo
-            ? candidateMap.get(candidate.linkedTo)
-            : candidates.find(other => other.linkedTo === candidate.id);
-        const members = [candidate];
-        if (linked && !assigned.has(linked.id)) members.push(linked);
-        members.sort((a, b) => catalogIndexes.get(a.id) - catalogIndexes.get(b.id));
+        const memberIds = new Set([candidate.id]);
+        const pending = [candidate.id];
+        while (pending.length) {
+            const id = pending.pop();
+            for (const linkedId of links.get(id)) {
+                if (!memberIds.has(linkedId)) {
+                    memberIds.add(linkedId);
+                    pending.push(linkedId);
+                }
+            }
+        }
+        const configuredOrder = supersets.find(superset => superset.exerciseIds.every(id => memberIds.has(id)))?.exerciseIds ?? [];
+        const members = [
+            ...configuredOrder.map(id => candidateMap.get(id)),
+            ...[...memberIds].filter(id => !configuredOrder.includes(id)).map(id => candidateMap.get(id))
+                .sort((a, b) => catalogIndexes.get(a.id) - catalogIndexes.get(b.id)),
+        ];
         members.forEach(member => assigned.add(member.id));
 
         const performedTimes = members
@@ -153,6 +178,18 @@ function formAtomicUnits(candidates, lastDates, today, catalogIndexes) {
         });
     }
     return units;
+}
+
+function catalogSupersets(settings, catalog) {
+    const configured = settings.supersets;
+    if (!Array.isArray(configured)) return [];
+    const individuallyValid = configured.filter(superset => (
+        isValidCatalogSupersetSettings([superset], catalog)
+    ));
+    const membershipCounts = new Map();
+    individuallyValid.flatMap(superset => superset.exerciseIds)
+        .forEach(id => membershipCounts.set(id, (membershipCounts.get(id) ?? 0) + 1));
+    return individuallyValid.filter(superset => superset.exerciseIds.every(id => membershipCounts.get(id) === 1));
 }
 
 function isTier4QuotaOpen(history, catalogMap, requiredTier3Groups) {
@@ -316,6 +353,7 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
             throw invalidCatalogExerciseError(exercise);
         }
     }
+    const validSupersets = catalogSupersets(normalizedSettings, normalizedCatalog);
     
     const today = new Date();
     const daysSinceLastLeg = getDaysSinceLastLegDay(history, today);
@@ -462,24 +500,29 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
     
     if (isLegDay) {
         const primaryLegs = candidates.filter(ex => ex.muscleGroup === 'Legs' && ex.dynamicTier === 0);
-        let legTime = 0;
-        primaryLegs.forEach(ex => legTime += (ex.sets * 1.75));
+        const legUnits = formAtomicUnits(candidates, lastDates, today, catalogIndexes, validSupersets)
+            .filter(unit => unit.members.some(ex => primaryLegs.includes(ex)));
+        const legTime = legUnits.reduce((total, unit) => total + unit.time, 0);
         
         if (legTime <= timeBudget) {
-            addMembers(primaryLegs);
+            legUnits.forEach(unit => addMembers(unit.members));
             totalTime += legTime;
         } else {
             // If they don't fit, mark as added so the main loop skips them entirely
-            primaryLegs.forEach(ex => addedIds.add(ex.id));
+            legUnits.flatMap(unit => unit.members).forEach(ex => addedIds.add(ex.id));
         }
     }
 
     let selectableCandidates = candidates.filter(candidate => !addedIds.has(candidate.id));
-    let atomicUnits = formAtomicUnits(selectableCandidates, lastDates, today, catalogIndexes);
+    let atomicUnits = formAtomicUnits(selectableCandidates, lastDates, today, catalogIndexes, validSupersets);
     const pivotUnit = atomicUnits.find(unit => unit.members.some(member => member.id === chosenPivotExId));
     if (pivotUnit) {
         if (totalTime + pivotUnit.time <= timeBudget) {
-            const pivotFirstMembers = [
+            const pivotSuperset = validSupersets.find(superset => (
+                superset.exerciseIds.includes(chosenPivotExId)
+                && superset.exerciseIds.every(id => pivotUnit.members.some(member => member.id === id))
+            ));
+            const pivotFirstMembers = pivotSuperset ? pivotUnit.members : [
                 pivotUnit.members.find(member => member.id === chosenPivotExId),
                 ...pivotUnit.members.filter(member => member.id !== chosenPivotExId),
             ];
@@ -495,7 +538,7 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
         && candidate.tier !== 1
         && candidate.dynamicTier !== 0
     ));
-    atomicUnits = formAtomicUnits(selectableCandidates, lastDates, today, catalogIndexes);
+    atomicUnits = formAtomicUnits(selectableCandidates, lastDates, today, catalogIndexes, validSupersets);
     const requiredTier3Groups = new Set(
         selectableCandidates
             .filter(candidate => candidate.tier === 3)
@@ -523,6 +566,15 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
             performanceSeconds,
             cooldownSeconds: normalizedSettings.cooldownSeconds,
         }),
+    });
+    const occurrenceIds = new Map(generatedWorkout.map(exercise => [exercise.id, exercise.occurrenceId]));
+    Object.defineProperty(generatedWorkout, 'supersets', {
+        value: validSupersets
+            .filter(superset => superset.exerciseIds.every(id => occurrenceIds.has(id)))
+            .map(superset => ({
+                occurrenceIds: superset.exerciseIds.map(id => occurrenceIds.get(id)),
+                restPlacement: superset.restPlacement,
+            })),
     });
     return generatedWorkout;
 }

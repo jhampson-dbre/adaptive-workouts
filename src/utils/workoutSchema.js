@@ -4,6 +4,10 @@ export const TRACKING_MODE = Object.freeze({
   BODYWEIGHT: 'bodyweight',
 });
 export const TRACKING_MODES = Object.freeze(Object.values(TRACKING_MODE));
+export const SUPERSET_REST_PLACEMENT = Object.freeze({
+  AFTER_ROUND: 'AFTER_ROUND',
+  BETWEEN_EXERCISES: 'BETWEEN_EXERCISES',
+});
 
 const TOP_SET_DECISIONS = new Set(['starting', 'increase', 'hold', 'decrease']);
 const BACKOFF_REASON_FIELDS = [
@@ -38,6 +42,31 @@ export function normalizeWorkoutSettings(settings) {
       ? source.cooldownSeconds
       : 300,
   };
+}
+
+export function isValidSupersetSettings(supersets) {
+  if (!Array.isArray(supersets)) return false;
+  const assigned = new Set();
+  return supersets.every(superset => {
+    if (!isObject(superset)
+      || Object.keys(superset).length !== 2
+      || !Array.isArray(superset.exerciseIds)
+      || superset.exerciseIds.length < 2
+      || !Object.values(SUPERSET_REST_PLACEMENT).includes(superset.restPlacement)
+      || superset.exerciseIds.some(id => !isNonEmptyString(id) || assigned.has(id))) return false;
+    superset.exerciseIds.forEach(id => assigned.add(id));
+    return new Set(superset.exerciseIds).size === superset.exerciseIds.length;
+  });
+}
+
+export function isValidCatalogSupersetSettings(supersets, catalog) {
+  if (!isValidSupersetSettings(supersets) || !Array.isArray(catalog)) return false;
+  const byId = new Map(catalog.map(exercise => [exercise?.id, exercise]));
+  return supersets.every(superset => {
+    const members = superset.exerciseIds.map(id => byId.get(id));
+    return members.every(exercise => exercise?.isActive !== false && isValidCatalogExercise(exercise))
+      && new Set(members.map(exercise => exercise.sets)).size === 1;
+  });
 }
 
 export function normalizeCatalogExercise(exercise) {
