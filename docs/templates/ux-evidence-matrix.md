@@ -114,3 +114,43 @@ the safe method attempted and the best available alternative.
 - Observed result: The unchanged `Sign-in failed. Please try again.` copy renders white (`rgb(255, 255, 255)`) on Nudge error red (`rgb(114, 28, 36)`), a computed 11.012:1 contrast ratio.
 - Rendered evidence: `.impeccable/evidence/trek-269-login-error-mobile.png`.
 - Material limitation: The failure is a deterministic local popup-blocking path; production identity-provider behavior was not exercised.
+
+---
+
+## 2026-08-02 — Nudge CSS consolidation
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-271 removes superseded CSS across the core journey and supporting surfaces, so unchanged responsive rendering needs direct proof.
+- Approved scenario or artifact: Preserve the approved Nudge core journey, history, private-access, canonical baseline, timing harness, and Settings presentation while deleting only confirmed-dead starter rules.
+
+## Changed scenario
+
+- Scenario: Verify the canonical Plan surface at desktop, mobile, and 320px reflow widths.
+- Build / commit: `codex/epic-14-audit-remediation` working tree for TREK-271 before task commit.
+- Viewport and starting state: Canonical synthetic emulator baseline at 1280 × 900, 390 × 844, and 320 × 844.
+- Actions: Load the Plan phase and inspect its header, journey progress, time control, and primary action.
+- Observed result: Chrome DevTools reported no console errors or warnings and no horizontal overflow at 390px or 320px; coordinator captures preserve the centered desktop column and the approved mobile/reflow hierarchy.
+- Rendered evidence: `.impeccable/evidence/trek-271-plan-desktop.png`, `.impeccable/evidence/trek-271-plan-mobile.png`, and `.impeccable/evidence/trek-271-plan-reflow-320.png`.
+- Material limitation: Chromium rendering does not prove physical-device Safari font metrics.
+
+## Changed scenario
+
+- Scenario: Verify Settings and signed-out private access after consolidation.
+- Build / commit: Same TREK-271 working tree.
+- Viewport and starting state: Canonical synthetic emulator baseline at 390 × 844.
+- Actions: Open Manage Catalog, inspect defaults and the Add exercise form, then sign out.
+- Observed result: Settings retained its approved hierarchy and controls with zero horizontal overflow. After review restored two live rules, Chrome DevTools verified all 15 Current Catalog rows at 1280px, 390px, and 320px: the list has no browser bullets/indentation, metadata/actions retain the responsive flex layout, and console output is clean. The private-access surface retained its focused, centered sign-in action.
+- Rendered evidence: `.impeccable/evidence/trek-271-settings-mobile.png`, `.impeccable/evidence/trek-271-settings-catalog-desktop.png`, `.impeccable/evidence/trek-271-settings-catalog-mobile.png`, `.impeccable/evidence/trek-271-settings-catalog-reflow-320.png`, and `.impeccable/evidence/trek-271-private-access-mobile.png`.
+- Material limitation: The signed-out capture verifies the local emulator access boundary, not a production identity-provider round trip.
+
+## Changed scenario
+
+- Scenario: Verify timing and history presentation surfaces.
+- Build / commit: Same TREK-271 working tree.
+- Viewport and starting state: Non-production synthetic timing harness at 390 × 844.
+- Actions: Run T-01 Start and Warmup; then run T-09 V4 History and save, select valid v4 history, and expand Workout history.
+- Observed result: Warmup timing and labeled overtime render without horizontal overflow; expanded history retains phase durations, set details, and readable card hierarchy.
+- Rendered evidence: `.impeccable/evidence/trek-271-timing-harness-mobile.png` and `.impeccable/evidence/trek-271-history-mobile.png`.
+- Material limitation: The harness presents injected outcomes and does not prove storage, locks, reconciliation, or production routing.
