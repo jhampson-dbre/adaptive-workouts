@@ -575,7 +575,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
       </section>
     </div>;
   }
-  if (sessionState?.status === 'saved') return <div className="workout-view"><JourneyProgress current="Review" /><section className="workout-summary" role="status"><h2 ref={savedRef} tabIndex="-1">Workout saved</h2><p>Your recorded work is available in workout history.</p><button type="button" className="finish-btn" onClick={() => onFinish?.()}>Plan another workout</button></section></div>;
+  if (sessionState?.status === 'saved') return <div className="workout-view"><JourneyProgress current="Review" /><section className="workout-summary"><h2 ref={savedRef} tabIndex="-1">Workout saved</h2><p role="status">This workout is complete.</p><button type="button" className="recovery-secondary" onClick={() => onFinish?.()}>Back to plan</button></section><WorkoutHistory key={user?.uid ?? null} historyKey={user?.uid ?? null} loadPage={({ cursor, pageSize }) => getHistoryPage(user?.uid, { cursor, pageSize })} /></div>;
   return <div className={`workout-view phase-${activeWorkout.phase}`}>
     <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{restAnnouncement || recoveryAcknowledgement}</div>
     <JourneyProgress current={finishCandidate ? 'Review' : journeyStep} />

@@ -394,3 +394,23 @@ the safe method attempted and the best available alternative.
 - Observed result: Login has one labelled main landmark and focused Nudge heading. The canonical Plan and Settings paths load successfully; phone Plan has 390px client/scroll widths, 44px labelled checkbox targets and slider, a 116px primary action, visible 4px focus blue, and no console warnings or errors. The phone recovery fixture remains assertive and actionable with a uniform 1px ink border and no horizontal overflow. The official Impeccable detector is clean.
 - Rendered evidence: Chrome DevTools MCP accessibility snapshots, computed-style inspection, and an inline phone screenshot of the canonical Plan state.
 - Material limitation: The timing fixture is synthetic and does not prove storage, locks, server reconciliation, or routing; targeted tests cover those mechanics. Chromium evidence does not replace physical-device or assistive-technology testing.
+
+---
+
+## 2026-08-02 - TREK-285 quiet workout completion endpoint
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-285 materially changes the post-save hierarchy from an immediate planning prompt to a terminal confirmation with optional history.
+- Approved scenario or artifact: Trekker comments CMT-508 and CMT-509, approved by a fresh UX design review. Preserve Review progress, focused `Workout saved`, factual `This workout is complete.`, neutral `Back to plan`, and the existing lazy Workout History disclosure without new navigation or state.
+
+## Changed scenario
+
+- Scenario: Complete and save a canonical synthetic workout, then verify the quiet endpoint with history collapsed and expanded.
+- Build / commit: `codex/trek-285-quiet-workout-completion` working tree before task commit.
+- Viewport and starting state: Codex in-app Chromium browser at 1280 x 720; canonical emulator baseline, one confirmed Barbell Curl set, then early finish, Cooldown, Review, and Save.
+- Actions: Save the workout; inspect focus, status and action hierarchy; measure controls and document containment; open Workout history; inspect the newly saved record; close the disclosure and inspect keyboard focus.
+- Observed result: `Workout saved` received focus with a computed 4px focus-blue outline. The only status text is `This workout is complete.`; `Back to plan` and Workout history are outside the status region. Back renders as a flat white, ink-rule secondary control at 50.5px high, while Review remains the sole yellow state signal. History began collapsed, expanded through its existing `aria-expanded` button, showed the newly saved 0:13 workout, and returned to collapsed with visible focus. Collapsed and expanded states retained equal client/scroll widths (1280px collapsed; 1265px expanded with the browser scrollbar) and no console error was observed.
+- Rendered evidence: Live accessibility snapshots, computed-style/geometry measurements, and inline full-page inspection in the Codex in-app browser; focused tests separately verify no history fetch before disclosure and the existing loader call after opening.
+- Material limitation: The available in-app browser did not expose device-viewport emulation, so the approved exact 390 x 844 saved-state capture could not be produced in this pass. The best safe alternative was the real desktop lifecycle plus the established responsive CSS and 44px control contracts exercised by focused tests; this does not replace physical-device, exact phone-height, or assistive-technology verification.
