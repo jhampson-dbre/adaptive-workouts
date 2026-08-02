@@ -6,7 +6,7 @@ import { gzipSync } from 'node:zlib'
 export const LIMITS = { boot: { raw: 760000, gzip: 225000 }, firstPlan: { raw: 760000, gzip: 225000 }, chunkRaw: 500000 }
 const planKey = 'src/components/AuthorizedApp.jsx'
 const firestoreMarker = '/node_modules/@firebase/firestore/'
-const requiredFonts = ['fonts/atkinson-hyperlegible-bold.ttf', 'fonts/atkinson-hyperlegible-regular.woff2', 'fonts/barlow-condensed-bold.ttf']
+const requiredFonts = ['fonts/atkinson-hyperlegible-bold.woff2', 'fonts/atkinson-hyperlegible-regular.woff2', 'fonts/barlow-condensed-bold.woff2']
 const jsFile = file => /\.m?js$/i.test(file)
 const gzip = bytes => gzipSync(bytes, { level: 9, mtime: 0 }).byteLength
 const readJson = async file => JSON.parse(await readFile(file, 'utf8'))

@@ -334,3 +334,23 @@ the safe method attempted and the best available alternative.
 - Observed result: Every inspected select computes to 18px Atkinson Hyperlegible at weight 400 and 45.3px high. At phone width, Add and Edit selects use the full 346px content width. At desktop width, Add fields render at 227.3px or 294px and Edit fields at 227.3px or 656px; `Tier 3 (Standard)`, `Simple completion`, and `Tier 3 (Primary Leg Day)` are fully visible. Fonts report loaded, and client/scroll widths remain equal at both viewports (390px phone; 1265px desktop).
 - Rendered evidence: Chrome DevTools MCP accessibility snapshots, computed-style measurements, and inline screenshots inspected for phone Add/Edit and desktop Add/Edit/Leg Day states.
 - Material limitation: Native select arrow metrics are Chromium-specific; this pass does not replace physical-device Safari or assistive-technology testing. Screenshots were inspected inline rather than persisted.
+
+---
+
+## 2026-08-02 - Local font WOFF2 optimization
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-281 changes the delivered font binaries and therefore can affect font loading, fallback behavior, glyph coverage, and rendered metrics across every UI surface.
+- Approved scenario or artifact: Preserve the `DESIGN.md` Atkinson Hyperlegible body and Barlow Condensed heading roles, all weights and glyphs, `font-display: swap`, local hosting, and the Clear Signal composition while reducing the precached font payload.
+
+## Changed scenario
+
+- Scenario: Verify all local font faces load from WOFF2 resources and preserve representative Plan/Settings typography at desktop and phone widths.
+- Build / commit: `codex/epic-14-audit-remediation` working tree for TREK-281 before task commit.
+- Viewport and starting state: Chrome DevTools MCP at 1282 x 667 and emulated 390 x 844; canonical synthetic baseline opened on Plan and Settings.
+- Actions: Force-load Atkinson Hyperlegible 400/700 and Barlow Condensed 700 through the CSS Font Loading API, inspect resource timing entries and computed typography, open Settings, and repeat computed-style/containment checks at phone width.
+- Observed result: All three font checks return true and `document.fonts.status` reports loaded. Resource timing contains only `atkinson-hyperlegible-regular.woff2` (17,184 bytes), `atkinson-hyperlegible-bold.woff2` (23,268 bytes), and `barlow-condensed-bold.woff2` (33,088 bytes); the live stylesheet has zero TTF references. Plan and Settings headings retain Barlow Condensed 700, body/select text retains Atkinson Hyperlegible 400 at 18px, and catalog titles retain Atkinson Hyperlegible 700. Phone and desktop client/scroll widths remain equal, with no console warnings or errors. Total local font bytes fall from 157,720 to 73,540, saving 84,180 bytes (53.37%).
+- Rendered evidence: Chrome DevTools MCP accessibility snapshots, resource/computed-style measurements, and an inline Settings phone screenshot.
+- Material limitation: Local Vite transfer measurements omit production CDN/cache effects, and Chromium rendering does not replace physical-device Safari font validation. The WOFF2 conversion separately preserved source glyph order, OpenType tables, name records, 1000 UPEM, weight, and italic angle.

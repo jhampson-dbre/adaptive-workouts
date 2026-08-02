@@ -6,7 +6,7 @@ import test from 'node:test'
 import { analyzeBuild, checkBuild } from './bundle-budget.mjs'
 
 const firestoreId = '/repo/node_modules/@firebase/firestore/dist/index.esm.js'
-const requiredFonts = ['fonts/atkinson-hyperlegible-bold.ttf', 'fonts/atkinson-hyperlegible-regular.woff2', 'fonts/barlow-condensed-bold.ttf']
+const requiredFonts = ['fonts/atkinson-hyperlegible-bold.woff2', 'fonts/atkinson-hyperlegible-regular.woff2', 'fonts/barlow-condensed-bold.woff2']
 const write = (root, file, value = 'export default 1') => writeFile(join(root, file), value)
 const fixture = async ({ manifestPatch = {}, provenancePatch, firestoreSize = 309235 } = {}) => {
   const root = await mkdtemp(join(tmpdir(), 'bundle-budget-')); await Promise.all([mkdir(join(root, '.vite')), mkdir(join(root, 'fonts'))])
@@ -32,6 +32,13 @@ test('permits the under-500000 isolated firestore SDK and keeps it out of boot a
   assert.equal(report.firestoreSdk, 'firestore-sdk.js')
   await checkBuild(root)
 }))
+
+test('uses WOFF2 for every local font face', async () => {
+  const css = await readFile(new URL('../src/index.css', import.meta.url), 'utf8')
+  assert.doesNotMatch(css, /url\('\/fonts\/[^']+\.ttf'\)/)
+  assert.match(css, /url\('\/fonts\/atkinson-hyperlegible-bold\.woff2'\) format\('woff2'\)/)
+  assert.match(css, /url\('\/fonts\/barlow-condensed-bold\.woff2'\) format\('woff2'\)/)
+})
 
 test('rejects missing or duplicate firestore manifest/provenance records', async () => {
   await withFixture({ manifestPatch: { firestore: { file: 'firestore-sdk.js' } } }, root => assert.rejects(() => analyzeBuild(root), /exactly one firestore-sdk manifest/))
