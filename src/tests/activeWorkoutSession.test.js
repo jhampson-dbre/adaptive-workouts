@@ -8,6 +8,7 @@ const exercise = { id: 'x', occurrenceId: 'x:0', name: 'X', muscleGroup: 'Core',
 const targets = { warmupSeconds: 0, performanceSeconds: 60, cooldownSeconds: 0 };
 const memory = () => { const values = new Map(); return { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) }; };
 const locks = () => ({ request: async (_name, _options, callback) => callback({ name: 'lock' }) });
+const twoSetExercise = (id, occurrenceId) => ({ ...exercise, id, occurrenceId, name: id, sets: 2, prescribedSetCount: 2, completed: false });
 const trackedExercise = mode => {
   const base = { id: mode, occurrenceId: `${mode}:0`, name: mode, muscleGroup: 'Core', tier: 1, dynamicTier: 99, trackingMode: mode, sets: 1, prescribedSetCount: 1 };
   if (mode === 'simple') return { ...base, completed: false };
@@ -53,6 +54,25 @@ test('saves the reverse-order AFTER_ROUND finisher as the sole v5 zero-rest reco
   const saved = saveImmutableWorkout.mock.calls[0][2];
   expect(saved.exercises[0].setRecords[0]).toMatchObject({ plannedRestSeconds: 60, actualRestSeconds: 0 });
   expect(saved.exercises[1].setRecords[0]).toMatchObject({ plannedRestSeconds: null, actualRestSeconds: null });
+});
+
+test.each([0, 1])('persists either first AFTER_ROUND member before the group rest starts (%i)', async exerciseIndex => {
+  const plan = Object.assign([twoSetExercise('bench', 'bench:0'), twoSetExercise('row', 'row:1')], { supersets: [{ occurrenceIds: ['bench:0', 'row:1'], restPlacement: 'AFTER_ROUND' }] });
+  const coordinator = createActiveWorkoutCoordinator({ storage: memory(), locks: locks(), staleAfterMs: 1_000_000, now: () => 1_000, createUuid: () => '123e4567-e89b-42d3-a456-426614174000' });
+  const session = createActiveWorkoutSession({ coordinator, projectId: 'p', createUuid: () => '123e4567-e89b-42d3-a456-426614174001', saveImmutableWorkout: async () => {}, readImmutableWorkoutFromServer: async () => ({ exists: () => false }) });
+  await session.bootstrap({ uid: 'u' }); await session.stageGenerated(plan, targets);
+  await session.action({ type: 'startWorkout', timestamp: 1000 }); await session.action({ type: 'startSet', exerciseIndex, setIndex: 0, timestamp: 1001 });
+  await expect(session.action({ type: 'confirmSet', exerciseIndex, setIndex: 0, timestamp: 1002 })).resolves.toBe(true);
+  expect(session.getState()).toMatchObject({ status: 'owned', error: null, activeWorkout: { exercises: expect.any(Array) } });
+  expect(session.getState().activeWorkout.exercises[exerciseIndex].setRecords[0]).toMatchObject({ completed: true, actualRestSeconds: null });
+  expect(session.getState().activeWorkout.exercises[exerciseIndex].setRecords[0]).not.toHaveProperty('_activeRest');
+  const ownerIndex = exerciseIndex === 0 ? 1 : 0;
+  await session.action({ type: 'startSet', exerciseIndex: ownerIndex, setIndex: 0, timestamp: 1003 });
+  await session.action({ type: 'confirmSet', exerciseIndex: ownerIndex, setIndex: 0, timestamp: 1004 });
+  await expect(session.action({ type: 'startSet', exerciseIndex, setIndex: 1, timestamp: 1005 })).resolves.toBe(true);
+  expect(session.getState()).toMatchObject({ status: 'owned', activeWorkout: { activeWorkTimer: { exerciseIndex, setIndex: 1 } } });
+  expect(session.getState().activeWorkout.exercises[ownerIndex].setRecords[0]).toMatchObject({ actualRestSeconds: 0, _activeGroupRest: plan.supersets[0] });
+  expect(session.getState().activeWorkout.exercises[ownerIndex].setRecords[0]).not.toHaveProperty('_activeRest');
 });
 
 test('does not reset a same-UID session when authorization is re-established', async () => {

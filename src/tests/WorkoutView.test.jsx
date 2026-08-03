@@ -169,6 +169,111 @@ const weighted = [{
   })),
 }];
 
+const supersetWorkout = (restPlacement = 'AFTER_ROUND') => {
+  const exercises = [
+    { ...timedWorkout[0], id: 'row', occurrenceId: 'row:0', name: 'Long Row Exercise Name', sets: 2, prescribedSetCount: 2, setRecords: timedWorkout[0].setRecords.map(record => ({ ...record, plannedRestSeconds: record.index === 0 ? 2 : null })) },
+    { ...timedWorkout[0], id: 'press', occurrenceId: 'press:1', name: 'Long Press Exercise Name', sets: 2, prescribedSetCount: 2, setRecords: timedWorkout[0].setRecords.map(record => ({ ...record, plannedRestSeconds: record.index === 0 ? 3 : null })) },
+  ];
+  exercises.supersets = [{ occurrenceIds: ['row:0', 'press:1'], restPlacement }];
+  return exercises;
+};
+
+test('guides a confirmed superset member to the earliest remaining member without listing group names', async () => {
+  renderWorkout(supersetWorkout());
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 1 set 1 confirm/i }));
+
+  expect(await screen.findByText('Superset 2 of 2 · Next')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Long Press Exercise Name exercise 2 set 1 start/i })).toBe(document.activeElement);
+  expect(screen.queryByText(/Long Row Exercise Name.*Long Press Exercise Name/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name.*expand/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 1 set 2 start/i }));
+  expect(screen.getByRole('button', { name: /Long Row Exercise Name exercise 1 set 2 confirm/i })).toBeDefined();
+});
+
+test('moves superset focus only after a delayed confirmation publishes its ready target', async () => {
+  let activeWorkout = initializeActiveWorkout(supersetWorkout());
+  activeWorkout = activeWorkoutReducer(activeWorkout, { type: 'startWorkout', timestamp: 1 });
+  activeWorkout = activeWorkoutReducer(activeWorkout, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 2 });
+  let resolveAction;
+  const action = vi.fn(() => new Promise(resolve => { resolveAction = resolve; }));
+  const renderState = state => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action }} sessionState={{ status: 'owned', activeWorkout: state, blocked: false }} /></AuthContext.Provider>;
+  const view = render(renderState(activeWorkout));
+  fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 1 set 1 confirm/i }));
+  const confirmed = activeWorkoutReducer(activeWorkout, action.mock.calls[0][0]);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(document.activeElement).not.toBe(screen.getByRole('button', { name: /Long Press Exercise Name exercise 2 set 1 start/i }));
+  resolveAction(true);
+  view.rerender(renderState(confirmed));
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: /Long Press Exercise Name exercise 2 set 1 start/i })));
+});
+
+test('keeps a BETWEEN_EXERCISES rest beside the recommended member and closes it when that member starts', async () => {
+  renderWorkout(supersetWorkout('BETWEEN_EXERCISES'));
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 1 set 1 confirm/i }));
+
+  const nextStart = await screen.findByRole('button', { name: /Long Press Exercise Name exercise 2 set 1 start/i });
+  expect(nextStart.parentElement.textContent).toMatch(/Rest: 0:02 remaining/i);
+  fireEvent.click(nextStart);
+  expect(screen.queryByText(/Rest: 0:02 remaining/i)).toBeNull();
+});
+
+test('announces a newly started group rest once without repeating the ready-set label', async () => {
+  renderWorkout(supersetWorkout('BETWEEN_EXERCISES'));
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 1 set 1 confirm/i }));
+
+  const status = await screen.findByRole('status');
+  expect(status.textContent).toBe('Long Row Exercise Name set 1 rest started.');
+  expect(status.textContent).not.toMatch(/Start set|Long Press Exercise Name exercise 2 set 1/i);
+  await act(async () => {});
+  expect(status.textContent).toBe('Long Row Exercise Name set 1 rest started.');
+});
+
+test('starting the recommended member retires its rest-start announcement but keeps an unrelated rest announcement', async () => {
+  const workout = supersetWorkout('BETWEEN_EXERCISES');
+  workout.push({ ...timedWorkout[0], id: 'carry', occurrenceId: 'carry:2', name: 'Carry', setRecords: timedWorkout[0].setRecords.map(record => ({ ...record })) });
+  renderWorkout(workout);
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Carry.*expand/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Carry exercise 3 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Carry exercise 3 set 1 confirm/i }));
+  expect(screen.getByRole('status').textContent).toBe('Carry set 1 rest started.');
+  fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 1 set 1 confirm/i }));
+  expect(screen.getByRole('status').textContent).toBe('Long Row Exercise Name set 1 rest started.');
+  fireEvent.click(screen.getByRole('button', { name: /Long Press Exercise Name exercise 2 set 1 start/i }));
+  expect(screen.getByRole('status').textContent).toBe('Carry set 1 rest started.');
+});
+
+test('recomputes recovered superset guidance after undo', () => {
+  const generated = initializeActiveWorkout(supersetWorkout());
+  let activeWorkout = activeWorkoutReducer(generated, { type: 'startWorkout', timestamp: 1 });
+  activeWorkout = activeWorkoutReducer(activeWorkout, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 2 });
+  activeWorkout = activeWorkoutReducer(activeWorkout, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 3 });
+  activeWorkout = activeWorkoutReducer(activeWorkout, { type: 'startSet', exerciseIndex: 1, setIndex: 0, timestamp: 4 });
+  activeWorkout = activeWorkoutReducer(activeWorkout, { type: 'confirmSet', exerciseIndex: 1, setIndex: 0, timestamp: 5 });
+  const undone = activeWorkoutReducer(activeWorkout, { type: 'undoSet', exerciseIndex: 1, setIndex: 0, timestamp: 6 });
+
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'owned', activeWorkout: undone, blocked: false }} /></AuthContext.Provider>);
+  expect(screen.getByText('Superset 2 of 2 · Next')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Long Press Exercise Name exercise 2 set 1 start/i })).toBeDefined();
+});
+
+test('expands the guided superset member when recovery hydrates in place', async () => {
+  let hydrated = initializeActiveWorkout(supersetWorkout());
+  hydrated = activeWorkoutReducer(hydrated, { type: 'startWorkout', timestamp: 1 });
+  hydrated = activeWorkoutReducer(hydrated, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 2 });
+  hydrated = activeWorkoutReducer(hydrated, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 3 });
+  const view = render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'checking', activeWorkout: null, blocked: true }} /></AuthContext.Provider>);
+  view.rerender(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'owned', activeWorkout: hydrated, blocked: false }} /></AuthContext.Provider>);
+  expect(await screen.findByRole('button', { name: /Long Press Exercise Name exercise 2 set 1 start/i })).toBeDefined();
+});
+
 test('keeps a same-exercise rest beside the next Start control while completed sets stay compact', () => {
   renderWorkout([timedWorkout[0]]);
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
@@ -557,7 +662,6 @@ test('visible rest alerts fire once per rest identity and reconfirming creates o
     act(() => vi.advanceTimersByTime(2000));
     const announcementAfterRealert = screen.getByRole('status').textContent;
     expect(announcementAfterRealert).not.toBe(announcementBeforeRealert);
-    expect(announcementAfterRealert.replace(/\u2060+$/u, '')).toBe(announcementBeforeRealert);
     expect(announcementAfterRealert).toMatch(/Plank set 1 rest is complete/i);
     expect(vibrate).toHaveBeenCalledTimes(2);
     expect(AudioContextMock).toHaveBeenCalledTimes(2);
@@ -614,14 +718,15 @@ test('returning after hidden rest expiry shows overtime without a delayed announ
     fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
     fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
     fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+    const restStart = screen.getByRole('status').textContent;
     visibility = 'hidden';
     act(() => vi.advanceTimersByTime(3000));
-    expect(screen.getByRole('status').textContent).toBe('');
+    expect(screen.getByRole('status').textContent).toBe(restStart);
     vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
     visibility = 'visible';
     act(() => document.dispatchEvent(new Event('visibilitychange')));
     expect(screen.getByRole('button', { name: /Plank.*rest overtime/i })).toBeDefined();
-    expect(screen.getByRole('status').textContent).toBe('');
+    expect(screen.getByRole('status').textContent).toBe(restStart);
   } finally {
     if (original) Object.defineProperty(document, 'visibilityState', original);
   }

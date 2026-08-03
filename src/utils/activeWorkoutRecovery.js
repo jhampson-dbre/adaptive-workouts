@@ -80,7 +80,23 @@ function validLedger(ledger, phase) {
     ? ledger.openPhase === null && ledger.openedAtEpochMs === null
     : ledger.openPhase === phase && integer(ledger.openedAtEpochMs) && ledger.openedAtEpochMs <= ledger.lastAcceptedEpochMs;
 }
-function validRecord(record, exercise, index, nextTimerId, version) {
+function afterRoundGroupCoversRecord(workout, exercise, index, nextTimerId) {
+  const validSharedRest = (record, group) => record?.completed
+    && JSON.stringify(record.activeGroupRest) === JSON.stringify(group)
+    && (record.activeRest === null
+      ? record.actualRestSeconds !== null && nonnegative(record.actualRestSeconds)
+      : exact(record.activeRest, ['id', 'startedAtEpochMs'])
+        && /^rest-[1-9]\d*$/.test(record.activeRest.id)
+        && integer(record.activeRest.startedAtEpochMs)
+        && Number(record.activeRest.id.slice(5)) < nextTimerId);
+  return workout.supersets?.some(group => group.restPlacement === 'AFTER_ROUND'
+    && group.occurrenceIds.includes(exercise.occurrenceId)
+    && (group.occurrenceIds.some(occurrenceId => occurrenceId !== exercise.occurrenceId
+      && workout.exercises.find(candidate => candidate.occurrenceId === occurrenceId)?.setRecords[index]?.completed === false)
+      || workout.exercises.some(candidate => group.occurrenceIds.includes(candidate.occurrenceId)
+        && validSharedRest(candidate.setRecords[index], group))));
+}
+function validRecord(record, exercise, index, nextTimerId, version, workout) {
   const common = ['index', 'completed', 'plannedRestSeconds', 'workDurationSeconds', 'actualRestSeconds', 'activeRest'];
   const mode = exercise.trackingMode;
   const additional = mode === 'weighted' ? ['targetWeight', 'targetReps', 'actualWeight', 'actualReps', 'recommendationReason', 'inputDirty'] : mode === 'bodyweight' ? ['targetReps', 'fullReps', 'assistedReps', 'eccentricReps'] : [];
@@ -93,7 +109,7 @@ function validRecord(record, exercise, index, nextTimerId, version) {
   if (record.activeRest !== null && (record.actualRestSeconds !== null || !record.completed || (index === exercise.sets - 1 && !groupFinalRest))) return false;
   if (record.activeGroupRest && (version !== 3 || !exact(record.activeGroupRest, ['occurrenceIds', 'restPlacement']) || !Array.isArray(record.activeGroupRest.occurrenceIds) || !['AFTER_ROUND', 'BETWEEN_EXERCISES'].includes(record.activeGroupRest.restPlacement))) return false;
   if (record.actualRestSeconds !== null && !nonnegative(record.actualRestSeconds)) return false;
-  if (record.completed && index !== exercise.sets - 1 && !((record.actualRestSeconds !== null && record.activeRest === null) || (record.actualRestSeconds === null && record.activeRest !== null))) return false;
+  if (record.completed && index !== exercise.sets - 1 && !((record.actualRestSeconds !== null && record.activeRest === null) || (record.actualRestSeconds === null && record.activeRest !== null) || (version === 3 && afterRoundGroupCoversRecord(workout, exercise, index, nextTimerId)))) return false;
   const actualCount = value => value === '' || nonnegative(value);
   if (mode === 'weighted') {
     if (!finiteNonnegative(record.targetWeight) || !integer(record.targetReps) || record.targetReps < 1 || !(record.actualWeight === '' || finiteNonnegative(record.actualWeight)) || !actualCount(record.actualReps) || !exact(record.inputDirty, ['actualWeight', 'actualReps']) || !Object.values(record.inputDirty).every(v => typeof v === 'boolean')) return false;
@@ -119,7 +135,7 @@ function validRecord(record, exercise, index, nextTimerId, version) {
   if (mode === 'bodyweight') return integer(record.targetReps) && record.targetReps > 0 && ['fullReps', 'assistedReps', 'eccentricReps'].every(key => actualCount(record[key]));
   return true;
 }
-function validExercise(exercise, nextTimerId, version) {
+function validExercise(exercise, nextTimerId, version, workout) {
   const common = ['id', 'occurrenceId', 'name', 'muscleGroup', 'tier', 'trackingMode', 'sets', 'prescribedSetCount', 'setRecords'];
   const extra = exercise.trackingMode === 'simple' ? ['completed'] : exercise.trackingMode === 'weighted' ? ['startingWeight', 'targetReps', 'floorReps', 'weightStep'] : exercise.trackingMode === 'bodyweight' ? ['targetReps'] : [];
   const optional = ['linkedTo', 'isActive'].filter(key => Object.hasOwn(exercise, key));
@@ -129,7 +145,7 @@ function validExercise(exercise, nextTimerId, version) {
   if (exercise.trackingMode === 'weighted' && (!Number.isFinite(exercise.startingWeight) || exercise.startingWeight < 0 || !integer(exercise.targetReps) || exercise.targetReps < 1 || !integer(exercise.floorReps) || exercise.floorReps < 0 || exercise.floorReps >= exercise.targetReps || !Number.isFinite(exercise.weightStep) || exercise.weightStep <= 0)) return false;
   if (exercise.trackingMode === 'bodyweight' && (!integer(exercise.targetReps) || exercise.targetReps < 1)) return false;
   let seenOpen = false;
-  if (!exercise.setRecords.every((record, index) => { if (seenOpen && record.completed) return false; if (!record.completed) seenOpen = true; return validRecord(record, exercise, index, nextTimerId, version) && (exercise.trackingMode === 'simple' || record.targetReps === exercise.targetReps); })) return false;
+  if (!exercise.setRecords.every((record, index) => { if (seenOpen && record.completed) return false; if (!record.completed) seenOpen = true; return validRecord(record, exercise, index, nextTimerId, version, workout) && (exercise.trackingMode === 'simple' || record.targetReps === exercise.targetReps); })) return false;
   if (exercise.trackingMode === 'simple' && exercise.completed !== exercise.setRecords.some(record => record.completed)) return false;
   const rests = exercise.setRecords.map((record, index) => ({ record, index })).filter(item => item.record.activeRest);
   return rests.length <= 1 && (!rests.length || rests[0].index === exercise.setRecords.filter(record => record.completed).length - 1);
@@ -145,7 +161,7 @@ function validCooldownUndoTarget(workout) {
 }
 function validWorkout(workout, version) {
   const keys = ['phase', 'workoutStartedAtEpochMs', 'activeWorkTimer', 'nextTimerId', 'phaseLedger', 'phaseCandidate', 'cooldownUndoTarget', 'exercises', ...(version === 3 ? ['supersets'] : [])];
-  if (!exact(workout, keys) || !ACTIVE_PHASES.includes(workout.phase) || !integer(workout.workoutStartedAtEpochMs) || !integer(workout.nextTimerId) || workout.nextTimerId < 1 || !validLedger(workout.phaseLedger, workout.phase) || !Array.isArray(workout.exercises) || !workout.exercises.length || new Set(workout.exercises.map(x => x.occurrenceId)).size !== workout.exercises.length || !workout.exercises.every(exercise => validExercise(exercise, workout.nextTimerId, version)) || (version === 3 && !Array.isArray(workout.supersets))) return false;
+  if (!exact(workout, keys) || !ACTIVE_PHASES.includes(workout.phase) || !integer(workout.workoutStartedAtEpochMs) || !integer(workout.nextTimerId) || workout.nextTimerId < 1 || !validLedger(workout.phaseLedger, workout.phase) || !Array.isArray(workout.exercises) || !workout.exercises.length || new Set(workout.exercises.map(x => x.occurrenceId)).size !== workout.exercises.length || !workout.exercises.every(exercise => validExercise(exercise, workout.nextTimerId, version, workout)) || (version === 3 && !Array.isArray(workout.supersets))) return false;
   if (workout.activeWorkTimer !== null && (!exact(workout.activeWorkTimer, ['id', 'occurrenceId', 'exerciseIndex', 'setIndex', 'startedAtEpochMs']) || !/^work-[1-9]\d*$/.test(workout.activeWorkTimer.id) || Number(workout.activeWorkTimer.id.slice(5)) >= workout.nextTimerId || !integer(workout.activeWorkTimer.startedAtEpochMs) || !nonnegative(workout.activeWorkTimer.exerciseIndex) || !nonnegative(workout.activeWorkTimer.setIndex))) return false;
   const records = workout.exercises.flatMap(exercise => exercise.setRecords);
   const timerIds = records.filter(record => record.activeRest).map(record => record.activeRest.id);
