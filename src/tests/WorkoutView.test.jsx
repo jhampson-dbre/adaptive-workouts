@@ -56,8 +56,8 @@ test('a blocked active workout exposes recovery controls and awaits Exit to Plan
   const exit = vi.fn().mockResolvedValue(undefined); const onFinish = vi.fn();
   const activeWorkout = initializeActiveWorkout(timedWorkout, { phaseTimingEnabled: true });
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ exit }} sessionState={{ status: 'blocked', activeWorkout, error: 'unsupported', blocked: true }} onFinish={onFinish} /></AuthContext.Provider>);
-  expect(screen.getByRole('heading', { level: 2, name: 'Workout recovery' })).toBeDefined();
-  expect(screen.getByText('This browser cannot safely start a recoverable workout.')).toBeDefined();
+  expect(screen.getByRole('heading', { level: 2, name: 'Workout interrupted' })).toBeDefined();
+  expect(screen.getByText('This browser cannot keep an in-progress workout available to resume.')).toBeDefined();
   expect(screen.queryByRole('button', { name: 'Start workout' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Exit to Plan' }));
   await waitFor(() => expect(exit).toHaveBeenCalledOnce());
@@ -66,7 +66,7 @@ test('a blocked active workout exposes recovery controls and awaits Exit to Plan
 
 test('recovery gives the retained-workout action visual priority without changing its controls', () => {
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ resume: vi.fn(), discard: vi.fn() }} sessionState={{ status: 'recovery-available', activeWorkout: null, blocked: true }} /></AuthContext.Provider>);
-  expect(screen.getByRole('region', { name: 'Workout recovery' }).className).toContain('recovery-panel');
+  expect(screen.getByRole('region', { name: 'Interrupted workout' }).className).toContain('recovery-panel');
   expect(screen.getByRole('button', { name: 'Resume workout' }).className).toContain('recovery-primary');
   expect(screen.getByRole('button', { name: 'Discard workout' }).className).toContain('recovery-secondary');
 });
@@ -82,7 +82,7 @@ test('focuses recovery only when its material presentation changes', async () =>
   const session = { requestHandoff: vi.fn(), resume: vi.fn(), exit: vi.fn() };
   const renderRecovery = error => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={session} sessionState={{ status: 'recovery-blocked', activeWorkout: null, error, blocked: true }} /></AuthContext.Provider>;
   const view = render(renderRecovery('timeout'));
-  const heading = screen.getByRole('heading', { name: 'Workout recovery' });
+  const heading = screen.getByRole('heading', { name: 'Workout interrupted' });
   await waitFor(() => expect(document.activeElement).toBe(heading));
   const exit = screen.getByRole('button', { name: 'Exit to Plan' }); exit.focus();
   view.rerender(renderRecovery('timeout'));
@@ -211,6 +211,7 @@ test('recovery resumes a partial mixed superset but otherwise follows display or
   partial = activeWorkoutReducer(partial, { type: 'startSet', exerciseIndex: 1, setIndex: 0, timestamp: 2 });
   partial = activeWorkoutReducer(partial, { type: 'confirmSet', exerciseIndex: 1, setIndex: 0, timestamp: 3 });
   const view = render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'checking', activeWorkout: null, blocked: true }} /></AuthContext.Provider>);
+  expect(screen.getByRole('status').textContent).toBe('Checking for a workout to resume.');
 
   view.rerender(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'owned', activeWorkout: partial, blocked: false }} /></AuthContext.Provider>);
   expect(await screen.findByRole('button', { name: /Long Press Exercise Name exercise 3 set 1 start/i })).toBeDefined();
@@ -431,7 +432,7 @@ test('orients a started legacy workout as Performance', () => {
   const generated = initializeActiveWorkout(timedWorkout);
   const activeWorkout = activeWorkoutReducer(generated, { type: 'startWorkout', timestamp: Date.now() });
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'owned', activeWorkout, blocked: false }} /></AuthContext.Provider>);
-  expect(screen.getByRole('heading', { name: 'Performance' })).toBeDefined();
+  expect(screen.getByRole('heading', { name: 'Main workout' })).toBeDefined();
   expect(screen.getByText('Perform').closest('li').getAttribute('aria-current')).toBe('step');
 });
 
@@ -603,7 +604,7 @@ test('retires contextual and Finish feedback after correction or cancellation wi
   fireEvent.change(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }), { target: { value: '' } });
   await waitFor(() => expect(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }).value).toBe(''));
   fireEvent.click(screen.getByRole('button', { name: /set 1 confirm/i }));
-  expect(screen.getByRole('alert').textContent).toMatch(/valid performance values/i);
+  expect(screen.getByRole('alert').textContent).toBe('Enter weight and rep values before confirming Bench Press set 1.');
   expect(screen.getByRole('status').textContent).toBe('');
   fireEvent.change(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }), { target: { value: '8' } });
   expect(screen.queryByRole('alert')).toBeNull();
@@ -629,12 +630,12 @@ test('weighted confirmation validates inputs and unlocks the next set with backo
   fireEvent.change(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }), { target: { value: '' } });
   await waitFor(() => expect(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }).value).toBe(''));
   fireEvent.click(screen.getByRole('button', { name: /set 1 confirm/i }));
-  expect(screen.getByText(/valid performance values/i)).toBeDefined();
+  expect(screen.getByText(/Enter weight and rep values/i)).toBeDefined();
   fireEvent.change(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }), { target: { value: '4' } });
   await waitFor(() => expect(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }).value).toBe('4'));
   fireEvent.click(screen.getByRole('button', { name: /set 1 confirm/i }));
   expect(screen.getByRole('button', { name: /set 2 start/i })).toBeDefined();
-  expect(screen.getByLabelText(/set 2 recommendation reason/i).textContent).toMatch(/-10 lb/i);
+  expect(screen.getByLabelText(/set 2 recommendation reason/i).textContent).toBe('Reduced 10 lb: previous set completed fewer than the 6-rep minimum.');
 });
 
 test('final confirmation collapses the exercise, expands next incomplete, and moves focus', async () => {
@@ -858,7 +859,7 @@ test('A8 production phase targets drive Warmup, Performance, Cooldown, and Revie
   fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   expect(screen.getByRole('heading', { level: 2, name: 'Warmup' })).toBe(document.activeElement);
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
-  expect(screen.getByRole('heading', { level: 2, name: 'Performance' })).toBe(document.activeElement);
+  expect(screen.getByRole('heading', { level: 2, name: 'Main workout' })).toBe(document.activeElement);
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   expect(screen.getByRole('heading', { level: 2, name: 'Cooldown' })).toBe(document.activeElement);
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
@@ -876,7 +877,7 @@ test('renders planned phase timing and freezes all phase totals in the semantic 
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   expect(screen.getByRole('heading', { level: 2, name: 'Review' })).toBe(document.activeElement);
   expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Warmup: 0:00 actual \/ 1:00 planned/);
-  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Performance: 0:00 actual \/ 0:45 planned/);
+  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Main workout: 0:00 actual \/ 0:45 planned/);
   expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Cooldown: 0:00 actual \/ 0:30 planned/);
 });
 
@@ -901,19 +902,22 @@ test.each([
   expect(screen.getByRole('button', { name: label })).toBeDefined();
 });
 
-test.each(['timeout', 'conflict'])('keeps identity-dependent recovery controls hidden for %s without a validated draft', error => {
+test.each([
+  ['timeout', 'Nudge could not confirm which tab is using this workout. Try again or exit.'],
+  ['conflict', 'This workout is open in another tab.'],
+])('keeps identity-dependent recovery controls hidden for %s without a validated draft', (error, message) => {
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ exit: vi.fn() }} sessionState={{ status: 'recovery-blocked', blocked: true, error, activeWorkout: { exercises: [] } }} /></AuthContext.Provider>);
-  expect(screen.getByRole('alert').textContent).toMatch(/ownership|another tab/i);
+  expect(screen.getByRole('alert').textContent).toBe(message);
   expect(screen.queryByRole('button', { name: 'Take over workout in this tab' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Try again in this tab' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Exit to Plan' })).toBeDefined();
 });
 
 test.each([
-  ['retryable-absent', 'Retry exact save', 'absent'],
-  ['write-pending', 'Check again', 'cleanup-error'],
-  ['reconcile-indeterminate', 'Check again', 'indeterminate'],
-])('uses pending immutable-save state %s for the actionable button', async (pendingState, label, error) => {
+  ['retryable-absent', 'Try saving again', 'absent', 'This workout was not saved. Try saving it again.'],
+  ['write-pending', 'Check again', 'cleanup-error', 'It is not clear whether this workout was saved. Check again before trying to save it.'],
+  ['reconcile-indeterminate', 'Check again', 'indeterminate', 'It is not clear whether this workout was saved. Check again before trying to save it.'],
+])('uses pending immutable-save state %s for the actionable button', async (pendingState, label, error, message) => {
   let review = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
   for (const action of [
     { type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 },
@@ -921,6 +925,7 @@ test.each([
   ]) review = activeWorkoutReducer(review, action);
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ save: vi.fn(), action: vi.fn() }} sessionState={{ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 0, performanceSeconds: 2700, cooldownSeconds: 0 }, pendingSave: { state: pendingState }, error, blocked: false }} /></AuthContext.Provider>);
   expect(await screen.findByRole('button', { name: label })).toBeDefined();
+  expect(screen.getByRole('alert').textContent).toBe(message);
   expect(screen.queryByText(/^(absent|indeterminate|conflict|cleanup-error)$/i)).toBeNull();
 });
 
@@ -930,13 +935,13 @@ test('blocked immutable-save conflict keeps frozen Review with only non-mutating
   const save = vi.fn(); const exit = vi.fn().mockResolvedValue(undefined); const onFinish = vi.fn();
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ save, exit, action: vi.fn() }} sessionState={{ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 0, performanceSeconds: 2700, cooldownSeconds: 0 }, snapshot: { draftId: 'd', ownershipGeneration: 1 }, pendingSave: { state: 'blocked-conflict' }, error: 'conflict', blocked: true }} onFinish={onFinish} /></AuthContext.Provider>);
   expect(await screen.findByRole('heading', { level: 2, name: 'Review' })).toBe(document.activeElement);
-  expect(screen.getByText('A different saved workout conflicts with this save.')).toBeDefined();
+  expect(screen.getByText('A different workout was saved while you were finishing this one.')).toBeDefined();
   expect(screen.getByRole('alert').className).toContain('recovery-feedback');
-  expect(screen.getByRole('button', { name: 'Keep workout pending' }).className).toContain('recovery-primary');
+  expect(screen.getByRole('button', { name: 'Keep this workout open' }).className).toContain('recovery-primary');
   expect(screen.getByRole('button', { name: 'Exit to Plan' }).className).toContain('recovery-secondary');
   expect(screen.queryByRole('button', { name: 'Back to workout' })).toBeNull(); expect(screen.queryByRole('button', { name: 'Save workout' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Keep workout pending' }));
-  expect(save).not.toHaveBeenCalled(); expect(screen.getByRole('status').textContent).toBe('Save conflict remains pending.');
+  fireEvent.click(screen.getByRole('button', { name: 'Keep this workout open' }));
+  expect(save).not.toHaveBeenCalled(); expect(screen.getByRole('status').textContent).toBe('This workout is still open.');
   fireEvent.click(screen.getByRole('button', { name: 'Exit to Plan' })); await waitFor(() => expect(exit).toHaveBeenCalledOnce()); expect(onFinish).toHaveBeenCalledOnce();
 });
 
@@ -962,12 +967,12 @@ test('renders the session-produced divergent immutable-save conflict as frozen R
 
   const summary = await screen.findByRole('region', { name: 'Workout summary' });
   expect(screen.getByRole('heading', { level: 2, name: 'Review' })).toBe(document.activeElement);
-  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Performance: 0:00 actual \/ 45:00 planned/);
+  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Main workout: 0:00 actual \/ 45:00 planned/);
   expect(summary.textContent).toMatch(/1 set recorded/);
-  expect([...summary.querySelectorAll('button')].map(button => button.textContent)).toEqual(['Keep workout pending', 'Exit to Plan']);
-  fireEvent.click(screen.getByRole('button', { name: 'Keep workout pending' }));
+  expect([...summary.querySelectorAll('button')].map(button => button.textContent)).toEqual(['Keep this workout open', 'Exit to Plan']);
+  fireEvent.click(screen.getByRole('button', { name: 'Keep this workout open' }));
   expect(save).toHaveBeenCalledOnce();
-  expect(screen.getByRole('status').textContent).toBe('Save conflict remains pending.');
+  expect(screen.getByRole('status').textContent).toBe('This workout is still open.');
   expect(session.getState()).toMatchObject({ pendingSave: { state: 'blocked-conflict' } });
   unsubscribe();
 });

@@ -126,6 +126,24 @@ describe('Timing presentation controller', () => {
     expect(controller.getViewModel().announcement).toMatch(/saved successfully/i);
   });
 
+  it('uses plain Review and retryable-save copy', () => {
+    const { controller } = createController();
+    controller.setRecovery('retryable-absent');
+    expect(controller.getViewModel().recoveryMessage).toBe('This workout was not saved. Try saving it again.');
+    controller.performRecoveryAction('Try saving again');
+    expect(controller.getViewModel().announcement).toBe('Trying to save this workout again.');
+    controller.setRecovery('reconcile-indeterminate');
+    expect(controller.getViewModel().recoveryMessage).toBe('It is not clear whether this workout was saved. Check again before trying to save it.');
+    controller.performRecoveryAction('Exit');
+    controller.dispatch({ type: 'startWorkout' });
+    controller.dispatch({ type: 'startSet', exerciseIndex: 0, setIndex: 0 });
+    controller.dispatch({ type: 'confirmSet', exerciseIndex: 0, setIndex: 0 });
+    controller.dispatch({ type: 'finishWorkout' });
+    render(<TimingPresentation controller={controller} />);
+    expect(screen.getByText('1 of 1 sets confirmed')).toBeDefined();
+    cleanup();
+  });
+
   it('focuses the semantic phase heading and retires event status on a clock tick', () => {
     const { controller, clock } = createController();
     render(<TimingPresentation controller={controller} />);
@@ -229,7 +247,7 @@ describe('Timing presentation controller', () => {
     render(<TimingHarness initialScenario="C-06" />);
     fireEvent.click(screen.getByRole('button', { name: 'Show blocked-conflict outcome' }));
     const conflict = screen.getByRole('alert');
-    expect(conflict.textContent).toMatch(/conflicts with this save/i);
+    expect(within(conflict).getByText('A different workout was saved while you were finishing this one.')).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: 'Keep pending' }));
     expect(screen.getByRole('alert')).toBe(conflict);
     expect(screen.getByRole('status').textContent).toBe('Save conflict remains pending.');
@@ -259,8 +277,8 @@ describe('Timing presentation controller', () => {
   it('renders distinct save retry/reconciliation acknowledgements while retaining pending state', () => {
     render(<TimingHarness initialScenario="C-06" />);
     fireEvent.click(screen.getByRole('button', { name: 'Show retryable-absent outcome' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Retry exact save' }));
-    expect(screen.getByRole('status').textContent).toBe('Exact save retry requested.');
+    fireEvent.click(screen.getByRole('button', { name: 'Try saving again' }));
+    expect(screen.getByRole('status').textContent).toBe('Trying to save this workout again.');
     expect(screen.getByRole('alert')).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: 'Show reconcile-indeterminate outcome' }));
     fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
@@ -336,7 +354,7 @@ describe('Timing presentation controller', () => {
     controller.setRecovery('lost');
     render(<TimingPresentation controller={controller} />);
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Performance' })).toBeDefined();
+    expect(screen.getByRole('heading', { level: 1, name: 'Main workout' })).toBeDefined();
     for (const name of ['Start set', 'Cancel work timer', 'Confirm set']) {
       expect(screen.queryByRole('button', { name })).toBeNull();
     }
@@ -402,9 +420,9 @@ describe('Timing presentation controller', () => {
   it('exposes distinct Resume and final-set Undo T-06 paths', () => {
     render(<TimingHarness initialScenario="T-06" />);
     fireEvent.click(screen.getByRole('button', { name: 'Show Resume Workout path' }));
-    expect(screen.getByRole('heading', { level: 1, name: 'Performance' })).toBeDefined();
+    expect(screen.getByRole('heading', { level: 1, name: 'Main workout' })).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: 'Show final-set Undo path' }));
-    expect(screen.getByRole('heading', { level: 1, name: 'Performance' })).toBeDefined();
+    expect(screen.getByRole('heading', { level: 1, name: 'Main workout' })).toBeDefined();
     cleanup();
   });
 
@@ -412,7 +430,7 @@ describe('Timing presentation controller', () => {
     render(<TimingHarness initialScenario="T-06" />);
     const before = screen.getByText(/Global elapsed:/i).textContent;
     fireEvent.click(screen.getByRole('button', { name: 'Show final-set Undo path' }));
-    expect(screen.getByRole('heading', { level: 1, name: 'Performance' })).toBeDefined();
+    expect(screen.getByRole('heading', { level: 1, name: 'Main workout' })).toBeDefined();
     expect(Number(screen.getByText(/Global elapsed:/i).textContent.slice(-2))).toBeGreaterThanOrEqual(Number(before.slice(-2)));
     cleanup();
   });
@@ -440,7 +458,7 @@ describe('Timing presentation controller', () => {
   it('renders the production recovery surface from a synthetic C-03 fixture', () => {
     render(<TimingHarness initialScenario="C-03" />);
     fireEvent.click(screen.getByRole('button', { name: 'Show production recovery surface' }));
-    expect(screen.getByRole('region', { name: 'Workout recovery' })).toBeDefined();
+    expect(screen.getByRole('region', { name: 'Interrupted workout' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Take over workout in this tab' })).toBeDefined();
     cleanup();
   });
@@ -450,7 +468,7 @@ describe('Timing presentation controller', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show blocked-conflict outcome' }));
     fireEvent.click(screen.getByRole('button', { name: 'Show production recovery surface' }));
     const fixture = within(screen.getByRole('region', { name: 'Production recovery fixture' }));
-    expect(fixture.getByRole('button', { name: 'Keep workout pending' })).toBeDefined();
+    expect(fixture.getByRole('button', { name: 'Keep this workout open' })).toBeDefined();
     expect(fixture.queryByRole('button', { name: 'Check again' })).toBeNull();
     cleanup();
   });

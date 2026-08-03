@@ -6,7 +6,7 @@ const RECOVERY_ACTIONS = {
   resumable: ['Resume workout', 'Discard'], conflict: ['Request handoff', 'Exit'],
   timeout: ['Retry acquisition', 'Exit'], denied: ['Retry acquisition', 'Exit'], unsupported: ['Exit'], lost: ['Recover workout', 'Exit'],
   'storage-error': ['Retry local recovery', 'Exit'], malformed: ['Discard', 'Exit'], 'unsupported-version': ['Discard', 'Exit'], stale: ['Discard', 'Exit'], 'wrong-user': ['Discard', 'Exit'], 'wrong-project': ['Discard', 'Exit'],
-  'retryable-absent': ['Retry exact save', 'Exit'], 'reconcile-indeterminate': ['Check again', 'Exit'], 'blocked-conflict': ['Keep pending', 'Exit'], saved: ['Continue'],
+  'retryable-absent': ['Try saving again', 'Exit'], 'reconcile-indeterminate': ['Check again', 'Exit'], 'blocked-conflict': ['Keep pending', 'Exit'], saved: ['Continue'],
 };
 
 function PhaseTimer({ timing }) {
@@ -30,8 +30,8 @@ function Recovery({ model, controller }) {
 function Review({ model, controller, actionsBlocked }) {
   if (!model.review) return null;
   const { phaseActualSeconds: phases } = model.review;
-  return <section aria-label="Frozen workout review"><h2>Completed work</h2><p>{model.completedWork} of {model.totalWork} items confirmed</p>
-    <dl><dt>Warmup</dt><dd>{formatDuration(phases.warmup)}</dd><dt>Performance</dt><dd>{formatDuration(phases.performance)}</dd><dt>Cooldown</dt><dd>{formatDuration(phases.cooldown)}</dd><dt>Total</dt><dd>{formatDuration(model.review.actualDurationSeconds)}</dd></dl>
+  return <section aria-label="Frozen workout review"><h2>Completed work</h2><p>{model.completedWork} of {model.totalWork} sets confirmed</p>
+    <dl><dt>Warmup</dt><dd>{formatDuration(phases.warmup)}</dd><dt>Main workout</dt><dd>{formatDuration(phases.performance)}</dd><dt>Cooldown</dt><dd>{formatDuration(phases.cooldown)}</dd><dt>Total</dt><dd>{formatDuration(model.review.actualDurationSeconds)}</dd></dl>
     <p>Save state: {model.review.saveState}</p>{!actionsBlocked && <><button type="button" onClick={() => controller.dispatch({ type: 'reviewBack' })}>Back</button>
       <button type="button" onClick={() => controller.setSaveState('saved')}>Save workout</button></>}</section>;
 }
@@ -57,7 +57,7 @@ export default function TimingPresentation({ controller }) {
     {model.phase !== 'review' && <PhaseTimer timing={model.phaseTiming} />}
     {!actionsBlocked && model.phase === 'generated' && <button type="button" onClick={() => controller.dispatch({ type: 'startWorkout' })}>Start Workout</button>}
     {!actionsBlocked && model.phase === 'warmup' && <button type="button" onClick={() => controller.dispatch({ type: 'startSet', exerciseIndex: 0, setIndex: 0 })}>Start first set</button>}
-    {!actionsBlocked && model.phase === 'performance' && <section aria-label="Performance work"><h2>{firstExercise?.name ?? 'Current exercise'}</h2><p>Prescription and current work timer remain available.</p><p>{model.activeWorkTimer ? 'Work timer is running.' : 'Choose the next action.'}</p>
+    {!actionsBlocked && model.phase === 'performance' && <section aria-label="Main workout exercises"><h2>{firstExercise?.name ?? 'Current exercise'}</h2><p>Prescription and current work timer remain available.</p><p>{model.activeWorkTimer ? 'Work timer is running.' : 'Choose the next action.'}</p>
       <button type="button" onClick={() => controller.dispatch({ type: 'startSet', exerciseIndex: 0, setIndex: 0 })}>Start set</button>
       <button type="button" onClick={() => controller.dispatch({ type: 'cancelSet', exerciseIndex: 0, setIndex: 0 })}>Cancel work timer</button>
       <button type="button" onClick={() => controller.dispatch({ type: 'confirmSet', exerciseIndex: 0, setIndex: 0 })}>Confirm set</button></section>}

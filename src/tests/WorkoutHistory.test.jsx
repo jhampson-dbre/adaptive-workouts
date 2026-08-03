@@ -302,12 +302,12 @@ test('shows confirmed bodyweight categories and totals', () => {
 test('uses only saved rationale fields for every stable recommendation reason', () => {
   const cases = [
     [{ decision: 'starting', sourceWorkoutId: null, sourceWorkoutDate: null, sourceAnchorWeight: null, appliedWeightStep: 0, recommendedWeight: 100, reasonCode: 'STARTING_NO_ANCHOR' }, 'Starting recommendation: 100 lb.'],
-    [{ decision: 'increase', sourceWorkoutId: 'old', sourceWorkoutDate: '2026-01-01', sourceAnchorWeight: 95, appliedWeightStep: 5, recommendedWeight: 100, reasonCode: 'INCREASE_ALL_SETS_QUALIFIED' }, '+5 lb from 95 lb: prior workout qualified for an increase.'],
-    [{ decision: 'decrease', sourceWorkoutId: 'old', sourceWorkoutDate: '2026-01-01', sourceAnchorWeight: 105, appliedWeightStep: 5, recommendedWeight: 100, reasonCode: 'DECREASE_TOP_BELOW_FLOOR' }, '-5 lb from 105 lb: prior top set fell below its floor.'],
-    [{ decision: 'hold', sourceWorkoutId: 'old', sourceWorkoutDate: '2026-01-01', sourceAnchorWeight: 100, appliedWeightStep: 0, recommendedWeight: 100, reasonCode: 'HOLD_TOP_BELOW_TARGET' }, 'Held at 100 lb: prior top set was below its target.'],
-    [{ decision: 'hold', sourceWorkoutId: 'old', sourceWorkoutDate: '2026-01-01', sourceAnchorWeight: 100, appliedWeightStep: 0, recommendedWeight: 100, reasonCode: 'HOLD_INCOMPLETE_SETS' }, 'Held at 100 lb: prior workout had incomplete sets.'],
-    [{ decision: 'hold', sourceWorkoutId: 'old', sourceWorkoutDate: '2026-01-01', sourceAnchorWeight: 100, appliedWeightStep: 0, recommendedWeight: 100, reasonCode: 'HOLD_BACKOFF_BELOW_FLOOR' }, 'Held at 100 lb: a prior backoff set fell below its floor.'],
-    [{ decision: 'hold', sourceWorkoutId: 'old', sourceWorkoutDate: '2026-01-01', sourceAnchorWeight: 100, appliedWeightStep: 0, recommendedWeight: 100, reasonCode: 'SOMETHING_NEW' }, 'Recommended 100 lb from the saved workout.'],
+    [{ decision: 'increase', sourceWorkoutId: 'old', sourceWorkoutDate: '2026-01-01', sourceAnchorWeight: 95, appliedWeightStep: 5, recommendedWeight: 100, reasonCode: 'INCREASE_ALL_SETS_QUALIFIED' }, '+5 lb from 95 lb based on the previous workout.'],
+    [{ decision: 'decrease', sourceWorkoutId: 'old', sourceWorkoutDate: '2026-01-01', sourceAnchorWeight: 105, appliedWeightStep: 5, recommendedWeight: 100, reasonCode: 'DECREASE_TOP_BELOW_FLOOR' }, '-5 lb from 105 lb: the first set in the previous workout completed fewer than the minimum reps.'],
+    [{ decision: 'hold', sourceWorkoutId: 'old', sourceWorkoutDate: '2026-01-01', sourceAnchorWeight: 100, appliedWeightStep: 0, recommendedWeight: 100, reasonCode: 'HOLD_TOP_BELOW_TARGET' }, 'Held at 100 lb: the first set in the previous workout completed fewer than its target reps.'],
+    [{ decision: 'hold', sourceWorkoutId: 'old', sourceWorkoutDate: '2026-01-01', sourceAnchorWeight: 100, appliedWeightStep: 0, recommendedWeight: 100, reasonCode: 'HOLD_INCOMPLETE_SETS' }, 'Held at 100 lb: the previous workout did not include all sets.'],
+    [{ decision: 'hold', sourceWorkoutId: 'old', sourceWorkoutDate: '2026-01-01', sourceAnchorWeight: 100, appliedWeightStep: 0, recommendedWeight: 100, reasonCode: 'HOLD_BACKOFF_BELOW_FLOOR' }, 'Held at 100 lb: a later set in the previous workout completed fewer than the minimum reps.'],
+    [{ decision: 'hold', sourceWorkoutId: 'old', sourceWorkoutDate: '2026-01-01', sourceAnchorWeight: 100, appliedWeightStep: 0, recommendedWeight: 100, reasonCode: 'SOMETHING_NEW' }, 'Recommended 100 lb based on the saved workout.'],
   ];
   for (const [reason, expected] of cases) {
     const { unmount } = render(<WorkoutHistory history={[workout({ exercises: [weighted({ sets: 1, prescribedSetCount: 1, setRecords: [weightedRecord(0, { recommendationReason: reason })] })] })]} />);
@@ -319,14 +319,14 @@ test('uses only saved rationale fields for every stable recommendation reason', 
 
 test('renders saved backoff explanations including capped recommendations', () => {
   const reasons = [
-    [{ recommendedWeight: 100, reasonCode: 'BACKOFF_AWAITING_PRIOR_SET' }, 'Awaiting prior set.'],
-    [{ recommendedWeight: 100, reasonCode: 'BACKOFF_FLOOR_MET' }, 'Held at 100 lb: prior set met the floor.'],
-    [{ recommendedWeight: 90, reasonCode: 'BACKOFF_BELOW_FLOOR', sourceActualReps: 4, floorReps: 6, dropSteps: 2, weightStep: 5, rawWeight: 90 }, '-10 lb: 4 reps, floor 6.'],
-    [{ recommendedWeight: 85, reasonCode: 'BACKOFF_BELOW_FLOOR', sourceActualReps: 4, floorReps: 6, dropSteps: 2, weightStep: 5, rawWeight: 90 }, 'Recommended 85 lb: 4 reps, floor 6; capped by the saved workout target.'],
-    [{ recommendedWeight: 100, reasonCode: 'BACKOFF_BELOW_FLOOR' }, 'Recommended 100 lb from the saved workout.'],
-    [{ recommendedWeight: 90, reasonCode: 'BACKOFF_BELOW_FLOOR', sourceActualReps: 4, floorReps: 6, rawWeight: 90 }, 'Recommended 90 lb from the saved workout.'],
-    [{ recommendedWeight: 90, reasonCode: 'BACKOFF_BELOW_FLOOR', sourceActualReps: 4, floorReps: 6, dropSteps: -1, weightStep: 5, rawWeight: 90 }, 'Recommended 90 lb from the saved workout.'],
-    [{ recommendedWeight: 100, reasonCode: 'FUTURE_BACKOFF' }, 'Recommended 100 lb from the saved workout.'],
+    [{ recommendedWeight: 100, reasonCode: 'BACKOFF_AWAITING_PRIOR_SET' }, 'Complete the previous set first.'],
+    [{ recommendedWeight: 100, reasonCode: 'BACKOFF_FLOOR_MET' }, 'Held at 100 lb: previous set reached the minimum reps.'],
+    [{ recommendedWeight: 90, reasonCode: 'BACKOFF_BELOW_FLOOR', sourceActualReps: 4, floorReps: 6, dropSteps: 2, weightStep: 5, rawWeight: 90 }, 'Reduced 10 lb: previous set completed fewer than the 6-rep minimum.'],
+    [{ recommendedWeight: 85, reasonCode: 'BACKOFF_BELOW_FLOOR', sourceActualReps: 4, floorReps: 6, dropSteps: 2, weightStep: 5, rawWeight: 90 }, 'Recommended 85 lb: previous set completed fewer than the 6-rep minimum; earlier sets limited this set to 85 lb.'],
+    [{ recommendedWeight: 100, reasonCode: 'BACKOFF_BELOW_FLOOR' }, 'Recommended 100 lb based on the saved workout.'],
+    [{ recommendedWeight: 90, reasonCode: 'BACKOFF_BELOW_FLOOR', sourceActualReps: 4, floorReps: 6, rawWeight: 90 }, 'Recommended 90 lb based on the saved workout.'],
+    [{ recommendedWeight: 90, reasonCode: 'BACKOFF_BELOW_FLOOR', sourceActualReps: 4, floorReps: 6, dropSteps: -1, weightStep: 5, rawWeight: 90 }, 'Recommended 90 lb based on the saved workout.'],
+    [{ recommendedWeight: 100, reasonCode: 'FUTURE_BACKOFF' }, 'Recommended 100 lb based on the saved workout.'],
   ];
   for (const [reason, expected] of reasons) {
     const records = [weightedRecord(0), weightedRecord(1, { targetWeight: reason.recommendedWeight, recommendationReason: reason })];
@@ -404,7 +404,7 @@ test('renders valid v4 total and accessible planned-versus-actual phase duration
   expect(screen.getByText('Duration: 2:05')).toBeDefined();
   const phases = screen.getByRole('region', { name: 'Phase durations' }).textContent;
   expect(phases).toContain('Warmup: Planned 10:00 · Actual 0:00');
-  expect(phases).toContain('Performance: Planned 30:00 · Actual 2:05');
+  expect(phases).toContain('Main workout: Planned 30:00 · Actual 2:05');
   expect(phases).toContain('Cooldown: Planned 5:00 · Actual 0:00');
 });
 

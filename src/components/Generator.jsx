@@ -134,7 +134,7 @@ export default function Generator({
       <JourneyProgress current="Plan" />
       <div className="plan-intro">
         <h2 ref={headingRef} tabIndex={baselineFocus ? '-1' : undefined}>How much time do you have?</h2>
-        <p>Nudge will use your recent training to decide what is worth doing next.</p>
+        <p>Nudge uses your recent workouts and available time to plan today&apos;s workout.</p>
       </div>
       
       {error && <div className="error-message" role="alert">{error}</div>}

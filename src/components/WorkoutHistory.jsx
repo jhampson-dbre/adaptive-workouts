@@ -42,44 +42,44 @@ function RecommendationReason({ record }) {
       text = `Starting recommendation: ${target} lb.`;
       break;
     case 'INCREASE_ALL_SETS_QUALIFIED':
-      text = `+${reason.appliedWeightStep} lb from ${reason.sourceAnchorWeight} lb: prior workout qualified for an increase.`;
+      text = `+${reason.appliedWeightStep} lb from ${reason.sourceAnchorWeight} lb based on the previous workout.`;
       break;
     case 'DECREASE_TOP_BELOW_FLOOR':
-      text = `-${reason.appliedWeightStep} lb from ${reason.sourceAnchorWeight} lb: prior top set fell below its floor.`;
+      text = `-${reason.appliedWeightStep} lb from ${reason.sourceAnchorWeight} lb: the first set in the previous workout completed fewer than the minimum reps.`;
       break;
     case 'HOLD_TOP_BELOW_TARGET':
-      text = `Held at ${target} lb: prior top set was below its target.`;
+      text = `Held at ${target} lb: the first set in the previous workout completed fewer than its target reps.`;
       break;
     case 'HOLD_INCOMPLETE_SETS':
-      text = `Held at ${target} lb: prior workout had incomplete sets.`;
+      text = `Held at ${target} lb: the previous workout did not include all sets.`;
       break;
     case 'HOLD_BACKOFF_BELOW_FLOOR':
-      text = `Held at ${target} lb: a prior backoff set fell below its floor.`;
+      text = `Held at ${target} lb: a later set in the previous workout completed fewer than the minimum reps.`;
       break;
     case 'BACKOFF_AWAITING_PRIOR_SET':
-      text = 'Awaiting prior set.';
+      text = 'Complete the previous set first.';
       break;
     case 'BACKOFF_FLOOR_MET':
-      text = `Held at ${target} lb: prior set met the floor.`;
+      text = `Held at ${target} lb: previous set reached the minimum reps.`;
       break;
     case 'BACKOFF_BELOW_FLOOR':
       if (![reason.sourceActualReps, reason.floorReps, reason.rawWeight].every(Number.isFinite)) {
-        text = `Recommended ${target} lb from the saved workout.`;
+        text = `Recommended ${target} lb based on the saved workout.`;
       } else if (reason.rawWeight === reason.recommendedWeight) {
         if (Number.isInteger(reason.dropSteps)
           && reason.dropSteps >= 0
           && Number.isFinite(reason.weightStep)
           && reason.weightStep > 0) {
-          text = `-${reason.dropSteps * reason.weightStep} lb: ${reason.sourceActualReps} reps, floor ${reason.floorReps}.`;
+          text = `Reduced ${reason.dropSteps * reason.weightStep} lb: previous set completed fewer than the ${reason.floorReps}-rep minimum.`;
         } else {
-          text = `Recommended ${target} lb from the saved workout.`;
+          text = `Recommended ${target} lb based on the saved workout.`;
         }
       } else {
-        text = `Recommended ${reason.recommendedWeight} lb: ${reason.sourceActualReps} reps, floor ${reason.floorReps}; capped by the saved workout target.`;
+        text = `Recommended ${reason.recommendedWeight} lb: previous set completed fewer than the ${reason.floorReps}-rep minimum; earlier sets limited this set to ${reason.recommendedWeight} lb.`;
       }
       break;
     default:
-      text = `Recommended ${target} lb from the saved workout.`;
+      text = `Recommended ${target} lb based on the saved workout.`;
   }
 
   return <p className="history-recommendation">{text}</p>;
@@ -254,7 +254,7 @@ function V4Workout({ entry, headingRef, focusable, onFocusLeave }) {
       </header>
       <section className="history-phase-durations" aria-label="Phase durations">
         <p>Warmup: Planned {formatDuration(entry.phaseDurations.warmup.plannedSeconds)} · Actual {formatDuration(entry.phaseDurations.warmup.actualSeconds)}</p>
-        <p>Performance: Planned {formatDuration(entry.phaseDurations.performance.plannedSeconds)} · Actual {formatDuration(entry.phaseDurations.performance.actualSeconds)}</p>
+        <p>Main workout: Planned {formatDuration(entry.phaseDurations.performance.plannedSeconds)} · Actual {formatDuration(entry.phaseDurations.performance.actualSeconds)}</p>
         <p>Cooldown: Planned {formatDuration(entry.phaseDurations.cooldown.plannedSeconds)} · Actual {formatDuration(entry.phaseDurations.cooldown.actualSeconds)}</p>
       </section>
       <ul className="history-exercise-list">
