@@ -12,6 +12,7 @@ afterEach(() => {
   cleanup();
   vi.resetAllMocks();
   storage.getHistoryPage.mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
+  Object.assign(navigator, { clipboard: undefined });
   vi.useRealTimers();
 });
 
@@ -852,6 +853,70 @@ test('A8 saves a strict v4 document with frozen phase durations instead of the l
   expect(onFinish).toHaveBeenCalledOnce();
   expect(view.api.save).toHaveBeenCalledOnce();
   expect(view.api.save.mock.calls[0][0]).toMatchObject({ actualDurationSeconds: 0, phaseActualSeconds: expect.any(Object) });
+});
+
+test('copies the frozen saved workout, keeps focus, reannounces success, and leaves history lazy', async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.assign(navigator, { clipboard: { writeText } });
+  const view = renderWorkout([{ ...timedWorkout[1] }]);
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
+  const copy = await screen.findByRole('button', { name: 'Copy workout' });
+  expect(storage.getHistoryPage).not.toHaveBeenCalled();
+  fireEvent.click(copy);
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith('Squat\n1 set\n0:00'));
+  expect(screen.getByText('Workout copied.', { selector: '[role="status"]' })).toBeDefined();
+  expect(copy).toBe(document.activeElement);
+  fireEvent.click(copy);
+  await waitFor(() => expect(screen.getByText(/^Workout copied\.\u2060$/, { selector: '[role="status"]' })).toBeDefined());
+  expect(view.api.save).toHaveBeenCalledOnce();
+});
+
+test('copies the frozen mixed saved candidate after live workout state is replaced', async () => {
+  let review = initializeActiveWorkout(mixedSupersetWorkout(), { phaseTimingEnabled: true });
+  for (const action of [
+    { type: 'startWorkout', timestamp: 1000 },
+    { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 1002 },
+    { type: 'startSet', exerciseIndex: 1, setIndex: 0, timestamp: 1003 }, { type: 'confirmSet', exerciseIndex: 1, setIndex: 0, timestamp: 1004 },
+    { type: 'startSet', exerciseIndex: 2, setIndex: 0, timestamp: 1005 }, { type: 'confirmSet', exerciseIndex: 2, setIndex: 0, timestamp: 1006 },
+    { type: 'finishWorkout', timestamp: 1007 },
+  ]) review = activeWorkoutReducer(review, action);
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.assign(navigator, { clipboard: { writeText } });
+  const renderState = state => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={state} /></AuthContext.Provider>;
+  const view = render(renderState({ status: 'review', activeWorkout: review, blocked: false }));
+  await screen.findByRole('heading', { level: 2, name: 'Review' });
+  view.rerender(renderState({ status: 'saved', activeWorkout: { exercises: [] }, blocked: false }));
+  const copy = await screen.findByRole('button', { name: 'Copy workout' });
+  expect(storage.getHistoryPage).not.toHaveBeenCalled();
+  fireEvent.click(copy);
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith('Carry\n1 set\n0:00\n\nA1. Long Row Exercise Name\n1 set\n0:00\n\nA2. Long Press Exercise Name\n1 set\n0:00'));
+});
+
+test('keeps Copy workout enabled and focused after clipboard absence or rejection, then replaces the error on retry', async () => {
+  const view = renderWorkout([{ ...timedWorkout[1] }]);
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
+  const copy = await screen.findByRole('button', { name: 'Copy workout' });
+  Object.assign(navigator, { clipboard: undefined });
+  fireEvent.click(copy);
+  expect(screen.getByRole('alert').textContent).toBe('Couldn\u2019t copy workout. Try again.');
+  expect(copy.disabled).toBe(false); expect(copy).toBe(document.activeElement);
+  const writeText = vi.fn().mockRejectedValueOnce(new Error('denied')).mockResolvedValueOnce(undefined);
+  Object.assign(navigator, { clipboard: { writeText } });
+  fireEvent.click(copy);
+  await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('Couldn\u2019t copy workout. Try again.'));
+  expect(copy).toBe(document.activeElement);
+  fireEvent.click(copy);
+  await waitFor(() => expect(screen.getByText('Workout copied.', { selector: '[role="status"]' })).toBeDefined());
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(view.api.save).toHaveBeenCalledOnce();
 });
 
 test('A8 production phase targets drive Warmup, Performance, Cooldown, and Review with final-confirm focus on Cooldown', async () => {

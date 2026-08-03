@@ -6,6 +6,7 @@ import { calculateElapsedSeconds } from '../utils/workoutTiming';
 import { getPhaseElapsedSeconds } from '../utils/activeWorkout';
 import { hasConfirmedWork } from '../utils/workoutSchema';
 import { RECOVERY_MESSAGES } from '../utils/timingPresentationController';
+import { formatWorkoutClipboard } from '../utils/workoutClipboard';
 import WorkoutHistory from './WorkoutHistory';
 import JourneyProgress from './JourneyProgress';
 
@@ -305,12 +306,14 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
   const saveError = publicStatusMessage(sessionState?.error, sessionState?.pendingSave?.state);
   const isSaving = sessionState?.status === 'save-pending';
   const [finishCandidate, setFinishCandidate] = useState(null);
+  const [clipboardFeedback, setClipboardFeedback] = useState('');
   const summaryRef = useRef(null);
   const phaseHeadingRef = useRef(null);
   const recoveryHeadingRef = useRef(null);
   const promptHeadingRef = useRef(null);
   const finishRef = useRef(null);
   const savedRef = useRef(null);
+  const copyRef = useRef(null);
   const headerRefs = useRef([]);
   const startRefs = useRef({});
   const alertedRestsRef = useRef(new Set());
@@ -365,9 +368,10 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
       finishRequestedAt: activeWorkout.phaseCandidate.finishRequestedAtEpochMs,
       date: new Date(activeWorkout.phaseCandidate.finishRequestedAtEpochMs).toISOString(),
       exercises: activeWorkout.exercises,
+      supersets: activeWorkout.supersets,
     });
     setFinishCandidate(candidate);
-  }, [activeWorkout.exercises, activeWorkout.phase, activeWorkout.phaseCandidate, finishCandidate]);
+  }, [activeWorkout.exercises, activeWorkout.phase, activeWorkout.phaseCandidate, activeWorkout.supersets, finishCandidate]);
 
   useEffect(() => {
     if (activeWorkout.phase !== 'review') backPendingRef.current = false;
@@ -566,6 +570,17 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
     saveInFlightRef.current = false;
   };
 
+  const copyWorkout = async () => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(formatWorkoutClipboard(finishCandidate));
+      setClipboardFeedback(current => refreshRepeatedLiveMessage(current, 'Workout copied.'));
+    } catch {
+      setClipboardFeedback('Couldn\u2019t copy workout. Try again.');
+    }
+    copyRef.current?.focus();
+  };
+
   const focusedSetIndex = (exercise, exerciseIndex) => {
     if (activeWorkout.activeWorkTimer?.exerciseIndex === exerciseIndex) return activeWorkout.activeWorkTimer.setIndex;
     return exercise.setRecords.findIndex((_, setIndex) => getSetStatus(exercise, setIndex) === 'ready');
@@ -656,7 +671,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
       </section>
     </div>;
   }
-  if (sessionState?.status === 'saved') return <div className="workout-view"><JourneyProgress current="Review" /><section className="workout-summary"><h2 ref={savedRef} tabIndex="-1">Workout saved</h2><p role="status">This workout is complete.</p><button type="button" className="recovery-secondary" onClick={() => onFinish?.()}>Back to plan</button></section><WorkoutHistory key={user?.uid ?? null} historyKey={user?.uid ?? null} loadPage={({ cursor, pageSize }) => getHistoryPage(user?.uid, { cursor, pageSize })} /></div>;
+  if (sessionState?.status === 'saved') return <div className="workout-view"><JourneyProgress current="Review" /><section className="workout-summary"><h2 ref={savedRef} tabIndex="-1">Workout saved</h2><p role="status">This workout is complete.</p><button ref={copyRef} type="button" className="recovery-secondary" onClick={copyWorkout}>Copy workout</button>{clipboardFeedback && <p role={normalizeLiveMessage(clipboardFeedback) === 'Workout copied.' ? 'status' : 'alert'} aria-live={normalizeLiveMessage(clipboardFeedback) === 'Workout copied.' ? 'polite' : 'assertive'} aria-atomic="true">{clipboardFeedback}</p>}<button type="button" className="recovery-secondary" onClick={() => onFinish?.()}>Back to plan</button></section><WorkoutHistory key={user?.uid ?? null} historyKey={user?.uid ?? null} loadPage={({ cursor, pageSize }) => getHistoryPage(user?.uid, { cursor, pageSize })} /></div>;
   return <div className={`workout-view phase-${activeWorkout.phase}`}>
     <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{restAnnouncement || recoveryAcknowledgement}</div>
     <JourneyProgress current={finishCandidate ? 'Review' : journeyStep} />
