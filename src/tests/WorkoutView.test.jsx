@@ -178,6 +178,60 @@ const supersetWorkout = (restPlacement = 'AFTER_ROUND') => {
   return exercises;
 };
 
+const mixedSupersetWorkout = () => {
+  const exercises = [
+    { ...timedWorkout[1], id: 'carry', occurrenceId: 'carry:0', name: 'Carry', setRecords: timedWorkout[1].setRecords.map(record => ({ ...record })) },
+    ...supersetWorkout().map(exercise => ({ ...exercise, sets: 1, prescribedSetCount: 1, setRecords: [exercise.setRecords[0]] })),
+  ];
+  exercises.supersets = [{ occurrenceIds: ['row:0', 'press:1'], restPlacement: 'AFTER_ROUND' }];
+  return exercises;
+};
+
+test('uses display order outside a superset and continues group handoff until it is exhausted', async () => {
+  renderWorkout(mixedSupersetWorkout());
+  expect(screen.getByRole('button', { name: /Carry exercise 1 set 1 start/i })).toBeDefined();
+  expect(screen.queryByRole('button', { name: /Long Row Exercise Name exercise 2 set 1 start/i })).toBeNull();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name.*expand/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 2 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 2 set 1 confirm/i }));
+  expect(await screen.findByRole('button', { name: /Long Press Exercise Name exercise 3 set 1 start/i })).toBe(document.activeElement);
+  fireEvent.click(screen.getByRole('button', { name: /Long Press Exercise Name exercise 3 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Long Press Exercise Name exercise 3 set 1 confirm/i }));
+
+  await waitFor(() => expect(screen.getByRole('button', { name: /Carry exercise 1 set 1 start/i })).toBe(document.activeElement));
+  expect(screen.getByRole('button', { name: /Long Row Exercise Name.*expand/i }).getAttribute('aria-expanded')).toBe('false');
+  expect(screen.getByRole('button', { name: /Long Press Exercise Name.*expand/i }).getAttribute('aria-expanded')).toBe('false');
+});
+
+test('recovery resumes a partial mixed superset but otherwise follows display order', async () => {
+  const initial = initializeActiveWorkout(mixedSupersetWorkout());
+  let partial = activeWorkoutReducer(initial, { type: 'startWorkout', timestamp: 1 });
+  partial = activeWorkoutReducer(partial, { type: 'startSet', exerciseIndex: 1, setIndex: 0, timestamp: 2 });
+  partial = activeWorkoutReducer(partial, { type: 'confirmSet', exerciseIndex: 1, setIndex: 0, timestamp: 3 });
+  const view = render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'checking', activeWorkout: null, blocked: true }} /></AuthContext.Provider>);
+
+  view.rerender(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'owned', activeWorkout: partial, blocked: false }} /></AuthContext.Provider>);
+  expect(await screen.findByRole('button', { name: /Long Press Exercise Name exercise 3 set 1 start/i })).toBeDefined();
+  view.unmount();
+
+  const fresh = initializeActiveWorkout(mixedSupersetWorkout());
+  const recovered = render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'checking', activeWorkout: null, blocked: true }} /></AuthContext.Provider>);
+  recovered.rerender(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'owned', activeWorkout: fresh, blocked: false }} /></AuthContext.Provider>);
+  expect(await screen.findByRole('button', { name: /Carry exercise 1 set 1 start/i })).toBeDefined();
+  recovered.unmount();
+
+  const lastOrdinary = mixedSupersetWorkout();
+  const lastOnly = initializeActiveWorkout(Object.assign([lastOrdinary[1], lastOrdinary[2], lastOrdinary[0]], { supersets: lastOrdinary.supersets }));
+  lastOnly.exercises = lastOnly.exercises.map((exercise, exerciseIndex) => exerciseIndex === 2 ? exercise : {
+    ...exercise, setRecords: exercise.setRecords.map(record => ({ ...record, completed: true })),
+  });
+  const finalRecovery = render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'checking', activeWorkout: null, blocked: true }} /></AuthContext.Provider>);
+  finalRecovery.rerender(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'owned', activeWorkout: lastOnly, blocked: false }} /></AuthContext.Provider>);
+  expect(await screen.findByRole('button', { name: /Carry exercise 3 set 1 start/i })).toBeDefined();
+});
+
 test('guides a confirmed superset member to the earliest remaining member without listing group names', async () => {
   renderWorkout(supersetWorkout());
   fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));

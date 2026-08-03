@@ -66,6 +66,16 @@ function findNextIncompleteExercise(exercises, currentIndex) {
   return -1;
 }
 
+function findFirstIncompleteExercise(exercises) {
+  return exercises.findIndex(exercise => !Array.isArray(exercise.setRecords)
+    || exercise.setRecords.some(record => !record.completed));
+}
+
+function nextIncompleteSet(workout, currentIndex) {
+  const exerciseIndex = findNextIncompleteExercise(workout.exercises, currentIndex);
+  return exerciseIndex >= 0 ? { exerciseIndex, setIndex: workout.exercises[exerciseIndex].setRecords.findIndex(record => !record.completed) } : null;
+}
+
 function supersetFor(workout, exercise) {
   return workout.supersets?.find(group => group.occurrenceIds.includes(exercise.occurrenceId));
 }
@@ -83,7 +93,10 @@ function nextSupersetSet(workout, group, completedSet) {
 }
 
 function nextGuidedSet(workout) {
-  return workout.supersets?.map(group => nextSupersetSet(workout, group)).find(Boolean) ?? null;
+  return workout.supersets?.map(group => {
+    const next = nextSupersetSet(workout, group);
+    return next && group.occurrenceIds.some(occurrenceId => workout.exercises.find(exercise => exercise.occurrenceId === occurrenceId)?.setRecords.some(record => record.completed)) ? next : null;
+  }).find(Boolean) ?? null;
 }
 
 function groupRest(workout, group) {
@@ -277,8 +290,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
   const [expanded, setExpanded] = useState(() => {
     const guided = nextGuidedSet(activeWorkout);
     if (guided) return { [guided.exerciseIndex]: true };
-    const firstIncomplete = (activeWorkout.exercises ?? []).findIndex(exercise => !Array.isArray(exercise.setRecords)
-      || exercise.setRecords.some(record => !record.completed));
+    const firstIncomplete = findFirstIncompleteExercise(activeWorkout.exercises);
     return firstIncomplete >= 0 ? { [firstIncomplete]: true } : {};
   });
   const [restAnnouncement, setRestAnnouncement] = useState('');
@@ -338,7 +350,8 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
   useEffect(() => {
     if (wasShowingRecoveryRef.current && !showingRecovery) {
       const guided = nextGuidedSet(activeWorkout);
-      if (guided) setExpanded({ [guided.exerciseIndex]: true });
+      const exerciseIndex = guided?.exerciseIndex ?? findFirstIncompleteExercise(activeWorkout.exercises);
+      if (exerciseIndex >= 0) setExpanded({ [exerciseIndex]: true });
     }
     wasShowingRecoveryRef.current = showingRecovery;
   }, [activeWorkout, showingRecovery]);
@@ -477,8 +490,8 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
     setFinishError('');
     setEarlyFinishPrompt(null);
     const superset = supersetFor(activeWorkout, exercise);
-    const next = superset ? nextSupersetSet(activeWorkout, superset, { exerciseIndex, setIndex }) : setIndex === exercise.setRecords.length - 1
-      ? (() => { const nextIndex = findNextIncompleteExercise(activeWorkout.exercises, exerciseIndex); return nextIndex >= 0 ? { exerciseIndex: nextIndex, setIndex: activeWorkout.exercises[nextIndex].setRecords.findIndex(record => !record.completed) } : null; })()
+    const next = superset ? nextSupersetSet(activeWorkout, superset, { exerciseIndex, setIndex }) ?? nextIncompleteSet(activeWorkout, exerciseIndex) : setIndex === exercise.setRecords.length - 1
+      ? nextIncompleteSet(activeWorkout, exerciseIndex)
       : null;
     if (superset || setIndex === exercise.setRecords.length - 1) {
       setExpanded(current => ({ ...current, [exerciseIndex]: false, ...(next ? { [next.exerciseIndex]: true } : {}) }));
