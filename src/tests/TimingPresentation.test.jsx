@@ -441,7 +441,7 @@ describe('Timing presentation controller', () => {
     render(<TimingHarness initialScenario="C-03" />);
     fireEvent.click(screen.getByRole('button', { name: 'Show production recovery surface' }));
     expect(screen.getByRole('region', { name: 'Workout recovery' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Request handoff' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Take over workout in this tab' })).toBeDefined();
     cleanup();
   });
 
@@ -450,7 +450,7 @@ describe('Timing presentation controller', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show blocked-conflict outcome' }));
     fireEvent.click(screen.getByRole('button', { name: 'Show production recovery surface' }));
     const fixture = within(screen.getByRole('region', { name: 'Production recovery fixture' }));
-    expect(fixture.getByRole('button', { name: 'Keep pending' })).toBeDefined();
+    expect(fixture.getByRole('button', { name: 'Keep workout pending' })).toBeDefined();
     expect(fixture.queryByRole('button', { name: 'Check again' })).toBeNull();
     cleanup();
   });
