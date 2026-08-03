@@ -9,16 +9,20 @@ import {
   isLegacyWorkoutDocument,
   isMalformedV2WorkoutDocument,
   isValidCatalogExercise,
+  isValidCatalogSupersetSettings,
+  isValidSupersetSettings,
   isValidV2ExerciseOccurrence,
   isValidV2WorkoutDocument,
   isValidV2WorkoutEnvelope,
   isValidV3ExerciseOccurrence,
   isValidV3WorkoutDocument,
   isValidV4WorkoutDocument,
+  isValidV5WorkoutDocument,
   normalizeCatalogExercise,
   normalizeWorkoutSettings,
   wasPerformed,
 } from '../utils/workoutSchema';
+import { buildCanonicalV5WorkoutDocument } from '../utils/workoutFingerprint';
 
 const weightedExercise = {
   id: 'bench',
@@ -145,7 +149,95 @@ const validV4Workout = {
   actualDurationSeconds: 125,
 };
 
+const validV5Workout = {
+  ...validV4Workout,
+  schemaVersion: 5,
+  exercises: [{ ...v3SimpleExercise, setRecords: [{ ...v3SimpleExercise.setRecords[0], actualRestSeconds: null }, v3SimpleExercise.setRecords[1]] }, { ...v3SimpleExercise, id: 'side-plank', occurrenceId: 'side-plank:3', name: 'Side Plank' }],
+  supersets: [{ occurrenceIds: ['plank:2', 'side-plank:3'], restPlacement: 'AFTER_ROUND' }],
+};
+
 describe('workout schema', () => {
+  it('accepts only durable v5 supersets with contiguous equal-set members', () => {
+    expect(isValidV5WorkoutDocument(validV5Workout)).toBe(true);
+    expect(classifyWorkoutDocument(validV5Workout)).toBe('valid-v5');
+    expect(isValidV5WorkoutDocument({ ...validV5Workout, supersets: [] })).toBe(false);
+    expect(isValidV5WorkoutDocument({ ...validV5Workout, supersets: [{ occurrenceIds: ['bench:0', 'bench:0'], restPlacement: 'AFTER_ROUND' }] })).toBe(false);
+    expect(isValidV5WorkoutDocument({ ...validV5Workout, supersets: [{ occurrenceIds: ['side-plank:3', 'plank:2'], restPlacement: 'AFTER_ROUND' }] })).toBe(false);
+    expect(classifyWorkoutDocument({ ...validV5Workout, supersets: [{ occurrenceIds: null, restPlacement: 'AFTER_ROUND' }] })).toBe('malformed-versioned');
+    expect(classifyWorkoutDocument({ ...validV5Workout, exercises: [null] })).toBe('malformed-versioned');
+    const unfinishedTerminal = structuredClone(validV5Workout);
+    unfinishedTerminal.exercises[1].setRecords[1] = { ...unfinishedTerminal.exercises[1].setRecords[1], completed: false, workDurationSeconds: null, plannedRestSeconds: 60, actualRestSeconds: 0 };
+    expect(isValidV5WorkoutDocument(unfinishedTerminal)).toBe(false);
+  });
+  it.each([0, 1])('validates completed AFTER_ROUND timing without changing v4 rules (%i)', ownerIndex => {
+    const candidate = { ...structuredClone(validV5Workout), exercises: structuredClone(validV5Workout.exercises).map(exercise => ({ ...exercise, setRecords: exercise.setRecords.map(record => ({ ...record })) })) };
+    candidate.exercises.forEach(exercise => {
+      exercise.setRecords.forEach(record => { record.completed = true; record.workDurationSeconds = 0; });
+    });
+    const otherIndex = ownerIndex === 0 ? 1 : 0;
+    candidate.exercises[ownerIndex].setRecords[0] = { ...candidate.exercises[ownerIndex].setRecords[0], plannedRestSeconds: 60, actualRestSeconds: 5 };
+    candidate.exercises[otherIndex].setRecords[0] = { ...candidate.exercises[otherIndex].setRecords[0], plannedRestSeconds: 60, actualRestSeconds: null };
+    candidate.exercises[ownerIndex].setRecords[1] = { ...candidate.exercises[ownerIndex].setRecords[1], plannedRestSeconds: 60, actualRestSeconds: 0 };
+    candidate.exercises[otherIndex].setRecords[1] = { ...candidate.exercises[otherIndex].setRecords[1], plannedRestSeconds: null, actualRestSeconds: null };
+    expect(isValidV5WorkoutDocument(candidate)).toBe(true);
+    expect(isValidV4WorkoutDocument({ ...candidate, schemaVersion: 4 })).toBe(false);
+
+    const duplicateOwner = structuredClone(candidate);
+    duplicateOwner.exercises[otherIndex].setRecords[0].actualRestSeconds = 1;
+    expect(isValidV5WorkoutDocument(duplicateOwner)).toBe(false);
+    const missingOwner = structuredClone(candidate);
+    missingOwner.exercises[ownerIndex].setRecords[0].actualRestSeconds = null;
+    expect(isValidV5WorkoutDocument(missingOwner)).toBe(false);
+    const negativeRest = structuredClone(candidate);
+    negativeRest.exercises[ownerIndex].setRecords[0].actualRestSeconds = -1;
+    expect(isValidV5WorkoutDocument(negativeRest)).toBe(false);
+  });
+  it('validates completed BETWEEN_EXERCISES final rests, including zero-duration history', () => {
+    const candidate = { ...structuredClone(validV5Workout), exercises: structuredClone(validV5Workout.exercises).map(exercise => ({ ...exercise, setRecords: exercise.setRecords.map(record => ({ ...record })) })), supersets: [{ occurrenceIds: ['plank:2', 'side-plank:3'], restPlacement: 'BETWEEN_EXERCISES' }] };
+    candidate.exercises.forEach(exercise => exercise.setRecords.forEach(record => { record.completed = true; record.workDurationSeconds = 0; record.plannedRestSeconds = 60; record.actualRestSeconds = 5; }));
+    candidate.exercises[0].setRecords[1].actualRestSeconds = 0;
+    candidate.exercises[1].setRecords[1].actualRestSeconds = 0;
+    expect(isValidV5WorkoutDocument(candidate)).toBe(true);
+    const noTerminalZero = structuredClone(candidate);
+    noTerminalZero.exercises.forEach(exercise => { exercise.setRecords[1].actualRestSeconds = 5; });
+    expect(isValidV5WorkoutDocument(noTerminalZero)).toBe(false);
+  });
+  it.each([0, 1])('validates a partial current AFTER_ROUND without accepting cross-round timing (%i)', completedIndex => {
+    const candidate = { ...structuredClone(validV5Workout), exercises: structuredClone(validV5Workout.exercises).map(exercise => ({ ...exercise, setRecords: exercise.setRecords.map(record => ({ ...record, completed: false, workDurationSeconds: null, actualRestSeconds: null })) })) };
+    candidate.exercises[completedIndex].setRecords[0] = { ...candidate.exercises[completedIndex].setRecords[0], completed: true, workDurationSeconds: 0, plannedRestSeconds: 60 };
+    expect(isValidV5WorkoutDocument(candidate)).toBe(true);
+    expect(() => buildCanonicalV5WorkoutDocument({ workoutId: '123e4567-e89b-42d3-a456-426614174000', finishRequestedAtEpochMs: 1_000, phaseTargets: { warmupSeconds: 600, performanceSeconds: 1800, cooldownSeconds: 300 }, phaseActualSeconds: { warmup: 0, performance: 0, cooldown: 0 }, exercises: candidate.exercises, supersets: candidate.supersets })).not.toThrow();
+    const crossRound = structuredClone(candidate);
+    crossRound.exercises[1 - completedIndex].setRecords[1] = { ...crossRound.exercises[1 - completedIndex].setRecords[1], completed: true, workDurationSeconds: 0 };
+    expect(isValidV5WorkoutDocument(crossRound)).toBe(false);
+    const negative = structuredClone(candidate);
+    negative.exercises[completedIndex].setRecords[0].actualRestSeconds = -1;
+    expect(isValidV5WorkoutDocument(negative)).toBe(false);
+  });
+  it('validates a partial current BETWEEN_EXERCISES final rest', () => {
+    const candidate = { ...structuredClone(validV5Workout), exercises: structuredClone(validV5Workout.exercises).map((exercise, index) => ({ ...exercise, sets: 1, prescribedSetCount: 1, setRecords: [{ ...exercise.setRecords[0], index: 0, completed: index === 0, plannedRestSeconds: index === 0 ? 60 : null, workDurationSeconds: index === 0 ? 0 : null, actualRestSeconds: index === 0 ? 0 : null }] })), supersets: [{ occurrenceIds: ['plank:2', 'side-plank:3'], restPlacement: 'BETWEEN_EXERCISES' }] };
+    expect(isValidV5WorkoutDocument(candidate)).toBe(true);
+    const invalid = structuredClone(candidate);
+    invalid.exercises[0].setRecords[0].actualRestSeconds = null;
+    expect(isValidV5WorkoutDocument(invalid)).toBe(false);
+  });
+  it('rejects a partial superset with a missing later record without throwing', () => {
+    const candidate = structuredClone(validV5Workout);
+    candidate.exercises.forEach(exercise => exercise.setRecords.forEach(record => {
+      record.completed = false;
+      record.workDurationSeconds = null;
+      record.actualRestSeconds = null;
+    }));
+    candidate.exercises[0].setRecords[0] = {
+      ...candidate.exercises[0].setRecords[0],
+      completed: true,
+      workDurationSeconds: 0,
+      plannedRestSeconds: 60,
+    };
+    candidate.exercises[0].setRecords[1] = null;
+    expect(() => isValidV5WorkoutDocument(candidate)).not.toThrow();
+    expect(isValidV5WorkoutDocument(candidate)).toBe(false);
+  });
   it('classifies wholly valid v4 documents, including zero phase durations', () => {
     expect(isValidV4WorkoutDocument(validV4Workout)).toBe(true);
     expect(classifyWorkoutDocument(validV4Workout)).toBe('valid-v4');
@@ -219,6 +311,30 @@ describe('workout schema', () => {
     expect(normalizeWorkoutSettings({ defaultRestSeconds: 601 })).toMatchObject({ defaultRestSeconds: 60 });
     expect(normalizeWorkoutSettings({ defaultRestSeconds: 60.5 })).toMatchObject({ defaultRestSeconds: 60 });
     expect(normalizeWorkoutSettings({ defaultRestSeconds: 90 })).toMatchObject({ defaultRestSeconds: 90 });
+  });
+
+  it('keeps ordered superset settings and rejects malformed create/edit values', () => {
+    const supersets = [{ exerciseIds: ['row', 'press'], restPlacement: 'AFTER_ROUND' }];
+    expect(normalizeWorkoutSettings({ supersets }).supersets).toEqual(supersets);
+    expect(isValidSupersetSettings(supersets)).toBe(true);
+    expect(isValidSupersetSettings([{ exerciseIds: ['row', 'row'], restPlacement: 'AFTER_ROUND' }])).toBe(false);
+    expect(isValidSupersetSettings([{ exerciseIds: ['row', 'press'], restPlacement: 'afterRound' }])).toBe(false);
+    expect(isValidSupersetSettings([{ exerciseIds: ['row', 'press'], restPlacement: 'AFTER_ROUND', extra: true }])).toBe(false);
+
+    const catalog = [
+      { id: 'row', name: 'Row', muscleGroup: 'Back', tier: 3, sets: 2 },
+      { id: 'press', name: 'Press', muscleGroup: 'Chest', tier: 3, sets: 2 },
+      { id: 'core', name: 'Core', muscleGroup: 'Core', tier: 3, sets: 3 },
+    ];
+    expect(isValidCatalogSupersetSettings(supersets, catalog)).toBe(true);
+    expect(isValidCatalogSupersetSettings([{ exerciseIds: ['row', 'missing'], restPlacement: 'AFTER_ROUND' }], catalog)).toBe(false);
+    expect(isValidCatalogSupersetSettings([{ exerciseIds: ['row', 'press'], restPlacement: 'AFTER_ROUND' }], [
+      catalog[0], { ...catalog[1], isActive: false }, catalog[2],
+    ])).toBe(false);
+    expect(isValidCatalogSupersetSettings([{ exerciseIds: ['row', 'core'], restPlacement: 'AFTER_ROUND' }], catalog)).toBe(false);
+    expect(isValidCatalogSupersetSettings([
+      supersets[0], { exerciseIds: ['press', 'core'], restPlacement: 'BETWEEN_EXERCISES' },
+    ], catalog)).toBe(false);
   });
 
   it('normalizes canonical phase settings with legacy Warmup fallback and defaults', () => {

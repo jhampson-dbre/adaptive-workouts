@@ -278,7 +278,7 @@ function HistoryEntry({ entry, ...headingProps }) {
   if (classification === 'legacy') return <LegacyWorkout entry={entry} {...headingProps} />;
   if (classification === 'valid-v2' || isValidV2WorkoutEnvelope(entry)) return <V2Workout entry={entry} {...headingProps} />;
   if (classification === 'valid-v3') return <V3Workout entry={entry} {...headingProps} />;
-  if (classification === 'valid-v4') return <V4Workout entry={entry} {...headingProps} />;
+  if (classification === 'valid-v4' || classification === 'valid-v5') return <V4Workout entry={entry} {...headingProps} />;
   return <MalformedWorkout entry={entry} {...headingProps} />;
 }
 

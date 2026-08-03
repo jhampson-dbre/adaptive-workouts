@@ -350,6 +350,72 @@ describe('active workout timing state machine', () => {
     expect(startSet(state, 0, 2, 10_000)).toBe(state);
   });
 
+  it('assigns superset rests to the configured owner and records zero rest when the group ends', () => {
+    const exercises = [timedWeighted('row', 2), timedWeighted('press', 2)];
+    exercises[1].occurrenceId = 'press:1';
+    exercises.supersets = [{ occurrenceIds: ['row:0', 'press:1'], restPlacement: 'AFTER_ROUND' }];
+    let state = startWorkout(initializeActiveWorkout(exercises));
+    state = confirmSet(startSet(state, 0, 0, 2_000), 0, 0, 3_000);
+    expect(state.exercises[0].setRecords[0]._activeRest).toBeUndefined();
+    state = confirmSet(startSet(state, 1, 0, 4_000), 1, 0, 5_000);
+    expect(state.exercises[1].setRecords[0]._activeRest).toBeDefined();
+    state = startSet(state, 0, 1, 7_000);
+    expect(state.exercises[1].setRecords[0].actualRestSeconds).toBe(2);
+    state = confirmSet(state, 0, 1, 8_000);
+    state = confirmSet(startSet(state, 1, 1, 9_000), 1, 1, 10_000);
+    expect(state.exercises[1].setRecords[1]).toMatchObject({ plannedRestSeconds: 60, actualRestSeconds: 0 });
+    expect(state.exercises[1].setRecords[1]._activeRest).toBeUndefined();
+  });
+
+  it('closes the current shared rest after earlier round markers have resolved', () => {
+    const exercises = [timedWeighted('row', 3), timedWeighted('press', 3)];
+    exercises[1].occurrenceId = 'press:1';
+    exercises.supersets = [{ occurrenceIds: ['row:0', 'press:1'], restPlacement: 'AFTER_ROUND' }];
+    let state = startWorkout(initializeActiveWorkout(exercises));
+    state = confirmSet(startSet(state, 0, 0, 2_000), 0, 0, 3_000);
+    state = confirmSet(startSet(state, 1, 0, 4_000), 1, 0, 5_000);
+    state = startSet(state, 0, 1, 6_000);
+    state = confirmSet(state, 0, 1, 7_000);
+    state = confirmSet(startSet(state, 1, 1, 8_000), 1, 1, 9_000);
+    expect(state.exercises[1].setRecords[1]._activeRest).toBeDefined();
+
+    state = startSet(state, 0, 2, 10_000);
+
+    expect(state.exercises[1].setRecords[1]).toMatchObject({ actualRestSeconds: 1 });
+    expect(state.exercises[1].setRecords[1]._activeRest).toBeUndefined();
+  });
+
+  it('keeps between-exercise rests with their member and removes a completed-group rest on undo', () => {
+    const exercises = [timedWeighted('row', 1), timedWeighted('press', 1)];
+    exercises[1].occurrenceId = 'press:1';
+    exercises.supersets = [{ occurrenceIds: ['row:0', 'press:1'], restPlacement: 'BETWEEN_EXERCISES' }];
+    let state = startWorkout(initializeActiveWorkout(exercises));
+    state = confirmSet(startSet(state, 0, 0, 2_000), 0, 0, 3_000);
+    expect(state.exercises[0].setRecords[0]._activeRest).toBeDefined();
+    state = startSet(state, 1, 0, 4_000);
+    expect(state.exercises[0].setRecords[0]).toMatchObject({ actualRestSeconds: 1 });
+    state = confirmSet(state, 1, 0, 5_000);
+    expect(state.exercises[1].setRecords[0]).toMatchObject({ plannedRestSeconds: 60, actualRestSeconds: 0 });
+    state = undoSet(state, 1, 0);
+    expect(state.exercises[1].setRecords[0]).toMatchObject({ completed: false, actualRestSeconds: null });
+    expect(state.exercises[0].setRecords[0]._activeRest).toBeUndefined();
+  });
+
+  it('gives reverse-order AFTER_ROUND completion the configured final member rest', () => {
+    const exercises = [timedWeighted('row', 2), timedWeighted('press', 2)];
+    exercises[1].occurrenceId = 'press:1';
+    exercises[1].setRecords[0].plannedRestSeconds = 90;
+    exercises.supersets = [{ occurrenceIds: ['row:0', 'press:1'], restPlacement: 'AFTER_ROUND' }];
+    let state = startWorkout(initializeActiveWorkout(exercises));
+    state = confirmSet(startSet(state, 1, 0, 2_000), 1, 0, 3_000);
+    state = confirmSet(startSet(state, 0, 0, 4_000), 0, 0, 5_000);
+    expect(state.exercises[0].setRecords[0]).toMatchObject({ plannedRestSeconds: 90, _activeRest: { startedAt: 5_000 } });
+    state = confirmSet(startSet(state, 1, 1, 6_000), 1, 1, 7_000);
+    state = confirmSet(startSet(state, 0, 1, 8_000), 0, 1, 9_000);
+    expect(state.exercises[0].setRecords[1]).toMatchObject({ plannedRestSeconds: 90, actualRestSeconds: 0 });
+    expect(state.exercises[0].setRecords[1]._activeRest).toBeUndefined();
+  });
+
   it('never starts rest after a final set', () => {
     let state = startWorkout(initializeActiveWorkout([timedSimple()]));
     state = startSet(state, 0, 0, 2_000);

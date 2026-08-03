@@ -98,6 +98,16 @@ describeFirestore('Firestore rules', () => {
     await assertFails(ref.delete());
   });
 
+  it('admits v5 through its separate immutable branch', async () => {
+    const db = testEnv.authenticatedContext('alex', { approved: true }).firestore();
+    const id = '123e4567-e89b-42d3-a456-426614174009';
+    const candidate = { id, schemaVersion: 5, status: 'completed', date: '2026-07-22T12:00:00.000Z', actualDurationSeconds: 0,
+      phaseDurations: { warmup: { plannedSeconds: 0, actualSeconds: 0 }, performance: { plannedSeconds: 0, actualSeconds: 0 }, cooldown: { plannedSeconds: 0, actualSeconds: 0 } },
+      exercises: [{}], supersets: [{ occurrenceIds: ['a', 'b'], restPlacement: 'AFTER_ROUND' }] };
+    await assertSucceeds(db.doc(`users/alex/history/${id}`).set(candidate));
+    await assertFails(db.doc(`users/alex/history/${id}`).set({ ...candidate, supersets: [] }));
+  });
+
   it('denies invalid v4 path/id/phase shapes while retaining legacy compatibility creates', async () => {
     const db = testEnv.authenticatedContext('alex', { approved: true }).firestore();
     const id = '123e4567-e89b-42d3-a456-426614174000';

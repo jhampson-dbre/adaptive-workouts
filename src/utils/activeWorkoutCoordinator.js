@@ -1,5 +1,5 @@
 import { createRecoveryDraft, migrateRecoveryDraftV1ToV2, readRecoveryDraftAsync, recoveryLockName, recoveryStorageKey, validateRecoveryDraft, verifyRecoveryDraftV2, hydrateRecoveryDraft, isValidRecoveryIdentity } from './activeWorkoutRecovery';
-import { canonicalizeWorkoutV4 } from './workoutFingerprint';
+import { canonicalizeWorkoutV4, canonicalizeWorkoutV5 } from './workoutFingerprint';
 
 const DEFAULT_TIMEOUT_MS = 8_000;
 const validExpected = expected => expected && typeof expected.draftId === 'string' && expected.draftId.length > 0 && Number.isSafeInteger(expected.ownershipGeneration) && expected.ownershipGeneration >= 1;
@@ -152,14 +152,15 @@ export function createActiveWorkoutCoordinator({ storage, locks, handoffTranspor
             && before.fingerprint.hex === after.fingerprint?.hex;
           try {
             immutableMatch = immutableMatch
-              && canonicalizeWorkoutV4(before.candidate) === canonicalizeWorkoutV4(after.candidate);
+              && (before.candidate.schemaVersion === 5 ? canonicalizeWorkoutV5(before.candidate) : canonicalizeWorkoutV4(before.candidate))
+                === (after.candidate.schemaVersion === 5 ? canonicalizeWorkoutV5(after.candidate) : canonicalizeWorkoutV4(after.candidate));
           } catch {
             immutableMatch = false;
           }
           if (!immutableMatch) return { status: 'invalid-draft' };
         }
 
-        if (draft.version === 2) {
+        if (draft.version === 2 || draft.version === 3) {
           const verification = await verifyRecoveryDraftV2(draft, { subtle });
           if (verification.status === 'fingerprint-error') return verification;
           if (verification.status !== 'verified') return { status: 'invalid-draft' };

@@ -414,3 +414,43 @@ the safe method attempted and the best available alternative.
 - Observed result: `Workout saved` received focus with a computed 4px focus-blue outline. The only status text is `This workout is complete.`; `Back to plan` and Workout history are outside the status region. Back renders as a flat white, ink-rule secondary control at 50.5px high, while Review remains the sole yellow state signal. History began collapsed, expanded through its existing `aria-expanded` button, showed the newly saved 0:13 workout, and returned to collapsed with visible focus. Collapsed and expanded states retained equal client/scroll widths (1280px collapsed; 1265px expanded with the browser scrollbar) and no console error was observed.
 - Rendered evidence: Live accessibility snapshots, computed-style/geometry measurements, and inline full-page inspection in the Codex in-app browser; focused tests separately verify no history fetch before disclosure and the existing loader call after opening.
 - Material limitation: The available in-app browser did not expose device-viewport emulation, so the approved exact 390 x 844 saved-state capture could not be produced in this pass. The best safe alternative was the real desktop lifecycle plus the established responsive CSS and 44px control contracts exercised by focused tests; this does not replace physical-device, exact phone-height, or assistive-technology verification.
+
+---
+
+## 2026-08-02 - TREK-289 Supersets management
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-289 adds creation, editing, removal, catalog-deactivation recovery, validation, and focus transitions to the Settings surface.
+- Approved scenario or artifact: EPIC-15 discovery decisions in CMT-513 and CMT-518, plus the incumbent Nudge Settings surface brief and Clear Signal design system.
+
+## Changed scenario
+
+- Scenario: Manage a three-member Superset across create/edit validation, removal, catalog deactivation, pause, and reactivation at phone and desktop widths.
+- Build / commit: `codex/epic-15-guided-supersets` TREK-289 working tree before task commit.
+- Viewport and starting state: Codex in-app Chromium at 390 x 844 and 1280 x 900 using the canonical local emulator catalog and a synthetic Romanian Deadlift, Standing Calf Raise, Leg Extension Superset with between-exercise rest.
+- Actions: Create and save a two-member between-exercises group; edit it to a three-member after-round group; exercise rejected-save retention, ordered-member controls, long-name wrapping, direct removal cancellation and success with a following group, pair and three-member deactivation choices, catalog set-count mismatch, pause/reactivation, responsive containment, and console diagnostics.
+- Observed result: Both approved rest/group-size configurations save and focus their resulting summaries. Cancelling a new group focuses the remounted `Add superset` action with a solid 4px `rgb(18, 97, 160)` outline. A mismatched member remains selected after the rejected save, the alert names all conflicting exercises, and focus returns to the first member control. Catalog set-count mismatch retains the entered value, names each member/set count, and focuses Edit sets. Long names and actions wrap without horizontal overflow. Opening removal focuses `Keep superset`; successful removal of the first of two groups announces the result and focuses the surviving group with the same outline. Pair deactivation focuses `Deactivate and pause`; three-member deactivation focuses `Remove and deactivate`; cancellation returns focus to the initiating control. Pausing names the inactive member and leaves the other exercises schedulable. Reactivation announces `Superset active.` and focuses the restored summary with the same outline; cancelling a failed reactivation returns focus to the remounted per-exercise Reactivate control. Phone client/scroll widths measured 375/375 within the 390px browser viewport; desktop measured 1265/1265. Chromium reported no warnings or errors.
+- Rendered evidence: In-app Chromium accessibility snapshots, inline screenshots of the two-member between-exercises editor/save, three-member after-round editor/save, retained mismatch, catalog mismatch, pair and three-member deactivation, removal cancellation/success, reactivation, narrow reflow, and desktop states, plus computed focus, outline, geometry, overflow, and live-region measurements. Focused Settings/storage tests cover save/retry failures; the reactivation-failure Cancel regression specifically verifies focus returns to the remounted Reactivate control without forcing the emulator network offline in the browser.
+- Material limitation: The browser clamps explicit viewports below 240px, so the narrowest controlled reflow pass was 240px (225px content width), where client/scroll widths remained equal; it is a best safe alternative rather than an exact 390px-at-200%-zoom claim. Synthetic emulator data and Chromium do not replace production Firestore, physical-device Safari, browser zoom, or assistive-technology testing.
+
+---
+
+## 2026-08-02 - TREK-290 guided Superset performance
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-290 changes exercise expansion, keyboard focus, live feedback, rest placement, and recovery behavior during active workouts.
+- Approved scenario or artifact: EPIC-15 decisions CMT-513, CMT-516, and CMT-518, plus the CMT-532/CMT-533 recovery issue-class audit and the incumbent Clear Signal Workout surface.
+
+## Changed scenario
+
+- Scenario: Perform and recover ordered two-member Supersets in both rest modes, with ordinary exercises and long names around the group.
+- Build / commit: `codex/epic-15-guided-supersets` TREK-290 working tree before task commit.
+- Viewport and starting state: Codex in-app Chromium at 390 x 844 and 1280 x 900 against the clean local emulator baseline; canonical Bench Press/Cable Row groups for lifecycle checks and a Barbell Curl/Romanian Deadlift group for long-name reflow.
+- Actions: Generate a mixed workout; confirm the first AFTER_ROUND member; confirm the round owner; reload and resume the active group rest; start the next round early; repeat the first-member handoff with BETWEEN_EXERCISES; inspect live status, active focus, outlines, rest adjacency, document containment, motion rules, and long-name wrapping.
+- Observed result: Initial plans identify members only as `Superset 1 of 2` and `Superset 2 of 2`, with `Next` on the recommended member and no concatenated group name. Confirmation collapses the completed row, expands the recommendation, and focuses its ready Start button. AFTER_ROUND starts no rest after member one, then announces the owner rest once after the round and shows its persistent countdown beside the next-round Start; recovery preserves that state, and starting the next round closes it without blocking persistence. BETWEEN_EXERCISES announces and displays the rest immediately after member one, beside the focused next-member Start. The phone active control computes a solid 4px `rgb(18, 97, 160)` outline. Barbell Curl/Romanian Deadlift labels and cards remain contained. Client and scroll widths are equal at phone (375/375 inside the 390px viewport) and desktop (1265/1265 inside 1280px). The new Superset rules contain no animation, transition, or scroll-behavior declaration.
+- Rendered evidence: Live accessibility snapshots and inline screenshots of the 390px automatic handoff, AFTER_ROUND persistent rest/recovery/next-round lifecycle, BETWEEN_EXERCISES countdown, long-name member card, and 1280px layout; computed focus, outline, viewport, overflow, and authored-motion measurements.
+- Material limitation: The in-app browser exposes no console-log retrieval capability, so this pass used rendered recovery alerts as its runtime failure signal and fixed both encountered recovery-v3 integration defects before repeating the lifecycle successfully. Chromium/emulator evidence does not replace production Firestore, physical-device Safari, reduced-motion OS emulation, or assistive-technology certification.

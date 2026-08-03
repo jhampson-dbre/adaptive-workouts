@@ -68,6 +68,14 @@ export async function saveSettings(userId, settings) {
   await setDoc(doc(db, 'users', userId), settings, { merge: true });
 }
 
+export async function saveSettingsAndCatalogItem(userId, settings, item) {
+  const { db, doc, writeBatch } = await loadFirestore();
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'users', userId), settings, { merge: true });
+  batch.set(doc(db, 'users', userId, 'catalog', item.id), item);
+  await batch.commit();
+}
+
 export async function getGenerationHistory(userId) {
   const { db, collection, getDocs, query, orderBy, limit } = await loadFirestore();
   const colRef = collection(db, 'users', userId, 'history');

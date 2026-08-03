@@ -4,6 +4,9 @@ import {
   buildCanonicalV4WorkoutDocument,
   canonicalizeWorkoutV4,
   fingerprintWorkoutV4,
+  buildCanonicalV5WorkoutDocument,
+  canonicalizeWorkoutV5,
+  fingerprintWorkoutV5,
 } from '../utils/workoutFingerprint';
 
 const workoutId = '123e4567-e89b-42d3-a456-426614174000';
@@ -20,6 +23,19 @@ const input = {
 };
 
 describe('canonical v4 workout fingerprint', () => {
+  it('keeps v5 canonicalization separate and includes its superset DTO', async () => {
+    const candidate = buildCanonicalV5WorkoutDocument({ ...input, supersets: [{ occurrenceIds: ['plank:0', 'row:1'], restPlacement: 'AFTER_ROUND' }], exercises: [
+      input.exercises[0], { ...input.exercises[0], id: 'row', occurrenceId: 'row:1', name: 'Row', setRecords: [{ ...input.exercises[0].setRecords[0], plannedRestSeconds: 60, actualRestSeconds: 0 }] },
+    ] });
+    expect(candidate.schemaVersion).toBe(5);
+    expect(canonicalizeWorkoutV5(candidate)).toContain('"supersets":[{"occurrenceIds":["plank:0","row:1"],"restPlacement":"AFTER_ROUND"}]');
+    await expect(fingerprintWorkoutV5(candidate)).resolves.toMatchObject({ canonicalization: 'workout-v5-json-v1', algorithm: 'SHA-256' });
+  });
+
+  it('builds v5 directly when the final AFTER_ROUND member records its skipped rest', () => {
+    const exercises = [input.exercises[0], { ...input.exercises[0], id: 'row', occurrenceId: 'row:1', name: 'Row', setRecords: [{ ...input.exercises[0].setRecords[0], plannedRestSeconds: 60, actualRestSeconds: 0 }] }];
+    expect(buildCanonicalV5WorkoutDocument({ ...input, exercises, supersets: [{ occurrenceIds: ['plank:0', 'row:1'], restPlacement: 'AFTER_ROUND' }] })).toMatchObject({ schemaVersion: 5, exercises: [{ setRecords: [{ plannedRestSeconds: null }] }, { setRecords: [{ plannedRestSeconds: 60, actualRestSeconds: 0 }] }] });
+  });
   it('builds an exact ordered candidate and canonical JSON', () => {
     const candidate = buildCanonicalV4WorkoutDocument(input);
     expect(candidate).toEqual({

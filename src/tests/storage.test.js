@@ -13,12 +13,13 @@ const firestore = vi.hoisted(() => ({
     getDocFromServer: vi.fn(),
     setDoc: vi.fn(),
     addDoc: vi.fn(),
+    writeBatch: vi.fn(),
 }));
 
 vi.mock('../utils/firestoreClient', () => ({
     loadFirestoreClient: async () => ({ ...firestore, db: { name: 'test-db' } }),
 }));
-import { getGenerationHistory, getHistoryPage, saveWorkout, saveImmutableWorkout, readImmutableWorkoutFromServer, getSettings, getCatalog, migrateLocalData } from '../utils/storage';
+import { getGenerationHistory, getHistoryPage, saveWorkout, saveImmutableWorkout, readImmutableWorkoutFromServer, getSettings, getCatalog, migrateLocalData, saveSettingsAndCatalogItem } from '../utils/storage';
 
 describe('Storage Layer (Async)', () => {
     beforeEach(() => {
@@ -34,6 +35,21 @@ describe('Storage Layer (Async)', () => {
         expect(typeof getSettings).toBe('function');
         expect(typeof getCatalog).toBe('function');
         expect(typeof migrateLocalData).toBe('function');
+        expect(typeof saveSettingsAndCatalogItem).toBe('function');
+    });
+
+    it('atomically saves a catalog change with its superset membership', async () => {
+        const batch = { set: vi.fn(), commit: vi.fn().mockResolvedValue() };
+        firestore.writeBatch.mockReturnValue(batch);
+        firestore.doc
+            .mockReturnValueOnce({ path: 'users/test-user' })
+            .mockReturnValueOnce({ path: 'users/test-user/catalog/bench' });
+
+        await saveSettingsAndCatalogItem('test-user', { supersets: [] }, { id: 'bench', isActive: false });
+
+        expect(batch.set).toHaveBeenNthCalledWith(1, { path: 'users/test-user' }, { supersets: [] }, { merge: true });
+        expect(batch.set).toHaveBeenNthCalledWith(2, { path: 'users/test-user/catalog/bench' }, { id: 'bench', isActive: false });
+        expect(batch.commit).toHaveBeenCalledOnce();
     });
 
     it('bounds generator history to the newest 100 raw documents', async () => {
