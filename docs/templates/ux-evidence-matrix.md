@@ -474,3 +474,23 @@ the safe method attempted and the best available alternative.
 - Observed result: The generated order is Calf Raises 01, left split squat 02, and right split squat 03. Workout ready initially expands only Calf Raises even though the left member retains the Superset `Next` context. Confirming the left member collapses it, expands the right member, and focuses its Start set. Confirming the final member collapses both completed Superset rows, keeps Calf Raises expanded, and focuses `Calf Raises exercise 1 set 1 start` with a solid 4px `rgb(18, 97, 160)` outline. Client and scroll widths remain equal at 375/375 within the 390px viewport.
 - Rendered evidence: Live accessibility snapshots, computed active-element/`aria-expanded`/outline/viewport measurements, and inline phone screenshots before performance and after the exhausted-Superset handoff.
 - Material limitation: Synthetic one-set exercises keep the evidence pass bounded and do not prove every set-count permutation. Focused component tests cover multi-set incumbent Superset behavior, ordinary transitions, delayed durable focus, manual override, undo, rest modes, and recovery. Chromium/emulator evidence does not replace physical-device or assistive-technology testing.
+
+---
+
+## 2026-08-03 - TREK-293 core journey copy clarity
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-293 changes user-facing recovery, destructive, empty, retry, and workout-decision language in the core Plan → Perform journey.
+- Approved scenario or artifact: The incumbent Nudge core-journey surface brief and Clear Signal design system; behavior, layout, focus, timing, persistence, and action hierarchy remain unchanged.
+
+## Changed scenario
+
+- Scenario: Recover or discard a saved synthetic workout, return to Plan, generate a workout, and inspect the clarified workout-ready action.
+- Build / commit: `codex/clarify-core-workout-copy` TREK-293 working tree before task commit; 85 focused tests, lint, build, Impeccable detector, and diff-check green.
+- Viewport and starting state: Codex in-app Chromium at 390 x 844 with a 375px document viewport; canonical synthetic emulator identity and a recoverable workout draft.
+- Actions: Inspect the recovery heading, message, Resume workout, and Discard workout actions; discard the synthetic draft; inspect focused Plan; generate the canonical workout; inspect the focused Workout ready state, helper text, Start workout action, and document containment.
+- Observed result: Recovery names both the retained workout and the destructive action without internal acquisition language. The recovery heading receives focus, the primary Resume workout action remains dominant, and both actions fit at phone width. Discard returns to focused Plan. The generated state says `Start the workout to time your sets.` and exposes the sentence-case `Start workout` action without changing exercise order or controls. Client and scroll widths remain equal at 375/375 in recovery, Plan, and workout-ready states.
+- Rendered evidence: Live accessibility snapshots, inline screenshots of recovery, Plan, and workout-ready states, plus computed focus, viewport, and overflow measurements.
+- Material limitation: The canonical baseline directly renders resume/discard and workout-ready language. Focused component tests cover the deterministic no-fit plan, history-load retry/loading, leg-choice alternative, cross-tab takeover/retry, blocked-save, cooldown, and early-finish strings that were not forced through emulator state. Synthetic Chromium evidence does not replace physical-device or assistive-technology testing.
