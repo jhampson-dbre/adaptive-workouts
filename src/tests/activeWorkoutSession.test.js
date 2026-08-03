@@ -56,10 +56,25 @@ test('saves the reverse-order AFTER_ROUND finisher as the sole v5 zero-rest reco
   expect(saved.exercises[1].setRecords[0]).toMatchObject({ plannedRestSeconds: null, actualRestSeconds: null });
 });
 
-test.each([0, 1])('persists either first AFTER_ROUND member before the group rest starts (%i)', async exerciseIndex => {
+test('persists sequential BETWEEN_EXERCISES members with closed group-rest history', async () => {
+  const coordinator = createActiveWorkoutCoordinator({ storage: memory(), locks: locks(), staleAfterMs: 1_000_000, now: () => 1_000, createUuid: () => '123e4567-e89b-42d3-a456-426614174000' });
+  const plan = Object.assign([exercise, { ...exercise, id: 'row', occurrenceId: 'row:1', name: 'Row' }, { ...exercise, id: 'carry', occurrenceId: 'carry:2', name: 'Carry' }], { supersets: [{ occurrenceIds: ['x:0', 'row:1', 'carry:2'], restPlacement: 'BETWEEN_EXERCISES' }] });
+  const session = createActiveWorkoutSession({ coordinator, projectId: 'p', createUuid: () => '123e4567-e89b-42d3-a456-426614174001', saveImmutableWorkout: async () => {}, readImmutableWorkoutFromServer: async () => ({ exists: () => false }) });
+  await session.bootstrap({ uid: 'u' }); await session.stageGenerated(plan, { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 });
+  await session.action({ type: 'startWorkout', timestamp: 1000 });
+  await session.action({ type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 });
+  await expect(session.action({ type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 1002 })).resolves.toBe(true);
+  await expect(session.action({ type: 'startSet', exerciseIndex: 1, setIndex: 0, timestamp: 1003 })).resolves.toBe(true);
+  await expect(session.action({ type: 'confirmSet', exerciseIndex: 1, setIndex: 0, timestamp: 1004 })).resolves.toBe(true);
+  await expect(session.action({ type: 'startSet', exerciseIndex: 2, setIndex: 0, timestamp: 1005 })).resolves.toBe(true);
+  await expect(session.action({ type: 'confirmSet', exerciseIndex: 2, setIndex: 0, timestamp: 1006 })).resolves.toBe(true);
+});
+
+test.each([0, 1])('persists normal and reverse AFTER_ROUND rounds through v5 save (%i)', async exerciseIndex => {
   const plan = Object.assign([twoSetExercise('bench', 'bench:0'), twoSetExercise('row', 'row:1')], { supersets: [{ occurrenceIds: ['bench:0', 'row:1'], restPlacement: 'AFTER_ROUND' }] });
   const coordinator = createActiveWorkoutCoordinator({ storage: memory(), locks: locks(), staleAfterMs: 1_000_000, now: () => 1_000, createUuid: () => '123e4567-e89b-42d3-a456-426614174000' });
-  const session = createActiveWorkoutSession({ coordinator, projectId: 'p', createUuid: () => '123e4567-e89b-42d3-a456-426614174001', saveImmutableWorkout: async () => {}, readImmutableWorkoutFromServer: async () => ({ exists: () => false }) });
+  const saveImmutableWorkout = vi.fn(async () => {});
+  const session = createActiveWorkoutSession({ coordinator, projectId: 'p', createUuid: () => '123e4567-e89b-42d3-a456-426614174001', saveImmutableWorkout, readImmutableWorkoutFromServer: async () => ({ exists: () => false }) });
   await session.bootstrap({ uid: 'u' }); await session.stageGenerated(plan, targets);
   await session.action({ type: 'startWorkout', timestamp: 1000 }); await session.action({ type: 'startSet', exerciseIndex, setIndex: 0, timestamp: 1001 });
   await expect(session.action({ type: 'confirmSet', exerciseIndex, setIndex: 0, timestamp: 1002 })).resolves.toBe(true);
@@ -73,6 +88,45 @@ test.each([0, 1])('persists either first AFTER_ROUND member before the group res
   expect(session.getState()).toMatchObject({ status: 'owned', activeWorkout: { activeWorkTimer: { exerciseIndex, setIndex: 1 } } });
   expect(session.getState().activeWorkout.exercises[ownerIndex].setRecords[0]).toMatchObject({ actualRestSeconds: 0, _activeGroupRest: plan.supersets[0] });
   expect(session.getState().activeWorkout.exercises[ownerIndex].setRecords[0]).not.toHaveProperty('_activeRest');
+  await expect(session.action({ type: 'confirmSet', exerciseIndex, setIndex: 1, timestamp: 1006 })).resolves.toBe(true);
+  await expect(session.action({ type: 'startSet', exerciseIndex: ownerIndex, setIndex: 1, timestamp: 1007 })).resolves.toBe(true);
+  await expect(session.action({ type: 'confirmSet', exerciseIndex: ownerIndex, setIndex: 1, timestamp: 1008 })).resolves.toBe(true);
+  await expect(session.action({ type: 'finishWorkout', timestamp: 1009 })).resolves.toBe(true);
+  await session.save();
+  expect(saveImmutableWorkout).toHaveBeenCalledWith('u', '123e4567-e89b-42d3-a456-426614174001', expect.objectContaining({ schemaVersion: 5 }));
+});
+
+test.each(['AFTER_ROUND', 'BETWEEN_EXERCISES'])('saves an early-finished partial %s group', async restPlacement => {
+  const coordinator = createActiveWorkoutCoordinator({ storage: memory(), locks: locks(), staleAfterMs: 1_000_000, now: () => 1_000, createUuid: () => '123e4567-e89b-42d3-a456-426614174000' });
+  const plan = Object.assign([twoSetExercise('bench', 'bench:0'), twoSetExercise('row', 'row:1')], { supersets: [{ occurrenceIds: ['bench:0', 'row:1'], restPlacement }] });
+  const saveImmutableWorkout = vi.fn(async () => {});
+  const session = createActiveWorkoutSession({ coordinator, projectId: 'p', createUuid: () => '123e4567-e89b-42d3-a456-426614174001', saveImmutableWorkout, readImmutableWorkoutFromServer: async () => ({ exists: () => false }) });
+  await session.bootstrap({ uid: 'u' }); await session.stageGenerated(plan, targets);
+  for (const action of [{ type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 1002 }, { type: 'startSet', exerciseIndex: 1, setIndex: 0, timestamp: 1003 }, { type: 'confirmSet', exerciseIndex: 1, setIndex: 0, timestamp: 1004 }, { type: 'startSet', exerciseIndex: 0, setIndex: 1, timestamp: 1005 }, { type: 'cancelSet', exerciseIndex: 0, setIndex: 1, timestamp: 1006 }, { type: 'confirmEarlyFinish', timestamp: 1007 }, { type: 'finishWorkout', timestamp: 1008 }]) await expect(session.action(action)).resolves.toBe(true);
+  await session.save();
+  expect(saveImmutableWorkout).toHaveBeenCalledWith('u', '123e4567-e89b-42d3-a456-426614174001', expect.objectContaining({ schemaVersion: 5 }));
+});
+
+test.each([0, 1])('saves an early-finished partial current AFTER_ROUND (%i)', async exerciseIndex => {
+  const coordinator = createActiveWorkoutCoordinator({ storage: memory(), locks: locks(), staleAfterMs: 1_000_000, now: () => 1_000, createUuid: () => '123e4567-e89b-42d3-a456-426614174000' });
+  const plan = Object.assign([twoSetExercise('bench', 'bench:0'), twoSetExercise('row', 'row:1')], { supersets: [{ occurrenceIds: ['bench:0', 'row:1'], restPlacement: 'AFTER_ROUND' }] });
+  const saveImmutableWorkout = vi.fn(async () => {});
+  const session = createActiveWorkoutSession({ coordinator, projectId: 'p', createUuid: () => '123e4567-e89b-42d3-a456-426614174001', saveImmutableWorkout, readImmutableWorkoutFromServer: async () => ({ exists: () => false }) });
+  await session.bootstrap({ uid: 'u' }); await session.stageGenerated(plan, targets);
+  for (const action of [{ type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex, setIndex: 0, timestamp: 1001 }, { type: 'confirmSet', exerciseIndex, setIndex: 0, timestamp: 1002 }, { type: 'confirmEarlyFinish', timestamp: 1003 }, { type: 'finishWorkout', timestamp: 1004 }]) await expect(session.action(action)).resolves.toBe(true);
+  await session.save();
+  expect(saveImmutableWorkout).toHaveBeenCalledWith('u', '123e4567-e89b-42d3-a456-426614174001', expect.objectContaining({ schemaVersion: 5 }));
+});
+
+test('saves an early-finished partial current BETWEEN_EXERCISES final set', async () => {
+  const coordinator = createActiveWorkoutCoordinator({ storage: memory(), locks: locks(), staleAfterMs: 1_000_000, now: () => 1_000, createUuid: () => '123e4567-e89b-42d3-a456-426614174000' });
+  const plan = Object.assign([exercise, { ...exercise, id: 'row', occurrenceId: 'row:1', name: 'Row' }], { supersets: [{ occurrenceIds: ['x:0', 'row:1'], restPlacement: 'BETWEEN_EXERCISES' }] });
+  const saveImmutableWorkout = vi.fn(async () => {});
+  const session = createActiveWorkoutSession({ coordinator, projectId: 'p', createUuid: () => '123e4567-e89b-42d3-a456-426614174001', saveImmutableWorkout, readImmutableWorkoutFromServer: async () => ({ exists: () => false }) });
+  await session.bootstrap({ uid: 'u' }); await session.stageGenerated(plan, targets);
+  for (const action of [{ type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 1002 }, { type: 'startSet', exerciseIndex: 1, setIndex: 0, timestamp: 1003 }, { type: 'cancelSet', exerciseIndex: 1, setIndex: 0, timestamp: 1004 }, { type: 'confirmEarlyFinish', timestamp: 1005 }, { type: 'finishWorkout', timestamp: 1006 }]) await expect(session.action(action)).resolves.toBe(true);
+  await session.save();
+  expect(saveImmutableWorkout).toHaveBeenCalledWith('u', '123e4567-e89b-42d3-a456-426614174001', expect.objectContaining({ schemaVersion: 5 }));
 });
 
 test('does not reset a same-UID session when authorization is re-established', async () => {

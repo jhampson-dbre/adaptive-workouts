@@ -96,6 +96,41 @@ function afterRoundGroupCoversRecord(workout, exercise, index, nextTimerId) {
       || workout.exercises.some(candidate => group.occurrenceIds.includes(candidate.occurrenceId)
         && validSharedRest(candidate.setRecords[index], group))));
 }
+function sameGroup(left, right) {
+  return left?.restPlacement === right?.restPlacement
+    && left.occurrenceIds?.length === right?.occurrenceIds?.length
+    && left.occurrenceIds.every((id, index) => id === right.occurrenceIds[index]);
+}
+function validSupersets(workout) {
+  const assigned = new Set();
+  return workout.supersets.every(group => {
+    if (!exact(group, ['occurrenceIds', 'restPlacement']) || !Array.isArray(group.occurrenceIds)
+      || group.occurrenceIds.length < 2 || new Set(group.occurrenceIds).size !== group.occurrenceIds.length
+      || !['AFTER_ROUND', 'BETWEEN_EXERCISES'].includes(group.restPlacement)) return false;
+    const members = group.occurrenceIds.map(id => workout.exercises.find(exercise => exercise.occurrenceId === id));
+    if (members.some(member => !member || assigned.has(member.occurrenceId))
+      || new Set(members.map(member => member.prescribedSetCount)).size !== 1) return false;
+    members.forEach(member => assigned.add(member.occurrenceId));
+    return true;
+  });
+}
+function validAfterRoundHistory(workout) {
+  return workout.supersets.filter(group => group.restPlacement === 'AFTER_ROUND').every(group => {
+    const sets = workout.exercises.find(exercise => exercise.occurrenceId === group.occurrenceIds[0]).setRecords;
+    return sets.every((_, index) => {
+      const records = group.occurrenceIds.map(occurrenceId => workout.exercises.find(exercise => exercise.occurrenceId === occurrenceId).setRecords[index]);
+      if (!records.every(record => record.completed)) return records.every(record => record.activeRest === null && record.actualRestSeconds === null && !record.activeGroupRest);
+      const owners = records.filter(record => sameGroup(record.activeGroupRest, group));
+      const [owner] = owners;
+      const validPlannedRest = integer(owner?.plannedRestSeconds) && owner.plannedRestSeconds >= 5 && owner.plannedRestSeconds <= 600;
+      const validOwner = owner && (index === sets.length - 1
+        ? owner.activeRest === null && owner.actualRestSeconds === 0
+        : (owner.activeRest !== null && owner.actualRestSeconds === null) || (owner.activeRest === null && nonnegative(owner.actualRestSeconds)));
+      return owners.length === 1 && validPlannedRest && validOwner
+        && records.every(record => record === owner || (record.activeRest === null && record.actualRestSeconds === null && !record.activeGroupRest));
+    });
+  });
+}
 function validRecord(record, exercise, index, nextTimerId, version, workout) {
   const common = ['index', 'completed', 'plannedRestSeconds', 'workDurationSeconds', 'actualRestSeconds', 'activeRest'];
   const mode = exercise.trackingMode;
@@ -107,7 +142,9 @@ function validRecord(record, exercise, index, nextTimerId, version, workout) {
   if ((!record.completed && (record.workDurationSeconds !== null || record.actualRestSeconds !== null)) || (record.completed && !nonnegative(record.workDurationSeconds))) return false;
   if (record.activeRest !== null && (!exact(record.activeRest, ['id', 'startedAtEpochMs']) || !/^rest-[1-9]\d*$/.test(record.activeRest.id) || !integer(record.activeRest.startedAtEpochMs) || Number(record.activeRest.id.slice(5)) >= nextTimerId)) return false;
   if (record.activeRest !== null && (record.actualRestSeconds !== null || !record.completed || (index === exercise.sets - 1 && !groupFinalRest))) return false;
-  if (record.activeGroupRest && (version !== 3 || !exact(record.activeGroupRest, ['occurrenceIds', 'restPlacement']) || !Array.isArray(record.activeGroupRest.occurrenceIds) || !['AFTER_ROUND', 'BETWEEN_EXERCISES'].includes(record.activeGroupRest.restPlacement))) return false;
+  if (record.activeGroupRest && (version !== 3 || !exact(record.activeGroupRest, ['occurrenceIds', 'restPlacement']) || !record.completed
+    || !workout.supersets.some(group => sameGroup(group, record.activeGroupRest) && group.occurrenceIds.includes(exercise.occurrenceId))
+    || (record.activeGroupRest.restPlacement === 'AFTER_ROUND' && !record.activeGroupRest.occurrenceIds.every(occurrenceId => workout.exercises.find(candidate => candidate.occurrenceId === occurrenceId)?.setRecords[index]?.completed)))) return false;
   if (record.actualRestSeconds !== null && !nonnegative(record.actualRestSeconds)) return false;
   if (record.completed && index !== exercise.sets - 1 && !((record.actualRestSeconds !== null && record.activeRest === null) || (record.actualRestSeconds === null && record.activeRest !== null) || (version === 3 && afterRoundGroupCoversRecord(workout, exercise, index, nextTimerId)))) return false;
   const actualCount = value => value === '' || nonnegative(value);
@@ -161,7 +198,7 @@ function validCooldownUndoTarget(workout) {
 }
 function validWorkout(workout, version) {
   const keys = ['phase', 'workoutStartedAtEpochMs', 'activeWorkTimer', 'nextTimerId', 'phaseLedger', 'phaseCandidate', 'cooldownUndoTarget', 'exercises', ...(version === 3 ? ['supersets'] : [])];
-  if (!exact(workout, keys) || !ACTIVE_PHASES.includes(workout.phase) || !integer(workout.workoutStartedAtEpochMs) || !integer(workout.nextTimerId) || workout.nextTimerId < 1 || !validLedger(workout.phaseLedger, workout.phase) || !Array.isArray(workout.exercises) || !workout.exercises.length || new Set(workout.exercises.map(x => x.occurrenceId)).size !== workout.exercises.length || !workout.exercises.every(exercise => validExercise(exercise, workout.nextTimerId, version, workout)) || (version === 3 && !Array.isArray(workout.supersets))) return false;
+  if (!exact(workout, keys) || !ACTIVE_PHASES.includes(workout.phase) || !integer(workout.workoutStartedAtEpochMs) || !integer(workout.nextTimerId) || workout.nextTimerId < 1 || !validLedger(workout.phaseLedger, workout.phase) || !Array.isArray(workout.exercises) || !workout.exercises.length || new Set(workout.exercises.map(x => x.occurrenceId)).size !== workout.exercises.length || (version === 3 && (!Array.isArray(workout.supersets) || !validSupersets(workout))) || !workout.exercises.every(exercise => validExercise(exercise, workout.nextTimerId, version, workout))) return false;
   if (workout.activeWorkTimer !== null && (!exact(workout.activeWorkTimer, ['id', 'occurrenceId', 'exerciseIndex', 'setIndex', 'startedAtEpochMs']) || !/^work-[1-9]\d*$/.test(workout.activeWorkTimer.id) || Number(workout.activeWorkTimer.id.slice(5)) >= workout.nextTimerId || !integer(workout.activeWorkTimer.startedAtEpochMs) || !nonnegative(workout.activeWorkTimer.exerciseIndex) || !nonnegative(workout.activeWorkTimer.setIndex))) return false;
   const records = workout.exercises.flatMap(exercise => exercise.setRecords);
   const timerIds = records.filter(record => record.activeRest).map(record => record.activeRest.id);
@@ -175,7 +212,7 @@ function validWorkout(workout, version) {
   }
   const hasRest = records.some(record => record.activeRest !== null);
   const groupRests = records.filter(record => record.activeGroupRest);
-  if (version === 3 && (groupRests.length > 1 || groupRests.some(record => !workout.supersets.some(group => JSON.stringify(group) === JSON.stringify(record.activeGroupRest))))) return false;
+  if (version === 3 && (!validAfterRoundHistory(workout) || workout.supersets.some(group => groupRests.filter(record => record.activeRest && sameGroup(record.activeGroupRest, group)).length > 1))) return false;
   const completed = records.filter(record => record.completed);
   if (workout.phase === 'warmup') return workout.activeWorkTimer === null && !completed.length && !hasRest && workout.phaseCandidate === null && workout.cooldownUndoTarget === null;
   if (workout.phase === 'performance') return workout.phaseCandidate === null && workout.cooldownUndoTarget === null;

@@ -422,36 +422,53 @@ function isValidSavedSupersets(supersets, exercises) {
   });
 }
 
-function groupCompletionRestOccurrences(supersets, exercises) {
+function groupTimingValidationCopy(supersets, exercises) {
   const byOccurrence = new Map(exercises.map(exercise => [exercise?.occurrenceId, exercise]));
-  const completed = new Set();
+  const normalized = exercises.map(exercise => ({ ...exercise, setRecords: exercise.setRecords?.map(record => ({ ...record })) }));
+  const normalizedByOccurrence = new Map(normalized.map(exercise => [exercise?.occurrenceId, exercise]));
   for (const group of supersets) {
     const members = group?.occurrenceIds?.map(id => byOccurrence.get(id));
-    if (!members?.every(exercise => Array.isArray(exercise?.setRecords))) return null;
-    const allComplete = members.every(exercise => exercise.setRecords.every(record => record.completed));
-    const zeroRests = members.filter(exercise => {
-      const record = exercise.setRecords.at(-1);
-      return record?.plannedRestSeconds !== null && record?.actualRestSeconds === 0;
-    });
-    if (zeroRests.length && !allComplete || (allComplete && zeroRests.length !== 1)) return null;
-    zeroRests.forEach(exercise => completed.add(exercise.occurrenceId));
+    if (!members?.every(exercise => Array.isArray(exercise?.setRecords)) || new Set(members.map(exercise => exercise.setRecords.length)).size !== 1) return null;
+    for (let index = 0; index < members[0].setRecords.length; index += 1) {
+      const records = members.map(exercise => exercise.setRecords[index]);
+      const completed = records.filter(record => record?.completed);
+      if (!completed.length) continue;
+      const isFinal = index === members[0].setRecords.length - 1;
+      if (completed.length !== records.length) {
+        if (members.some(exercise => exercise.setRecords.slice(index + 1).some(record => record?.completed))) return null;
+        if (group.restPlacement === 'AFTER_ROUND') {
+          if (!completed.every(record => record.actualRestSeconds === null && (isFinal ? record.plannedRestSeconds === null : isValidPlannedRestSeconds(record.plannedRestSeconds)))) return null;
+          if (!isFinal) records.forEach((record, memberIndex) => { if (record.completed) normalizedByOccurrence.get(members[memberIndex].occurrenceId).setRecords[index].actualRestSeconds = 0; });
+        } else {
+          if (!completed.every(record => isValidPlannedRestSeconds(record.plannedRestSeconds) && isNonnegativeInteger(record.actualRestSeconds))) return null;
+          if (isFinal) records.forEach((record, memberIndex) => { if (record.completed) Object.assign(normalizedByOccurrence.get(members[memberIndex].occurrenceId).setRecords[index], { plannedRestSeconds: null, actualRestSeconds: null }); });
+        }
+        continue;
+      }
+      if (group.restPlacement === 'AFTER_ROUND') {
+        const owners = records.filter(record => isValidPlannedRestSeconds(record.plannedRestSeconds) && isNonnegativeInteger(record.actualRestSeconds));
+        if (owners.length !== 1 || (isFinal && owners[0].actualRestSeconds !== 0)
+          || records.some(record => record !== owners[0] && (record.actualRestSeconds !== null || (!isFinal && !isValidPlannedRestSeconds(record.plannedRestSeconds)) || (isFinal && record.plannedRestSeconds !== null)))) return null;
+        members.forEach(exercise => {
+          const record = normalizedByOccurrence.get(exercise.occurrenceId).setRecords[index];
+          if (isFinal) Object.assign(record, { plannedRestSeconds: null, actualRestSeconds: null });
+          else if (record.actualRestSeconds === null) record.actualRestSeconds = owners[0].actualRestSeconds;
+        });
+      } else {
+        if (!records.every(record => isValidPlannedRestSeconds(record.plannedRestSeconds) && isNonnegativeInteger(record.actualRestSeconds)) || (isFinal && !records.some(record => record.actualRestSeconds === 0))) return null;
+        if (isFinal) members.forEach(exercise => Object.assign(normalizedByOccurrence.get(exercise.occurrenceId).setRecords[index], { plannedRestSeconds: null, actualRestSeconds: null }));
+      }
+    }
   }
-  return completed;
+  return normalized;
 }
 
 export function isValidV5WorkoutDocument(workout) {
   const { supersets, ...v4 } = workout ?? {};
   if (!Array.isArray(supersets) || !Array.isArray(workout?.exercises)) return false;
-  const terminalIds = groupCompletionRestOccurrences(supersets, workout.exercises);
-  if (!terminalIds) return false;
-  const normalizedExercises = Array.isArray(workout?.exercises) ? workout.exercises.map(exercise => {
-    if (!terminalIds.has(exercise?.occurrenceId)) return exercise;
-    const index = exercise?.setRecords?.length - 1;
-    const record = exercise?.setRecords?.[index];
-    if (record?.plannedRestSeconds === null) return exercise;
-    if (!record?.completed || !isValidPlannedRestSeconds(record.plannedRestSeconds) || record.actualRestSeconds !== 0) return exercise;
-    return { ...exercise, setRecords: exercise.setRecords.map((item, itemIndex) => itemIndex === index ? { ...item, plannedRestSeconds: null, actualRestSeconds: null } : item) };
-  }) : workout?.exercises;
+  if (!isValidSavedSupersets(supersets, workout.exercises)) return false;
+  const normalizedExercises = groupTimingValidationCopy(supersets, workout.exercises);
+  if (!normalizedExercises) return false;
   return hasOnlyFields(workout, new Set([...V4_DOCUMENT_FIELDS, 'supersets']))
     && workout.schemaVersion === 5
     && isValidV4WorkoutDocument({ ...v4, schemaVersion: 4, exercises: normalizedExercises })

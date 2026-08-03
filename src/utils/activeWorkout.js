@@ -78,7 +78,7 @@ function closePriorRest(state, exerciseIndex, setIndex, timestamp) {
   if (superset) {
     for (let currentExerciseIndex = 0; currentExerciseIndex < state.exercises.length; currentExerciseIndex += 1) {
       const recordIndex = state.exercises[currentExerciseIndex].setRecords
-        ?.findIndex(record => sameSuperset(record._activeGroupRest, superset));
+        ?.findIndex(record => record._activeRest && sameSuperset(record._activeGroupRest, superset));
       if (recordIndex >= 0) return closeRest(state, currentExerciseIndex, recordIndex, timestamp);
     }
   }

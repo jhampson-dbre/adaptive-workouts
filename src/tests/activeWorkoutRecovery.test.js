@@ -129,9 +129,20 @@ describe('active workout recovery', () => {
     const ownerIndex = firstExerciseIndex === 0 ? 1 : 0;
     const partial = activeSuperset('AFTER_ROUND', firstExerciseIndex);
     expect(await asyncDisposition(draftFor(partial))).toBe('resumable');
+    const partialWithGroupRest = clone(partial);
+    partialWithGroupRest.exercises[firstExerciseIndex].setRecords[0].actualRestSeconds = 0;
+    expect(await asyncDisposition(draftFor(partialWithGroupRest))).toBe('malformed');
+    const partialWithActiveRest = clone(partial);
+    partialWithActiveRest.exercises[firstExerciseIndex].setRecords[0]._activeRest = { id: 'rest-1', startedAt: 1002 };
+    partialWithActiveRest._nextTimerId = 2;
+    expect(await asyncDisposition(draftFor(partialWithActiveRest))).toBe('malformed');
 
     const activeOwnerRest = activeWorkoutReducer(activeWorkoutReducer(partial, { type: 'startSet', exerciseIndex: ownerIndex, setIndex: 0, timestamp: 1003 }), { type: 'confirmSet', exerciseIndex: ownerIndex, setIndex: 0, timestamp: 1004 });
     expect(await asyncDisposition(draftFor(activeOwnerRest))).toBe('resumable');
+    const unmarkedActiveRest = clone(activeOwnerRest);
+    unmarkedActiveRest.exercises[firstExerciseIndex].setRecords[0]._activeRest = { id: 'rest-2', startedAt: 1004 };
+    unmarkedActiveRest._nextTimerId = 3;
+    expect(await asyncDisposition(draftFor(unmarkedActiveRest))).toBe('malformed');
 
     const closedOwnerRest = activeWorkoutReducer(activeOwnerRest, { type: 'startSet', exerciseIndex: firstExerciseIndex, setIndex: 1, timestamp: 1005 });
     expect(await asyncDisposition(draftFor(closedOwnerRest))).toBe('resumable');
@@ -142,6 +153,16 @@ describe('active workout recovery', () => {
     const invalidClosedRest = clone(closedOwnerRest);
     invalidClosedRest.exercises[ownerIndex].setRecords[0].actualRestSeconds = -1;
     expect(await asyncDisposition(draftFor(invalidClosedRest))).toBe('malformed');
+    const unmarkedClosedRest = clone(closedOwnerRest);
+    unmarkedClosedRest.exercises[firstExerciseIndex].setRecords[0].actualRestSeconds = unmarkedClosedRest.exercises[ownerIndex].setRecords[0].actualRestSeconds;
+    expect(await asyncDisposition(draftFor(unmarkedClosedRest))).toBe('malformed');
+    const duplicateClosedOwner = clone(closedOwnerRest);
+    duplicateClosedOwner.exercises[firstExerciseIndex].setRecords[0] = {
+      ...duplicateClosedOwner.exercises[firstExerciseIndex].setRecords[0],
+      actualRestSeconds: duplicateClosedOwner.exercises[ownerIndex].setRecords[0].actualRestSeconds,
+      _activeGroupRest: clone(duplicateClosedOwner.supersets[0]),
+    };
+    expect(await asyncDisposition(draftFor(duplicateClosedOwner))).toBe('malformed');
     const forgedClosedMarker = clone(closedOwnerRest);
     delete forgedClosedMarker.exercises[ownerIndex].setRecords[0]._activeGroupRest;
     forgedClosedMarker.exercises[ownerIndex].setRecords[1]._activeGroupRest = clone(forgedClosedMarker.supersets[0]);
@@ -163,6 +184,23 @@ describe('active workout recovery', () => {
     expect(await asyncDisposition(draftFor(noGroup))).toBe('malformed');
   });
 
+  it('keeps resolved shared-rest history while rejecting duplicate active or cross-round markers', async () => {
+    const partial = activeSuperset('AFTER_ROUND', 0);
+    const active = activeWorkoutReducer(activeWorkoutReducer(partial, { type: 'startSet', exerciseIndex: 1, setIndex: 0, timestamp: 1003 }), { type: 'confirmSet', exerciseIndex: 1, setIndex: 0, timestamp: 1004 });
+    const closed = activeWorkoutReducer(active, { type: 'startSet', exerciseIndex: 0, setIndex: 1, timestamp: 1005 });
+    const completed = activeWorkoutReducer(activeWorkoutReducer(activeWorkoutReducer(closed, { type: 'confirmSet', exerciseIndex: 0, setIndex: 1, timestamp: 1006 }), { type: 'startSet', exerciseIndex: 1, setIndex: 1, timestamp: 1007 }), { type: 'confirmSet', exerciseIndex: 1, setIndex: 1, timestamp: 1008 });
+    expect(await asyncDisposition(draftFor(completed))).toBe('resumable');
+
+    const duplicateActive = clone(active);
+    duplicateActive.exercises[0].setRecords[0] = { ...duplicateActive.exercises[0].setRecords[0], _activeRest: { id: 'rest-3', startedAt: 1004 }, _activeGroupRest: clone(duplicateActive.supersets[0]) };
+    duplicateActive._nextTimerId = 4;
+    expect(await asyncDisposition(draftFor(duplicateActive))).toBe('malformed');
+    const crossRound = clone(active);
+    delete crossRound.exercises[1].setRecords[0]._activeGroupRest;
+    crossRound.exercises[0].setRecords[1]._activeGroupRest = clone(crossRound.supersets[0]);
+    expect(await asyncDisposition(draftFor(crossRound))).toBe('malformed');
+  });
+
   it('preserves the skipped final group-completion rest through recovery v3', async () => {
     const group = { occurrenceIds: ['squat:0', 'row:1'], restPlacement: 'AFTER_ROUND' };
     const completed = exercise => ({ ...exercise, completed: true, setRecords: [{ ...exercise.setRecords[0], completed: true, workDurationSeconds: 0, actualRestSeconds: null, plannedRestSeconds: null }] });
@@ -173,6 +211,12 @@ describe('active workout recovery', () => {
     const result = await readRecoveryDraftAsync({ storage: { getItem: () => JSON.stringify(draft) }, ...identity, nowEpochMs: 5, staleAfterMs: 10 });
     expect(result.status).toBe('resumable');
     expect(result.hydrated.exercises[1].setRecords[0]).toMatchObject({ actualRestSeconds: 0, _activeGroupRest: draft.activeWorkout.supersets[0] });
+    const positiveFinalRest = clone(state);
+    positiveFinalRest.exercises[1].setRecords[0].actualRestSeconds = 1;
+    expect(await asyncDisposition(draftFor(positiveFinalRest))).toBe('malformed');
+    const missingFinalPlannedRest = clone(state);
+    missingFinalPlannedRest.exercises[1].setRecords[0].plannedRestSeconds = null;
+    expect(await asyncDisposition(draftFor(missingFinalPlannedRest))).toBe('malformed');
   });
 
   it('resumes a final BETWEEN_EXERCISES group rest and closes it across cloned group DTOs', async () => {

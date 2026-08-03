@@ -367,6 +367,24 @@ describe('active workout timing state machine', () => {
     expect(state.exercises[1].setRecords[1]._activeRest).toBeUndefined();
   });
 
+  it('closes the current shared rest after earlier round markers have resolved', () => {
+    const exercises = [timedWeighted('row', 3), timedWeighted('press', 3)];
+    exercises[1].occurrenceId = 'press:1';
+    exercises.supersets = [{ occurrenceIds: ['row:0', 'press:1'], restPlacement: 'AFTER_ROUND' }];
+    let state = startWorkout(initializeActiveWorkout(exercises));
+    state = confirmSet(startSet(state, 0, 0, 2_000), 0, 0, 3_000);
+    state = confirmSet(startSet(state, 1, 0, 4_000), 1, 0, 5_000);
+    state = startSet(state, 0, 1, 6_000);
+    state = confirmSet(state, 0, 1, 7_000);
+    state = confirmSet(startSet(state, 1, 1, 8_000), 1, 1, 9_000);
+    expect(state.exercises[1].setRecords[1]._activeRest).toBeDefined();
+
+    state = startSet(state, 0, 2, 10_000);
+
+    expect(state.exercises[1].setRecords[1]).toMatchObject({ actualRestSeconds: 1 });
+    expect(state.exercises[1].setRecords[1]._activeRest).toBeUndefined();
+  });
+
   it('keeps between-exercise rests with their member and removes a completed-group rest on undo', () => {
     const exercises = [timedWeighted('row', 1), timedWeighted('press', 1)];
     exercises[1].occurrenceId = 'press:1';
