@@ -14,6 +14,6 @@ it('preserves the original empty workout result after generation', async () => {
   const trigger = screen.getByRole('button', { name: 'Generate empty workout' })
   trigger.focus(); fireEvent.click(trigger)
   expect(screen.getByRole('heading', { name: 'Your Workout' })).toBeTruthy()
-  expect(screen.getByText('No exercises fit the criteria or time budget.')).toBeTruthy()
+  expect(screen.getByText('No workout fits this plan. Change the available time or muscle groups, then plan again.')).toBeTruthy()
   expect(document.activeElement).toBe(trigger)
 })

@@ -4,7 +4,7 @@ import { generateWorkout, getDaysSinceLastLegDay, getDayOfWeek } from '../utils/
 import JourneyProgress from './JourneyProgress';
 
 const MUSCLE_GROUPS = ['Biceps', 'Shoulders', 'Back', 'Chest', 'Triceps', 'Core', 'Legs'];
-const HISTORY_UNAVAILABLE_MESSAGE = 'Workout history is unavailable. Retry before generating a workout.';
+const HISTORY_UNAVAILABLE_MESSAGE = 'Workout history is unavailable. Try loading it again before planning a workout.';
 
 class HistoryLoadError extends Error {
   constructor(cause) {
@@ -134,13 +134,13 @@ export default function Generator({
       <JourneyProgress current="Plan" />
       <div className="plan-intro">
         <h2 ref={headingRef} tabIndex={baselineFocus ? '-1' : undefined}>How much time do you have?</h2>
-        <p>Nudge will use your recent training to decide what is worth doing next.</p>
+        <p>Nudge uses your recent workouts and available time to plan today&apos;s workout.</p>
       </div>
       
       {error && <div className="error-message" role="alert">{error}</div>}
       {canRetryHistory && (
         <button type="button" onClick={handleGenerate} disabled={isGenerating}>
-          {isGenerating ? 'Retrying...' : 'Retry'}
+          {isGenerating ? 'Loading workout history...' : 'Try loading history again'}
         </button>
       )}
 
@@ -167,7 +167,7 @@ export default function Generator({
       {legDayChoice && <section className="leg-day-choice" role="region" aria-label="Leg day choice">
         <h2 ref={legDayChoiceHeadingRef} tabIndex="-1">Include legs in today&apos;s workout?</h2>
         <button type="button" onClick={() => completeLegDayChoice(true)}>Include legs today</button>
-        <button type="button" onClick={() => completeLegDayChoice(false)}>Keep current plan</button>
+        <button type="button" onClick={() => completeLegDayChoice(false)}>Leave legs out today</button>
       </section>}
 
       <details className="groups-container">

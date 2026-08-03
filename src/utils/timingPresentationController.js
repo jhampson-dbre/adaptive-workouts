@@ -4,17 +4,17 @@ import {
   initializeActiveWorkout,
 } from './activeWorkout';
 
-const PHASE_LABELS = { warmup: 'Warmup', performance: 'Performance', cooldown: 'Cooldown', review: 'Review', cancelled: 'Workout cancelled' };
+const PHASE_LABELS = { warmup: 'Warmup', performance: 'Main workout', cooldown: 'Cooldown', review: 'Review', cancelled: 'Workout cancelled' };
 const RECOVERY_MESSAGES = {
-  resumable: 'A saved workout is ready to resume.', conflict: 'Another tab owns this workout.',
-  unsupported: 'This browser cannot safely start a recoverable workout.', denied: 'Workout ownership was denied.',
-  timeout: 'Workout ownership timed out. Try again or exit.', lost: 'Workout ownership was lost. Recovery is available.',
-  'storage-error': 'Local recovery storage is unavailable.', malformed: 'The saved workout cannot be recovered.',
-  'unsupported-version': 'The saved workout uses an unsupported version.', stale: 'The saved workout is stale.',
-  'wrong-user': 'The saved workout belongs to a different account.', 'wrong-project': 'The saved workout belongs to a different project.',
-  'reconcile-indeterminate': 'Save outcome is still unknown. Check again before retrying.',
-  'retryable-absent': 'The save was not found. Retry the same workout.',
-  'blocked-conflict': 'A different saved workout conflicts with this save.', saved: 'Workout saved successfully.',
+  resumable: 'A saved workout is ready to resume.', conflict: 'This workout is open in another tab.',
+  unsupported: 'This browser cannot keep an in-progress workout available to resume.', denied: 'Another tab is using this workout.',
+  timeout: 'Nudge could not confirm which tab is using this workout. Try again or exit.', lost: 'This workout is no longer active in this tab.',
+  'storage-error': 'This browser cannot access the saved workout.', malformed: 'The saved workout cannot be recovered.',
+  'unsupported-version': 'This saved workout was created by a different version of Nudge.', stale: 'This saved workout is too old to resume.',
+  'wrong-user': 'The saved workout belongs to a different account.', 'wrong-project': 'This saved workout is not available in this app.',
+  'reconcile-indeterminate': 'It is not clear whether this workout was saved. Check again before trying to save it.',
+  'retryable-absent': 'This workout was not saved. Try saving it again.',
+  'blocked-conflict': 'A different workout was saved while you were finishing this one.', saved: 'Workout saved successfully.',
 };
 const RECOVERY_ACTION_ACKNOWLEDGEMENTS = Object.freeze({
   'Keep pending': { message: 'Save conflict remains pending.', retain: true },
@@ -22,7 +22,7 @@ const RECOVERY_ACTION_ACKNOWLEDGEMENTS = Object.freeze({
   'Retry acquisition': { message: 'Ownership retry requested.', retain: true },
   'Recover workout': { message: 'Recovery requested. Waiting for ownership.', retain: true },
   'Retry local recovery': { message: 'Local recovery retry requested.', retain: true },
-  'Retry exact save': { message: 'Exact save retry requested.', retain: true },
+  'Try saving again': { message: 'Trying to save this workout again.', retain: true },
   'Check again': { message: 'Save reconciliation check requested.', retain: true },
   'Resume workout': { message: 'Workout resumed.', retain: false },
   Discard: { message: 'Recovery draft discarded.', retain: false },

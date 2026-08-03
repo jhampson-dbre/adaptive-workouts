@@ -52,29 +52,29 @@ const renderWorkout = (workout, onFinish = () => {}, user = { uid: 'test-user-id
   return Object.assign(view, { api: sessionApi });
 };
 
-test('a blocked active workout exposes recovery controls and awaits Exit before returning to Plan', async () => {
+test('a blocked active workout exposes recovery controls and awaits Exit to Plan before returning to Plan', async () => {
   const exit = vi.fn().mockResolvedValue(undefined); const onFinish = vi.fn();
   const activeWorkout = initializeActiveWorkout(timedWorkout, { phaseTimingEnabled: true });
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ exit }} sessionState={{ status: 'blocked', activeWorkout, error: 'unsupported', blocked: true }} onFinish={onFinish} /></AuthContext.Provider>);
-  expect(screen.getByRole('heading', { level: 2, name: 'Workout recovery' })).toBeDefined();
-  expect(screen.getByText('This browser cannot safely start a recoverable workout.')).toBeDefined();
-  expect(screen.queryByRole('button', { name: 'Start Workout' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Exit' }));
+  expect(screen.getByRole('heading', { level: 2, name: 'Workout interrupted' })).toBeDefined();
+  expect(screen.getByText('This browser cannot keep an in-progress workout available to resume.')).toBeDefined();
+  expect(screen.queryByRole('button', { name: 'Start workout' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Exit to Plan' }));
   await waitFor(() => expect(exit).toHaveBeenCalledOnce());
   expect(onFinish).toHaveBeenCalledOnce();
 });
 
 test('recovery gives the retained-workout action visual priority without changing its controls', () => {
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ resume: vi.fn(), discard: vi.fn() }} sessionState={{ status: 'recovery-available', activeWorkout: null, blocked: true }} /></AuthContext.Provider>);
-  expect(screen.getByRole('region', { name: 'Workout recovery' }).className).toContain('recovery-panel');
-  expect(screen.getByRole('button', { name: 'Resume' }).className).toContain('recovery-primary');
-  expect(screen.getByRole('button', { name: 'Discard' }).className).toContain('recovery-secondary');
+  expect(screen.getByRole('region', { name: 'Interrupted workout' }).className).toContain('recovery-panel');
+  expect(screen.getByRole('button', { name: 'Resume workout' }).className).toContain('recovery-primary');
+  expect(screen.getByRole('button', { name: 'Discard workout' }).className).toContain('recovery-secondary');
 });
 
-test('a stale recovery blocker offers exact Discard rather than Exit', () => {
+test('a stale recovery blocker offers exact Discard workout rather than Exit to Plan', () => {
   const discard = vi.fn();
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ discard }} sessionState={{ status: 'recovery-blocked', activeWorkout: null, error: 'stale', blocked: true }} /></AuthContext.Provider>);
-  fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Discard workout' }));
   expect(discard).toHaveBeenCalledOnce();
 });
 
@@ -82,9 +82,9 @@ test('focuses recovery only when its material presentation changes', async () =>
   const session = { requestHandoff: vi.fn(), resume: vi.fn(), exit: vi.fn() };
   const renderRecovery = error => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={session} sessionState={{ status: 'recovery-blocked', activeWorkout: null, error, blocked: true }} /></AuthContext.Provider>;
   const view = render(renderRecovery('timeout'));
-  const heading = screen.getByRole('heading', { name: 'Workout recovery' });
+  const heading = screen.getByRole('heading', { name: 'Workout interrupted' });
   await waitFor(() => expect(document.activeElement).toBe(heading));
-  const exit = screen.getByRole('button', { name: 'Exit' }); exit.focus();
+  const exit = screen.getByRole('button', { name: 'Exit to Plan' }); exit.focus();
   view.rerender(renderRecovery('timeout'));
   expect(document.activeElement).toBe(exit);
   view.rerender(renderRecovery('conflict'));
@@ -95,7 +95,7 @@ test('announces and reports a successful Resume without reporting a failed attem
   const onResume = vi.fn();
   const resume = vi.fn(async () => true);
   const { rerender } = render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ resume }} sessionState={{ status: 'recovery-available', activeWorkout: null, blocked: true }} onResume={onResume} /></AuthContext.Provider>);
-  fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Resume workout' }));
   await waitFor(() => expect(onResume).toHaveBeenCalledOnce());
   rerender(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ resume }} sessionState={{ status: 'owned', activeWorkout: initializeActiveWorkout(timedWorkout, { phaseTimingEnabled: true }), blocked: false }} onResume={onResume} /></AuthContext.Provider>);
   expect(screen.getByRole('status').textContent).toBe('Workout resumed.');
@@ -103,7 +103,7 @@ test('announces and reports a successful Resume without reporting a failed attem
 
   const failedResume = vi.fn(async () => false);
   rerender(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ resume: failedResume }} sessionState={{ status: 'recovery-available', activeWorkout: null, blocked: true }} onResume={onResume} /></AuthContext.Provider>);
-  fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Resume workout' }));
   await waitFor(() => expect(failedResume).toHaveBeenCalledOnce());
   expect(onResume).toHaveBeenCalledOnce();
 });
@@ -115,23 +115,23 @@ test('retires the Resume acknowledgement only after an accepted action or a newe
   const action = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
   const initial = initializeActiveWorkout(timedWorkout, { phaseTimingEnabled: true });
   const { rerender } = render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ resume, action }} sessionState={{ status: 'recovery-available', activeWorkout: null, blocked: true }} onResume={onResume} /></AuthContext.Provider>);
-  fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Resume workout' }));
   await act(async () => {});
   expect(onResume).toHaveBeenCalledOnce();
   rerender(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ resume, action }} sessionState={{ status: 'owned', activeWorkout: initial, blocked: false }} onResume={onResume} /></AuthContext.Provider>);
   expect(screen.getByRole('status').textContent).toBe('Workout resumed.');
 
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   await act(async () => {});
   expect(action).toHaveBeenCalledTimes(1);
   expect(screen.getByRole('status').textContent).toBe('Workout resumed.');
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   await act(async () => {});
   expect(action).toHaveBeenCalledTimes(2);
   expect(screen.getByRole('status').textContent).toBe('');
 
   rerender(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ resume, action }} sessionState={{ status: 'recovery-available', activeWorkout: null, blocked: true }} onResume={onResume} /></AuthContext.Provider>);
-  fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Resume workout' }));
   await act(async () => {});
   expect(onResume).toHaveBeenCalledTimes(2);
   const running = activeWorkoutReducer(initial, { type: 'startWorkout', timestamp: Date.now() });
@@ -192,7 +192,7 @@ test('uses display order outside a superset and continues group handoff until it
   expect(screen.getByRole('button', { name: /Carry exercise 1 set 1 start/i })).toBeDefined();
   expect(screen.queryByRole('button', { name: /Long Row Exercise Name exercise 2 set 1 start/i })).toBeNull();
 
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name.*expand/i }));
   fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 2 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 2 set 1 confirm/i }));
@@ -211,6 +211,7 @@ test('recovery resumes a partial mixed superset but otherwise follows display or
   partial = activeWorkoutReducer(partial, { type: 'startSet', exerciseIndex: 1, setIndex: 0, timestamp: 2 });
   partial = activeWorkoutReducer(partial, { type: 'confirmSet', exerciseIndex: 1, setIndex: 0, timestamp: 3 });
   const view = render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'checking', activeWorkout: null, blocked: true }} /></AuthContext.Provider>);
+  expect(screen.getByRole('status').textContent).toBe('Checking for a workout to resume.');
 
   view.rerender(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'owned', activeWorkout: partial, blocked: false }} /></AuthContext.Provider>);
   expect(await screen.findByRole('button', { name: /Long Press Exercise Name exercise 3 set 1 start/i })).toBeDefined();
@@ -234,7 +235,7 @@ test('recovery resumes a partial mixed superset but otherwise follows display or
 
 test('guides a confirmed superset member to the earliest remaining member without listing group names', async () => {
   renderWorkout(supersetWorkout());
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 1 set 1 confirm/i }));
 
@@ -265,7 +266,7 @@ test('moves superset focus only after a delayed confirmation publishes its ready
 
 test('keeps a BETWEEN_EXERCISES rest beside the recommended member and closes it when that member starts', async () => {
   renderWorkout(supersetWorkout('BETWEEN_EXERCISES'));
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 1 set 1 confirm/i }));
 
@@ -277,7 +278,7 @@ test('keeps a BETWEEN_EXERCISES rest beside the recommended member and closes it
 
 test('announces a newly started group rest once without repeating the ready-set label', async () => {
   renderWorkout(supersetWorkout('BETWEEN_EXERCISES'));
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 1 set 1 confirm/i }));
 
@@ -292,7 +293,7 @@ test('starting the recommended member retires its rest-start announcement but ke
   const workout = supersetWorkout('BETWEEN_EXERCISES');
   workout.push({ ...timedWorkout[0], id: 'carry', occurrenceId: 'carry:2', name: 'Carry', setRecords: timedWorkout[0].setRecords.map(record => ({ ...record })) });
   renderWorkout(workout);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Carry.*expand/i }));
   fireEvent.click(screen.getByRole('button', { name: /Carry exercise 3 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Carry exercise 3 set 1 confirm/i }));
@@ -330,7 +331,7 @@ test('expands the guided superset member when recovery hydrates in place', async
 
 test('keeps a same-exercise rest beside the next Start control while completed sets stay compact', () => {
   renderWorkout([timedWorkout[0]]);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
 
@@ -345,7 +346,7 @@ test('keeps a same-exercise rest beside the next Start control while completed s
 
 test('presents one guided action before the optional exercise list', () => {
   renderWorkout(timedWorkout);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
 
   expect(screen.getByRole('navigation', { name: 'Workout progress' })).toBeTruthy();
   expect(screen.getByRole('heading', { name: 'Exercises' })).toBeTruthy();
@@ -358,7 +359,7 @@ test('presents one guided action before the optional exercise list', () => {
 
 test('a reconfirmed set returns to compact presentation after details and Undo', () => {
   renderWorkout([timedWorkout[0]]);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: /Show details for Plank set 1/i }));
@@ -373,7 +374,7 @@ test('a reconfirmed set returns to compact presentation after details and Undo',
 test('next Start omits predecessor rest after the live rest closes and in initialized completed-prefix state', () => {
   const exercise = timedWorkout[0];
   const first = renderWorkout([exercise]);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i }));
@@ -388,7 +389,7 @@ test('next Start omits predecessor rest after the live rest closes and in initia
       { ...exercise.setRecords[1] },
     ],
   }]);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   expect(screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i }).parentElement.textContent).toBe('Start set');
   fireEvent.click(screen.getByRole('button', { name: /Show details for Plank set 1/i }));
   expect(screen.getByText('Rest: 0:03 actual / 0:02 planned')).toBeDefined();
@@ -396,7 +397,7 @@ test('next Start omits predecessor rest after the live rest closes and in initia
 
 test('editing completed details preserves another set invalid-confirmation feedback', () => {
   renderWorkout(weighted);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: /set 2 start/i }));
@@ -420,7 +421,7 @@ test('starts explicitly with set controls disabled and one shared total timer', 
   expect(screen.getByRole('heading', { name: 'Workout ready' })).toBeDefined();
   expect(screen.queryByText('Ready when you are')).toBeNull();
   expect(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }).disabled).toBe(true);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   expect(screen.getByText('Perform').closest('li').getAttribute('aria-current')).toBe('step');
   act(() => vi.advanceTimersByTime(2000));
   expect(screen.getByLabelText('Total elapsed 0:02')).toBeDefined();
@@ -431,7 +432,7 @@ test('orients a started legacy workout as Performance', () => {
   const generated = initializeActiveWorkout(timedWorkout);
   const activeWorkout = activeWorkoutReducer(generated, { type: 'startWorkout', timestamp: Date.now() });
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'owned', activeWorkout, blocked: false }} /></AuthContext.Provider>);
-  expect(screen.getByRole('heading', { name: 'Performance' })).toBeDefined();
+  expect(screen.getByRole('heading', { name: 'Main workout' })).toBeDefined();
   expect(screen.getByText('Perform').closest('li').getAttribute('aria-current')).toBe('step');
 });
 
@@ -441,11 +442,11 @@ test('makes Finish primary in Cooldown and discloses remaining work', () => {
   cooldown = { ...cooldown, phase: 'cooldown' };
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'owned', activeWorkout: cooldown, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 60 }, blocked: false }} /></AuthContext.Provider>);
 
-  const finish = screen.getByRole('button', { name: 'Finish Workout' });
+  const finish = screen.getByRole('button', { name: 'Finish workout' });
   const remaining = screen.getByText('Return to remaining work').closest('details');
   expect(finish.compareDocumentPosition(remaining) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(remaining.open).toBe(false);
-  expect(screen.getByRole('button', { name: 'Resume Workout' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Resume workout' })).toBeTruthy();
 });
 
 test('labels a completed simple exercise factually in Review', () => {
@@ -474,7 +475,7 @@ test('labels a completed simple exercise factually in Review', () => {
 test('times work inline, confirms a set, and exposes persistent overtime when collapsed', () => {
   vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
   renderWorkout(timedWorkout);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
   act(() => vi.advanceTimersByTime(2000));
   expect(screen.getByText('Work: 0:02')).toBeDefined();
@@ -507,7 +508,7 @@ test('announces every rest that completes on the same shared tick', () => {
   };
   try {
     renderWorkout([timedWorkout[0], row]);
-    fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
     fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
     fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
     fireEvent.click(screen.getByRole('button', { name: /Row.*expand/i }));
@@ -536,7 +537,7 @@ test('announces every rest that completes on the same shared tick', () => {
 test('retires an overdue rest announcement when the next set starts', () => {
   vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
   renderWorkout([timedWorkout[0]]);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
   act(() => vi.advanceTimersByTime(2000));
@@ -554,7 +555,7 @@ test('retiring one duplicate-name rest announcement preserves the other occurren
     setRecords: timedWorkout[0].setRecords.map(record => ({ ...record })),
   };
   renderWorkout([timedWorkout[0], duplicate]);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: /Plank, 0 of 2 confirmed.*expand/i }));
@@ -571,19 +572,19 @@ test('retiring one duplicate-name rest announcement preserves the other occurren
 test('keeps blocked Start feedback with its exercise and blocked Finish feedback beside Finish', () => {
   vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
   renderWorkout(timedWorkout);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat.*expand/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 2 set 1 start/i }));
   expect(screen.getByRole('alert').textContent).toMatch(/Only one work timer/i);
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   expect(screen.queryByRole('region', { name: 'Workout summary' })).toBeNull();
   expect(screen.getByText(/Finish or cancel Plank set 1 before finishing/i)).toBeDefined();
 });
 
 test('cancelling the active owner retires a blocked Start error in another exercise', () => {
   renderWorkout(timedWorkout);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat.*expand/i }));
@@ -598,16 +599,16 @@ test('cancelling the active owner retires a blocked Start error in another exerc
 
 test('retires contextual and Finish feedback after correction or cancellation without using the rest announcer', async () => {
   renderWorkout(weighted);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /set 1 start/i }));
   fireEvent.change(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }), { target: { value: '' } });
   await waitFor(() => expect(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }).value).toBe(''));
   fireEvent.click(screen.getByRole('button', { name: /set 1 confirm/i }));
-  expect(screen.getByRole('alert').textContent).toMatch(/valid performance values/i);
+  expect(screen.getByRole('alert').textContent).toBe('Enter weight and rep values before confirming Bench Press set 1.');
   expect(screen.getByRole('status').textContent).toBe('');
   fireEvent.change(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }), { target: { value: '8' } });
   expect(screen.queryByRole('alert')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   expect(screen.getByText(/Finish or cancel Bench Press set 1 before finishing/i)).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: /set 1 cancel/i }));
   expect(screen.queryByText(/Finish or cancel Bench Press set 1 before finishing/i)).toBeNull();
@@ -615,7 +616,7 @@ test('retires contextual and Finish feedback after correction or cancellation wi
 
 test('cancel leaves the set ready without recording work or rest', () => {
   renderWorkout(timedWorkout);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 cancel/i }));
   expect(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i })).toBeDefined();
@@ -624,22 +625,22 @@ test('cancel leaves the set ready without recording work or rest', () => {
 
 test('weighted confirmation validates inputs and unlocks the next set with backoff', async () => {
   renderWorkout(weighted);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /set 1 start/i }));
   fireEvent.change(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }), { target: { value: '' } });
   await waitFor(() => expect(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }).value).toBe(''));
   fireEvent.click(screen.getByRole('button', { name: /set 1 confirm/i }));
-  expect(screen.getByText(/valid performance values/i)).toBeDefined();
+  expect(screen.getByText(/Enter weight and rep values/i)).toBeDefined();
   fireEvent.change(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }), { target: { value: '4' } });
   await waitFor(() => expect(screen.getByRole('spinbutton', { name: /set 1 actual reps/i }).value).toBe('4'));
   fireEvent.click(screen.getByRole('button', { name: /set 1 confirm/i }));
   expect(screen.getByRole('button', { name: /set 2 start/i })).toBeDefined();
-  expect(screen.getByLabelText(/set 2 recommendation reason/i).textContent).toMatch(/-10 lb/i);
+  expect(screen.getByLabelText(/set 2 recommendation reason/i).textContent).toBe('Reduced 10 lb: previous set completed fewer than the 6-rep minimum.');
 });
 
 test('final confirmation collapses the exercise, expands next incomplete, and moves focus', async () => {
   renderWorkout([{ ...timedWorkout[0], sets: 1, prescribedSetCount: 1, setRecords: [timedWorkout[0].setRecords[1]] }, timedWorkout[1]]);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
   await waitFor(() => expect(screen.getByRole('button', { name: /Plank.*expand/i }).getAttribute('aria-expanded')).toBe('false'));
@@ -651,7 +652,7 @@ test('final confirmation wraps focus to an earlier incomplete exercise', async (
   const earlier = { ...timedWorkout[1], id: 'row', occurrenceId: 'row:0', name: 'Row' };
   const later = { ...timedWorkout[1], id: 'press', occurrenceId: 'press:1', name: 'Press' };
   renderWorkout([earlier, later]);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Press.*expand/i }));
   fireEvent.click(screen.getByRole('button', { name: /Press exercise 2 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Press exercise 2 set 1 confirm/i }));
@@ -671,7 +672,7 @@ test('focuses the selected exercise first ready set when its earlier set is comp
     ],
   };
   renderWorkout([current, next]);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Row exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Row exercise 1 set 1 confirm/i }));
 
@@ -697,7 +698,7 @@ test('visible rest alerts fire once per rest identity and reconfirming creates o
   Object.defineProperty(navigator, 'vibrate', { configurable: true, value: vibrate });
   try {
     renderWorkout([timedWorkout[0]]);
-    fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
     fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
     fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
     act(() => vi.advanceTimersByTime(2000));
@@ -738,7 +739,7 @@ test('throwing or unavailable alert APIs never break visible overtime status', (
   Object.defineProperty(navigator, 'vibrate', { configurable: true, value: () => { throw new Error('unavailable'); } });
   try {
     renderWorkout([timedWorkout[0]]);
-    fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
     fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
     fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
     act(() => vi.advanceTimersByTime(3000));
@@ -749,7 +750,7 @@ test('throwing or unavailable alert APIs never break visible overtime status', (
     Object.defineProperty(window, 'AudioContext', { configurable: true, value: undefined });
     Object.defineProperty(navigator, 'vibrate', { configurable: true, value: undefined });
     renderWorkout([timedWorkout[0]]);
-    fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
     fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
     fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
     act(() => vi.advanceTimersByTime(3000));
@@ -769,7 +770,7 @@ test('returning after hidden rest expiry shows overtime without a delayed announ
   Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility });
   try {
     renderWorkout(timedWorkout);
-    fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
     fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
     fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
     const restStart = screen.getByRole('status').textContent;
@@ -788,7 +789,7 @@ test('returning after hidden rest expiry shows overtime without a delayed announ
 
 test('undoing a final set re-expands its exercise', async () => {
   renderWorkout([{ ...timedWorkout[1] }]);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   await waitFor(() => expect(screen.getByRole('button', { name: /Squat.*expand/i })).toBeDefined());
@@ -805,21 +806,21 @@ test('Finish uses a fresh reducer snapshot after Back and saves coherent v4 timi
     setRecords: [{ ...timedWorkout[0].setRecords[0], plannedRestSeconds: 5 }, timedWorkout[0].setRecords[1]],
   }, timedWorkout[1]];
   const onFinish = vi.fn(); const view = renderWorkout(savableWorkout, onFinish);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   expect(screen.getByRole('heading', { name: 'Finish workout early?' })).toBe(document.activeElement);
   expect(screen.getByText(/Plank: 1 set remaining/)).toBeDefined();
   expect(screen.getByRole('button', { name: 'Return to workout' })).toBeDefined();
-  fireEvent.click(screen.getByRole('button', { name: 'Continue to Cooldown' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to cooldown' }));
   expect(screen.getByRole('heading', { level: 2, name: 'Cooldown' })).toBe(document.activeElement);
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   await act(async () => {});
   expect(screen.getByText(/1 set recorded/)).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Back to workout' }));
   await act(async () => {});
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Back to plan' })).toBeDefined());
   expect(screen.getByRole('heading', { level: 2, name: 'Workout saved' })).toBe(document.activeElement);
@@ -841,10 +842,10 @@ test('Finish uses a fresh reducer snapshot after Back and saves coherent v4 timi
 test('A8 saves a strict v4 document with frozen phase durations instead of the live v3 writer', async () => {
   const onFinish = vi.fn();
   const view = renderWorkout([{ ...timedWorkout[1] }], onFinish);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Back to plan' })).toBeDefined());
   fireEvent.click(screen.getByRole('button', { name: 'Back to plan' }));
@@ -855,13 +856,13 @@ test('A8 saves a strict v4 document with frozen phase durations instead of the l
 
 test('A8 production phase targets drive Warmup, Performance, Cooldown, and Review with final-confirm focus on Cooldown', async () => {
   const view = renderWorkout([{ ...timedWorkout[1] }], () => {}, { uid: 'test-user-id' }, { warmupSeconds: 60, performanceSeconds: 0, cooldownSeconds: 60 });
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   expect(screen.getByRole('heading', { level: 2, name: 'Warmup' })).toBe(document.activeElement);
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
-  expect(screen.getByRole('heading', { level: 2, name: 'Performance' })).toBe(document.activeElement);
+  expect(screen.getByRole('heading', { level: 2, name: 'Main workout' })).toBe(document.activeElement);
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   expect(screen.getByRole('heading', { level: 2, name: 'Cooldown' })).toBe(document.activeElement);
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   expect(await screen.findByRole('region', { name: 'Workout summary' })).toBeDefined();
   expect(view.api.action.mock.calls.map(([action]) => action.type)).toEqual(expect.arrayContaining(['startWorkout', 'startSet', 'confirmSet', 'finishWorkout']));
   expect(screen.queryByText(/refreshing or closing this page will lose/i)).toBeNull();
@@ -869,27 +870,27 @@ test('A8 production phase targets drive Warmup, Performance, Cooldown, and Revie
 
 test('renders planned phase timing and freezes all phase totals in the semantic Review heading', async () => {
   renderWorkout([{ ...timedWorkout[1] }], () => {}, { uid: 'test-user-id' }, { warmupSeconds: 60, performanceSeconds: 45, cooldownSeconds: 30 });
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   expect(screen.getByText('Warmup: 1:00 planned / 1:00 remaining')).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   expect(screen.getByRole('heading', { level: 2, name: 'Review' })).toBe(document.activeElement);
   expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Warmup: 0:00 actual \/ 1:00 planned/);
-  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Performance: 0:00 actual \/ 0:45 planned/);
+  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Main workout: 0:00 actual \/ 0:45 planned/);
   expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Cooldown: 0:00 actual \/ 0:30 planned/);
 });
 
 test('offers cooperative handoff after a live-owner timeout and resumes through the normal destination callback', async () => {
   const onResume = vi.fn(); const session = { resume: vi.fn(), requestHandoff: vi.fn().mockResolvedValue(true), exit: vi.fn() };
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={session} sessionState={{ status: 'recovery-blocked', blocked: true, error: 'timeout', activeWorkout: { exercises: [] }, snapshot: { draftId: 'draft', ownershipGeneration: 1 } }} onResume={onResume} /></AuthContext.Provider>);
-  fireEvent.click(screen.getByRole('button', { name: 'Request handoff' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Take over workout in this tab' }));
   await waitFor(() => expect(onResume).toHaveBeenCalledOnce());
 });
 
 test.each([
-  ['Request handoff', 'requestHandoff'],
-  ['Retry acquisition', 'resume'],
+  ['Take over workout in this tab', 'requestHandoff'],
+  ['Try again in this tab', 'resume'],
 ])('activates %s only for the retained exact recovery snapshot', async (label, method) => {
   const onResume = vi.fn();
   const session = { requestHandoff: vi.fn().mockResolvedValue(true), resume: vi.fn().mockResolvedValue(true), exit: vi.fn() };
@@ -901,19 +902,22 @@ test.each([
   expect(screen.getByRole('button', { name: label })).toBeDefined();
 });
 
-test.each(['timeout', 'conflict'])('keeps identity-dependent recovery controls hidden for %s without a validated draft', error => {
+test.each([
+  ['timeout', 'Nudge could not confirm which tab is using this workout. Try again or exit.'],
+  ['conflict', 'This workout is open in another tab.'],
+])('keeps identity-dependent recovery controls hidden for %s without a validated draft', (error, message) => {
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ exit: vi.fn() }} sessionState={{ status: 'recovery-blocked', blocked: true, error, activeWorkout: { exercises: [] } }} /></AuthContext.Provider>);
-  expect(screen.getByRole('alert').textContent).toMatch(/ownership|another tab/i);
-  expect(screen.queryByRole('button', { name: 'Request handoff' })).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Retry acquisition' })).toBeNull();
-  expect(screen.getByRole('button', { name: 'Exit' })).toBeDefined();
+  expect(screen.getByRole('alert').textContent).toBe(message);
+  expect(screen.queryByRole('button', { name: 'Take over workout in this tab' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Try again in this tab' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Exit to Plan' })).toBeDefined();
 });
 
 test.each([
-  ['retryable-absent', 'Retry exact save', 'absent'],
-  ['write-pending', 'Check again', 'cleanup-error'],
-  ['reconcile-indeterminate', 'Check again', 'indeterminate'],
-])('uses pending immutable-save state %s for the actionable button', async (pendingState, label, error) => {
+  ['retryable-absent', 'Try saving again', 'absent', 'This workout was not saved. Try saving it again.'],
+  ['write-pending', 'Check again', 'cleanup-error', 'It is not clear whether this workout was saved. Check again before trying to save it.'],
+  ['reconcile-indeterminate', 'Check again', 'indeterminate', 'It is not clear whether this workout was saved. Check again before trying to save it.'],
+])('uses pending immutable-save state %s for the actionable button', async (pendingState, label, error, message) => {
   let review = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
   for (const action of [
     { type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 },
@@ -921,23 +925,24 @@ test.each([
   ]) review = activeWorkoutReducer(review, action);
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ save: vi.fn(), action: vi.fn() }} sessionState={{ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 0, performanceSeconds: 2700, cooldownSeconds: 0 }, pendingSave: { state: pendingState }, error, blocked: false }} /></AuthContext.Provider>);
   expect(await screen.findByRole('button', { name: label })).toBeDefined();
+  expect(screen.getByRole('alert').textContent).toBe(message);
   expect(screen.queryByText(/^(absent|indeterminate|conflict|cleanup-error)$/i)).toBeNull();
 });
 
-test('blocked immutable-save conflict keeps frozen Review with only non-mutating Keep pending and Exit', async () => {
+test('blocked immutable-save conflict keeps frozen Review with only non-mutating Keep workout pending and Exit to Plan', async () => {
   let review = initializeActiveWorkout([{ ...timedWorkout[1] }], { phaseTimingEnabled: true });
   for (const action of [{ type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 1002 }, { type: 'finishWorkout', timestamp: 1003 }]) review = activeWorkoutReducer(review, action);
   const save = vi.fn(); const exit = vi.fn().mockResolvedValue(undefined); const onFinish = vi.fn();
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ save, exit, action: vi.fn() }} sessionState={{ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 0, performanceSeconds: 2700, cooldownSeconds: 0 }, snapshot: { draftId: 'd', ownershipGeneration: 1 }, pendingSave: { state: 'blocked-conflict' }, error: 'conflict', blocked: true }} onFinish={onFinish} /></AuthContext.Provider>);
   expect(await screen.findByRole('heading', { level: 2, name: 'Review' })).toBe(document.activeElement);
-  expect(screen.getByText('A different saved workout conflicts with this save.')).toBeDefined();
+  expect(screen.getByText('A different workout was saved while you were finishing this one.')).toBeDefined();
   expect(screen.getByRole('alert').className).toContain('recovery-feedback');
-  expect(screen.getByRole('button', { name: 'Keep pending' }).className).toContain('recovery-primary');
-  expect(screen.getByRole('button', { name: 'Exit' }).className).toContain('recovery-secondary');
+  expect(screen.getByRole('button', { name: 'Keep this workout open' }).className).toContain('recovery-primary');
+  expect(screen.getByRole('button', { name: 'Exit to Plan' }).className).toContain('recovery-secondary');
   expect(screen.queryByRole('button', { name: 'Back to workout' })).toBeNull(); expect(screen.queryByRole('button', { name: 'Save workout' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Keep pending' }));
-  expect(save).not.toHaveBeenCalled(); expect(screen.getByRole('status').textContent).toBe('Save conflict remains pending.');
-  fireEvent.click(screen.getByRole('button', { name: 'Exit' })); await waitFor(() => expect(exit).toHaveBeenCalledOnce()); expect(onFinish).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button', { name: 'Keep this workout open' }));
+  expect(save).not.toHaveBeenCalled(); expect(screen.getByRole('status').textContent).toBe('This workout is still open.');
+  fireEvent.click(screen.getByRole('button', { name: 'Exit to Plan' })); await waitFor(() => expect(exit).toHaveBeenCalledOnce()); expect(onFinish).toHaveBeenCalledOnce();
 });
 
 test('renders the session-produced divergent immutable-save conflict as frozen Review', async () => {
@@ -962,12 +967,12 @@ test('renders the session-produced divergent immutable-save conflict as frozen R
 
   const summary = await screen.findByRole('region', { name: 'Workout summary' });
   expect(screen.getByRole('heading', { level: 2, name: 'Review' })).toBe(document.activeElement);
-  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Performance: 0:00 actual \/ 45:00 planned/);
+  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Main workout: 0:00 actual \/ 45:00 planned/);
   expect(summary.textContent).toMatch(/1 set recorded/);
-  expect([...summary.querySelectorAll('button')].map(button => button.textContent)).toEqual(['Keep pending', 'Exit']);
-  fireEvent.click(screen.getByRole('button', { name: 'Keep pending' }));
+  expect([...summary.querySelectorAll('button')].map(button => button.textContent)).toEqual(['Keep this workout open', 'Exit to Plan']);
+  fireEvent.click(screen.getByRole('button', { name: 'Keep this workout open' }));
   expect(save).toHaveBeenCalledOnce();
-  expect(screen.getByRole('status').textContent).toBe('Save conflict remains pending.');
+  expect(screen.getByRole('status').textContent).toBe('This workout is still open.');
   expect(session.getState()).toMatchObject({ pendingSave: { state: 'blocked-conflict' } });
   unsubscribe();
 });
@@ -1034,7 +1039,7 @@ test('uses the accepted visible epoch for every transition after a backward acti
   vi.useFakeTimers();
   vi.setSystemTime(new Date(10_000));
   const view = renderWorkout([{ ...timedWorkout[1] }], () => {}, { uid: 'test-user-id' }, { warmupSeconds: 60, performanceSeconds: 60, cooldownSeconds: 60 });
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   vi.setSystemTime(new Date(11_000));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   act(() => vi.advanceTimersByTime(7_000));
@@ -1042,7 +1047,7 @@ test('uses the accepted visible epoch for every transition after a backward acti
   vi.setSystemTime(new Date(12_000));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   vi.setSystemTime(new Date(13_000));
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   expect(screen.getByRole('region', { name: 'Workout summary' })).toBeDefined();
   expect(view.api.action.mock.calls.map(([action]) => action)).toEqual(expect.arrayContaining([
     expect.objectContaining({ type: 'confirmSet', timestamp: 18_000 }),
@@ -1077,7 +1082,7 @@ test('a mounted active workout keeps its initial rendered epoch for a backward f
   vi.setSystemTime(new Date(18_000));
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action }} sessionState={{ status: 'owned', activeWorkout: cooldown, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 60 }, blocked: false }} /></AuthContext.Provider>);
   vi.setSystemTime(new Date(12_000));
-  fireEvent.click(screen.getByRole('button', { name: 'Resume Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Resume workout' }));
   expect(action).toHaveBeenCalledWith({ type: 'resumeWorkout', timestamp: 18_000 });
 });
 
@@ -1133,7 +1138,7 @@ test('a recovered Cooldown honors a newer snapshot epoch when finishing', () => 
   cooldown = { ...cooldown, phaseLedger: { ...cooldown.phaseLedger, openedAtEpochMs: 9_000, lastAcceptedEpochMs: 9_000 } };
   const action = vi.fn();
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action }} sessionState={{ status: 'owned', activeWorkout: cooldown, snapshot: { lastMutationAtEpochMs: 9_500 }, blocked: false }} /></AuthContext.Provider>);
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   const finish = action.mock.calls[0][0];
   expect(finish).toMatchObject({ type: 'finishWorkout', timestamp: 9_500 });
   const next = activeWorkoutReducer(cooldown, finish);
@@ -1185,10 +1190,10 @@ test('live work and rest readouts retain their forward display value after a bac
 
 test('failed save retries the identical frozen v4 payload', async () => {
   const view = renderWorkout([{ ...timedWorkout[1] }], () => {}, { uid: 'test-user-id' }, undefined, { save: vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(undefined) });
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
   await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/offline/i));
   const payload = view.api.save.mock.calls[0][0];
@@ -1200,10 +1205,10 @@ test('failed save retries the identical frozen v4 payload', async () => {
 
 test('a failed session save keeps the frozen candidate for retry', async () => {
   const view = renderWorkout([{ ...timedWorkout[1] }], () => {}, { uid: 'user-a' }, undefined, { save: vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(undefined) });
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
   await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/offline/i));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
@@ -1219,21 +1224,21 @@ test('history loading is deferred until disclosure and failures remain nonblocki
   fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
   expect(await screen.findByText('Couldn’t load workout history.')).toBeDefined();
   expect(storage.getHistoryPage).toHaveBeenCalledWith('test-user-id', { cursor: null, pageSize: 20 });
-  expect(screen.getByRole('button', { name: 'Start Workout' })).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Start workout' })).toBeDefined();
 });
 
 test('zero-work cancellation and partial early finish use explicit session outcomes', async () => {
   const onFinish = vi.fn(); const view = renderWorkout(timedWorkout, onFinish);
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 cancel/i }));
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   expect(screen.getByRole('region', { name: 'Cancel workout' })).toBeDefined();
   expect(screen.getByRole('heading', { name: 'Cancel workout?' })).toBe(document.activeElement);
   fireEvent.click(screen.getByRole('button', { name: 'Keep working' }));
   expect(screen.queryByRole('region', { name: 'Cancel workout' })).toBeNull();
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Finish Workout' })).toBe(document.activeElement));
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Finish workout' })).toBe(document.activeElement));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Cancel workout' }));
   await waitFor(() => expect(view.api.discard).toHaveBeenCalledOnce());
   expect(onFinish).toHaveBeenCalledOnce();
@@ -1244,10 +1249,10 @@ test('duplicate Save clicks share one in-flight request and disable summary navi
   const saveApi = vi.fn(() => new Promise(resolve => { resolveSave = resolve; }));
   const onFinish = vi.fn();
   const view = renderWorkout([{ ...timedWorkout[1] }], onFinish, { uid: 'test-user-id' }, undefined, { save: saveApi });
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
 
   const save = screen.getByRole('button', { name: 'Save workout' });
   fireEvent.click(save);
@@ -1271,10 +1276,10 @@ test('duplicate Save clicks share one in-flight request and disable summary navi
 test('session save failures retain the frozen summary without finishing', async () => {
   const onFinish = vi.fn();
   const missingUser = renderWorkout([{ ...timedWorkout[1] }], onFinish, { uid: 'test-user-id' }, undefined, { save: vi.fn().mockRejectedValue(new Error('Sign in before saving.')) });
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
   expect(screen.getByRole('region', { name: 'Workout summary' })).toBeDefined();
   await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/sign in/i));
@@ -1283,10 +1288,10 @@ test('session save failures retain the frozen summary without finishing', async 
   missingUser.unmount();
 
   const builderFailure = renderWorkout([{ ...timedWorkout[1], tier: undefined }], onFinish, { uid: 'test-user-id' }, undefined, { save: vi.fn().mockRejectedValue(new Error('Could not prepare workout.')) });
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
   await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/could not prepare/i));
   expect(screen.getByRole('region', { name: 'Workout summary' })).toBeDefined();
@@ -1297,10 +1302,10 @@ test('session save failures retain the frozen summary without finishing', async 
 test('session account conflict keeps Review and permits a retry after recovery', async () => {
   const onFinish = vi.fn();
   const view = renderWorkout([{ ...timedWorkout[1] }], onFinish, { uid: 'user-a' }, undefined, { save: vi.fn().mockRejectedValueOnce(new Error('Account changed.')).mockResolvedValueOnce(undefined) });
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
   await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/account changed/i));
   const failedCandidate = view.api.save.mock.calls[0][0];
@@ -1318,10 +1323,10 @@ test('history fetch failure stays separate while a timed workout saves successfu
   const view = renderWorkout([{ ...timedWorkout[1] }], onFinish);
   fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
   expect(await screen.findByText('Couldn’t load workout history.')).toBeDefined();
-  fireEvent.click(screen.getByRole('button', { name: 'Start Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
-  fireEvent.click(screen.getByRole('button', { name: 'Finish Workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Back to plan' })).toBeDefined());
   fireEvent.click(screen.getByRole('button', { name: 'Back to plan' }));

@@ -117,14 +117,15 @@ function phaseReadout(label, planned, actual, live = false) {
 function publicStatusMessage(status, pendingState) {
   if (pendingState && RECOVERY_MESSAGES[pendingState]) return RECOVERY_MESSAGES[pendingState];
   if (RECOVERY_MESSAGES[status]) return RECOVERY_MESSAGES[status];
-  if (status === 'handoff-released') return 'This tab released workout ownership to another tab.';
+  if (status === 'handoff-released') return 'This workout moved to another tab.';
   if (typeof status === 'string' && /sign in/i.test(status)) return 'Sign in before saving this workout.';
   if (typeof status === 'string' && /account changed/i.test(status)) return 'Your signed-in account changed. Return to the account that started this workout before saving.';
   if (typeof status === 'string' && /offline/i.test(status)) return 'Could not save while offline. Try again when connected.';
   if (typeof status === 'string' && /could not prepare/i.test(status)) return 'Could not prepare this workout to save. Review the workout and try again.';
-  if (['absent', 'cleanup-error'].includes(status)) return 'The exact save needs another check before retrying.';
-  if (['indeterminate', 'fingerprint-error'].includes(status)) return 'The save outcome is still unknown. Check again before retrying.';
-  if (typeof status === 'string' && (status.startsWith('invalid-') || status === 'conflict')) return 'This workout cannot continue safely. Exit and try again.';
+  if (status === 'absent') return 'This workout was not saved. Try saving it again.';
+  if (['cleanup-error', 'indeterminate'].includes(status)) return 'It is not clear whether this workout was saved. Check again before trying to save it.';
+  if (status === 'fingerprint-error') return 'It is not clear whether this workout was saved. Check again before trying to save it.';
+  if (typeof status === 'string' && (status.startsWith('invalid-') || status === 'conflict')) return 'This workout cannot continue safely. Exit to Plan and try again.';
   return status ? 'This workout cannot continue safely.' : null;
 }
 
@@ -167,7 +168,7 @@ function WorkoutSummary({ candidate, phaseTargets, isSaving, saveError, saveStat
       <h2 tabIndex="-1" ref={summaryRef}>Review</h2>
       <p className="summary-total">{recordedWork} recorded · {formatTime(candidate.actualDurationSeconds)}</p>
       <ul aria-label="Frozen phase timing">
-        {['warmup', 'performance', 'cooldown'].map(phase => <li key={phase}>{phaseReadout(phase[0].toUpperCase() + phase.slice(1), phaseTargets?.[`${phase}Seconds`] ?? 0, candidate.phaseActualSeconds?.[phase] ?? 0)}</li>)}
+        {['warmup', 'performance', 'cooldown'].map(phase => <li key={phase}>{phaseReadout(phase === 'performance' ? 'Main workout' : phase[0].toUpperCase() + phase.slice(1), phaseTargets?.[`${phase}Seconds`] ?? 0, candidate.phaseActualSeconds?.[phase] ?? 0)}</li>)}
       </ul>
       <ul>{candidate.exercises.filter(exercise => exercise.setRecords?.some(record => record.completed) || exercise.completed).map((exercise, index) => {
         const records = Array.isArray(exercise.setRecords) ? exercise.setRecords : null;
@@ -180,10 +181,10 @@ function WorkoutSummary({ candidate, phaseTargets, isSaving, saveError, saveStat
       {hasWork && unconfirmed.length > 0 && <details className="summary-remaining"><summary>Planned work not recorded</summary><ul>{unconfirmed.map((exercise, index) => <li key={`${exercise.id}-${index}`}>{exercise.name}</li>)}</ul></details>}
       {saveError && <p className="error-message recovery-feedback" role="alert">{saveError}</p>}
       <div className={`summary-actions${blockedConflict ? ' recovery-actions' : ''}`}>
-        {blockedConflict ? <><button className="recovery-primary" type="button" onClick={onKeepPending}>Keep pending</button><button className="recovery-secondary" type="button" onClick={onExit}>Exit</button></> : <>
+        {blockedConflict ? <><button className="recovery-primary" type="button" onClick={onKeepPending}>Keep this workout open</button><button className="recovery-secondary" type="button" onClick={onExit}>Exit to Plan</button></> : <>
           <button type="button" onClick={onBack} disabled={isSaving}>Back to workout</button>
           <button type="button" className="finish-btn" onClick={onSave} disabled={!hasWork || isSaving} aria-busy={isSaving}>
-            {isSaving ? 'Saving...' : ['write-pending', 'reconcile-indeterminate'].includes(saveStatus) ? 'Check again' : saveStatus === 'retryable-absent' ? 'Retry exact save' : 'Save workout'}
+            {isSaving ? 'Saving...' : ['write-pending', 'reconcile-indeterminate'].includes(saveStatus) ? 'Check again' : saveStatus === 'retryable-absent' ? 'Try saving again' : 'Save workout'}
           </button>
         </>}
       </div>
@@ -195,17 +196,17 @@ function recommendationText(exercise, record) {
   const reason = record.recommendationReason;
   if (!reason) return '';
   if (record.index > 0) {
-    if (reason.reasonCode === 'BACKOFF_AWAITING_PRIOR_SET') return 'Awaiting prior set';
+    if (reason.reasonCode === 'BACKOFF_AWAITING_PRIOR_SET') return 'Complete the previous set first.';
     if (reason.reasonCode === 'BACKOFF_BELOW_FLOOR') {
-      if (reason.rawWeight !== reason.recommendedWeight) return `Recommended ${reason.recommendedWeight} lb: ${reason.sourceActualReps} reps, floor ${reason.floorReps}; capped by the current workout target.`;
-      return `-${reason.dropSteps * exercise.weightStep} lb: ${reason.sourceActualReps} reps, floor ${reason.floorReps}.`;
+      if (reason.rawWeight !== reason.recommendedWeight) return `Recommended ${reason.recommendedWeight} lb: previous set completed fewer than the ${reason.floorReps}-rep minimum; earlier sets limited this set to ${reason.recommendedWeight} lb.`;
+      return `Reduced ${reason.dropSteps * exercise.weightStep} lb: previous set completed fewer than the ${reason.floorReps}-rep minimum.`;
     }
-    return `Held at ${record.targetWeight} lb: prior set met the floor.`;
+    return `Held at ${record.targetWeight} lb: previous set reached the minimum reps.`;
   }
   if (reason.decision === 'starting') return `Starting recommendation: ${record.targetWeight} lb.`;
-  if (reason.decision === 'increase') return `Increased to ${record.targetWeight} lb from prior performance.`;
-  if (reason.decision === 'decrease') return `Decreased to ${record.targetWeight} lb from prior performance.`;
-  return `Held at ${record.targetWeight} lb from prior performance.`;
+  if (reason.decision === 'increase') return `Increased to ${record.targetWeight} lb based on the previous workout.`;
+  if (reason.decision === 'decrease') return `Decreased to ${record.targetWeight} lb based on the previous workout.`;
+  return `Held at ${record.targetWeight} lb based on the previous workout.`;
 }
 
 function NumberInput({ label, value, disabled, onChange, step = '1' }) {
@@ -265,7 +266,7 @@ function SetRow({ exercise, exerciseIndex, setIndex, started, activeTimer, activ
       {isActive ? <><span className="work-timer">Work: {formatTime(calculateElapsedSeconds(activeTimer.startedAt, now))}</span><button type="button" aria-label={`${prefix} confirm`} aria-describedby={error ? errorId : undefined} onClick={() => onConfirm(exerciseIndex, setIndex)}>Confirm attempt</button><button type="button" aria-label={`${prefix} cancel`} onClick={() => onCancel(exerciseIndex, setIndex)}>Cancel timer</button></>
         : status === 'ready' ? <><button type="button" ref={startRef} aria-label={`${prefix} start`} disabled={!started} aria-describedby={error ? errorId : (!started ? 'workout-start-help' : undefined)} onClick={start}>Start set</button>{restRecord && <span className="superset-rest-status"><RestReadout record={restRecord} now={now} /></span>}</>
           : record.completed ? <><button type="button" aria-expanded={showDetails} onClick={() => setShowDetails(current => !current)}>{showDetails ? `Hide details for ${exercise.name} set ${setIndex + 1}` : `Show details for ${exercise.name} set ${setIndex + 1}`}</button>{showDetails && <div className="completed-set-details"><span>Work: {formatTime(record.workDurationSeconds ?? 0)}</span><RestReadout record={record} now={now} showLive={false} /><button type="button" className="secondary-action" disabled={record.actualRestSeconds !== null || exercise.setRecords.slice(setIndex + 1).some(item => item.completed)} onClick={() => dispatch({ type: 'undoSet', exerciseIndex, setIndex })}>Undo set {setIndex + 1}</button></div>}</>
-            : <span>Complete the prior set first.</span>}
+            : <span>Complete the previous set first.</span>}
     </div>
   </section>;
 }
@@ -326,8 +327,8 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
     : activeWorkout.phase === 'review' ? 'Review'
       : started || ['warmup', 'performance'].includes(activeWorkout.phase) ? 'Perform' : 'Plan';
   const phaseTitle = started && activeWorkout.phase === 'generated'
-    ? 'Performance'
-    : { generated: 'Workout ready', warmup: 'Warmup', performance: 'Performance', cooldown: 'Cooldown', review: 'Review', cancelled: 'Workout cancelled' }[activeWorkout.phase] ?? 'Workout';
+    ? 'Main workout'
+    : { generated: 'Workout ready', warmup: 'Warmup', performance: 'Main workout', cooldown: 'Cooldown', review: 'Review', cancelled: 'Workout cancelled' }[activeWorkout.phase] ?? 'Workout';
   const showingRecovery = (sessionState?.blocked && !blockedSaveConflict) || !sessionState?.activeWorkout;
   const recoveryPresentation = showingRecovery
     ? `${sessionState?.status ?? ''}:${sessionState?.error ?? ''}:${sessionState?.snapshot?.draftId ?? ''}:${sessionState?.snapshot?.ownershipGeneration ?? ''}`
@@ -484,7 +485,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
     const invalidBodyweight = exercise.trackingMode === 'bodyweight'
       && !['fullReps', 'assistedReps', 'eccentricReps']
         .every(field => Number.isInteger(before[field]) && before[field] >= 0);
-    if (invalidWeighted || invalidBodyweight) { setExerciseErrors(current => ({ ...current, [exerciseIndex]: { setIndex, message: `Enter valid performance values before confirming ${exercise.name} set ${setIndex + 1}.` } })); return; }
+    if (invalidWeighted || invalidBodyweight) { setExerciseErrors(current => ({ ...current, [exerciseIndex]: { setIndex, message: `Enter ${exercise.trackingMode === 'weighted' ? 'weight and rep' : 'rep'} values before confirming ${exercise.name} set ${setIndex + 1}.` } })); return; }
     clearErrorsBlockedBy(exerciseIndex, setIndex);
     clearExerciseError(exerciseIndex);
     setFinishError('');
@@ -644,13 +645,13 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
     const discardable = resumable || sessionState?.error === 'stale';
     const canAcquireRetainedDraft = hasRecoveryIdentity(sessionState?.snapshot);
     return <div className="workout-view recovery-view">
-      <section className="recovery-panel" role="region" aria-label="Workout recovery">
-        <h2 ref={recoveryHeadingRef} tabIndex="-1">{checking ? 'Checking active workout' : resumable ? 'Resume workout?' : 'Workout recovery'}</h2>
-        <p className="recovery-message" role={checking ? 'status' : 'alert'}>{checking ? 'Checking for a saved workout draft.' : resumable ? RECOVERY_MESSAGES.resumable : publicStatusMessage(sessionState?.error)}</p>
+      <section className="recovery-panel" role="region" aria-label="Interrupted workout">
+        <h2 ref={recoveryHeadingRef} tabIndex="-1">{checking ? 'Checking active workout' : resumable ? 'Resume workout?' : 'Workout interrupted'}</h2>
+        <p className="recovery-message" role={checking ? 'status' : 'alert'}>{checking ? 'Checking for a workout to resume.' : resumable ? RECOVERY_MESSAGES.resumable : publicStatusMessage(sessionState?.error)}</p>
         {!checking && <div className="recovery-actions">
-          {resumable && <button className="recovery-primary" type="button" onClick={async () => { if (await session.resume()) { setRecoveryAcknowledgement('Workout resumed.'); onResume?.(); } }}>Resume</button>}
-          {canAcquireRetainedDraft && ['timeout', 'conflict'].includes(sessionState?.error) && <><button className="recovery-primary" type="button" onClick={async () => { if (await session.requestHandoff?.()) { setRecoveryAcknowledgement('Workout resumed.'); onResume?.(); } }}>Request handoff</button><button className="recovery-secondary" type="button" onClick={async () => { if (await session.resume?.()) { setRecoveryAcknowledgement('Workout resumed.'); onResume?.(); } }}>Retry acquisition</button></>}
-          <button className="recovery-secondary" type="button" onClick={async () => { if (discardable) await session.discard(); else { await session.exit(); onFinish?.(); } }}>{discardable ? 'Discard' : 'Exit'}</button>
+          {resumable && <button className="recovery-primary" type="button" onClick={async () => { if (await session.resume()) { setRecoveryAcknowledgement('Workout resumed.'); onResume?.(); } }}>Resume workout</button>}
+          {canAcquireRetainedDraft && ['timeout', 'conflict'].includes(sessionState?.error) && <><button className="recovery-primary" type="button" onClick={async () => { if (await session.requestHandoff?.()) { setRecoveryAcknowledgement('Workout resumed.'); onResume?.(); } }}>Take over workout in this tab</button><button className="recovery-secondary" type="button" onClick={async () => { if (await session.resume?.()) { setRecoveryAcknowledgement('Workout resumed.'); onResume?.(); } }}>Try again in this tab</button></>}
+          <button className="recovery-secondary" type="button" onClick={async () => { if (discardable) await session.discard(); else { await session.exit(); onFinish?.(); } }}>{discardable ? 'Discard workout' : 'Exit to Plan'}</button>
         </div>}
       </section>
     </div>;
@@ -659,13 +660,13 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
   return <div className={`workout-view phase-${activeWorkout.phase}`}>
     <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{restAnnouncement || recoveryAcknowledgement}</div>
     <JourneyProgress current={finishCandidate ? 'Review' : journeyStep} />
-    {finishCandidate ? <WorkoutSummary candidate={finishCandidate} phaseTargets={sessionState?.phaseTargets} isSaving={isSaving} saveError={saveError} saveStatus={saveStatus} blockedConflict={blockedSaveConflict} onBack={handleBack} onSave={handleSave} onKeepPending={() => setRecoveryAcknowledgement('Save conflict remains pending.')} onExit={async () => { await session.exit(); onFinish?.(); }} summaryRef={summaryRef} /> : <>
+    {finishCandidate ? <WorkoutSummary candidate={finishCandidate} phaseTargets={sessionState?.phaseTargets} isSaving={isSaving} saveError={saveError} saveStatus={saveStatus} blockedConflict={blockedSaveConflict} onBack={handleBack} onSave={handleSave} onKeepPending={() => setRecoveryAcknowledgement('This workout is still open.')} onExit={async () => { await session.exit(); onFinish?.(); }} summaryRef={summaryRef} /> : <>
       <div className="workout-header"><h2 className="workout-title" ref={phaseHeadingRef} tabIndex="-1">{phaseTitle}</h2>{started && <div className="timer" aria-label={`Total elapsed ${formatTime(displayedElapsedSeconds)}`}>{formatTime(displayedElapsedSeconds)}</div>}</div>
-      <p id="workout-start-help" className="workout-help">{['warmup', 'cooldown'].includes(activeWorkout.phase) && activeWorkout.phaseLedger ? phaseReadout(activeWorkout.phase === 'warmup' ? 'Warmup' : 'Cooldown', sessionState?.phaseTargets?.[`${activeWorkout.phase}Seconds`] ?? 0, getPhaseElapsedSeconds(activeWorkout, activeWorkout.phase, now), true) : started ? 'Start a ready set. Only one work timer can run at a time.' : 'Start the workout to enable set timers.'}</p>
-      {!started && activeWorkout.phase !== 'cancelled' && <button className="start-btn" onClick={() => { const timestamp = acceptDisplayTime(Date.now()); dispatch({ type: 'startWorkout', timestamp }); }}>Start Workout</button>}
-      {activeWorkout.phase === 'cooldown' && <div className="summary-actions"><button ref={finishRef} className="finish-btn" aria-describedby={finishError ? 'finish-feedback' : undefined} onClick={handleFinish}>Finish Workout</button><button type="button" onClick={() => dispatch({ type: 'resumeWorkout', timestamp: acceptDisplayTime(Date.now()) })}>Resume Workout</button>{finishError && <p id="finish-feedback" className="error-message" role="alert">{finishError}</p>}</div>}
+      <p id="workout-start-help" className="workout-help">{['warmup', 'cooldown'].includes(activeWorkout.phase) && activeWorkout.phaseLedger ? phaseReadout(activeWorkout.phase === 'warmup' ? 'Warmup' : 'Cooldown', sessionState?.phaseTargets?.[`${activeWorkout.phase}Seconds`] ?? 0, getPhaseElapsedSeconds(activeWorkout, activeWorkout.phase, now), true) : started ? 'Start an available set. You can time one set at a time.' : 'Start the workout to time your sets.'}</p>
+      {!started && activeWorkout.phase !== 'cancelled' && <button className="start-btn" onClick={() => { const timestamp = acceptDisplayTime(Date.now()); dispatch({ type: 'startWorkout', timestamp }); }}>Start workout</button>}
+      {activeWorkout.phase === 'cooldown' && <div className="summary-actions"><button ref={finishRef} className="finish-btn" aria-describedby={finishError ? 'finish-feedback' : undefined} onClick={handleFinish}>Finish workout</button><button type="button" onClick={() => dispatch({ type: 'resumeWorkout', timestamp: acceptDisplayTime(Date.now()) })}>Resume workout</button>{finishError && <p id="finish-feedback" className="error-message" role="alert">{finishError}</p>}</div>}
       {activeWorkout.phase === 'cooldown' ? <details className="remaining-work"><summary>Return to remaining work</summary>{exerciseList}</details> : exerciseList}
-      {(activeWorkout.phase === 'performance' || (!activeWorkout._phaseTimingEnabled && started)) && <div className="summary-actions"><button ref={finishRef} className="finish-btn" aria-describedby={finishError ? 'finish-feedback' : undefined} onClick={handleFinish}>Finish Workout</button>{finishError && <p id="finish-feedback" className="error-message" role="alert">{finishError}</p>}{earlyFinishPrompt === 'partial' && <section className="early-finish-confirmation" role="region" aria-label="Finish workout early"><h2 ref={promptHeadingRef} tabIndex="-1">Finish workout early?</h2><p>Unfinished work:</p><ul>{activeWorkout.exercises.filter(exercise => exercise.setRecords.some(record => !record.completed)).map(exercise => <li key={exercise.occurrenceId || exercise.id}>{exercise.name}: {exercise.setRecords.filter(record => !record.completed).length} {exercise.setRecords.filter(record => !record.completed).length === 1 ? 'set' : 'sets'} remaining</li>)}</ul><button type="button" className="return-to-workout" onClick={dismissEarlyFinish}>Return to workout</button><button type="button" onClick={confirmEarlyFinish}>Continue to Cooldown</button></section>}{earlyFinishPrompt === 'zero' && <section className="early-finish-confirmation" role="region" aria-label="Cancel workout"><h2 ref={promptHeadingRef} tabIndex="-1">Cancel workout?</h2><p>No work has been confirmed. Cancel this workout?</p><button type="button" onClick={() => void cancelWorkout()}>Cancel workout</button><button type="button" onClick={dismissEarlyFinish}>Keep working</button></section>}</div>}
+      {(activeWorkout.phase === 'performance' || (!activeWorkout._phaseTimingEnabled && started)) && <div className="summary-actions"><button ref={finishRef} className="finish-btn" aria-describedby={finishError ? 'finish-feedback' : undefined} onClick={handleFinish}>Finish workout</button>{finishError && <p id="finish-feedback" className="error-message" role="alert">{finishError}</p>}{earlyFinishPrompt === 'partial' && <section className="early-finish-confirmation" role="region" aria-label="Finish workout early"><h2 ref={promptHeadingRef} tabIndex="-1">Finish workout early?</h2><p>Unfinished work:</p><ul>{activeWorkout.exercises.filter(exercise => exercise.setRecords.some(record => !record.completed)).map(exercise => <li key={exercise.occurrenceId || exercise.id}>{exercise.name}: {exercise.setRecords.filter(record => !record.completed).length} {exercise.setRecords.filter(record => !record.completed).length === 1 ? 'set' : 'sets'} remaining</li>)}</ul><button type="button" className="return-to-workout" onClick={dismissEarlyFinish}>Return to workout</button><button type="button" onClick={confirmEarlyFinish}>Continue to cooldown</button></section>}{earlyFinishPrompt === 'zero' && <section className="early-finish-confirmation" role="region" aria-label="Cancel workout"><h2 ref={promptHeadingRef} tabIndex="-1">Cancel workout?</h2><p>No work has been confirmed.</p><button type="button" onClick={() => void cancelWorkout()}>Cancel workout</button><button type="button" onClick={dismissEarlyFinish}>Keep working</button></section>}</div>}
     </>}
     <WorkoutHistory key={user?.uid ?? null} historyKey={user?.uid ?? null} loadPage={({ cursor, pageSize }) => getHistoryPage(user?.uid, { cursor, pageSize })} />
   </div>;

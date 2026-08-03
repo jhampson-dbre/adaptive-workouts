@@ -24,6 +24,7 @@ describe('Generator Component', () => {
 
         expect(screen.getByRole('navigation', { name: 'Workout progress' })).toBeTruthy();
         expect(screen.getByRole('heading', { name: 'How much time do you have?' })).toBeTruthy();
+        expect(screen.getByText('Nudge uses your recent workouts and available time to plan today\'s workout.')).toBeTruthy();
         expect(screen.getByRole('button', { name: 'Plan my workout' })).toBeTruthy();
         expect(screen.getByText('Anything to work around?').closest('details').open).toBe(false);
     });
@@ -133,7 +134,7 @@ describe('Generator Component', () => {
         fireEvent.click(screen.getByText('Plan my workout'));
         
         await waitFor(() => expect(screen.getByRole('region', { name: 'Leg day choice' })).toBeTruthy());
-        fireEvent.click(screen.getByRole('button', { name: 'Keep current plan' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Leave legs out today' }));
         await waitFor(() => {
             expect(window.confirm).not.toHaveBeenCalled();
             expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], false, expect.any(Array), expect.any(Array), expect.any(Object));
@@ -154,7 +155,7 @@ describe('Generator Component', () => {
         />);
         fireEvent.click(screen.getByText('Plan my workout'));
 
-        const retry = await screen.findByRole('button', { name: 'Retry' });
+        const retry = await screen.findByRole('button', { name: 'Try loading history again' });
         expect(screen.getAllByRole('alert')).toHaveLength(1);
         expect(screen.getByRole('alert').textContent).toMatch(/workout history is unavailable/i);
         expect(screen.getByText(/workout history is unavailable/i)).not.toBeNull();
@@ -164,7 +165,7 @@ describe('Generator Component', () => {
         let resolveHistory;
         storage.getGenerationHistory.mockReturnValueOnce(new Promise(resolve => { resolveHistory = resolve; }));
         fireEvent.click(retry);
-        expect(screen.getByRole('button', { name: 'Retrying...' }).disabled).toBe(true);
+        expect(screen.getByRole('button', { name: 'Loading workout history...' }).disabled).toBe(true);
         resolveHistory([]);
 
         await waitFor(() => {
