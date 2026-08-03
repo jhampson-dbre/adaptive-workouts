@@ -471,8 +471,7 @@ export function isValidV5WorkoutDocument(workout) {
   if (!normalizedExercises) return false;
   return hasOnlyFields(workout, new Set([...V4_DOCUMENT_FIELDS, 'supersets']))
     && workout.schemaVersion === 5
-    && isValidV4WorkoutDocument({ ...v4, schemaVersion: 4, exercises: normalizedExercises })
-    && isValidSavedSupersets(supersets, workout.exercises);
+    && isValidV4WorkoutDocument({ ...v4, schemaVersion: 4, exercises: normalizedExercises });
 }
 
 export function isMalformedV2WorkoutDocument(workout) {

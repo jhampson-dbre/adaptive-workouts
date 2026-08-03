@@ -124,7 +124,6 @@ export default function Settings({ onClose, onDirtyChange }) {
   const [cooldownMinutes, setCooldownMinutes] = useState('5');
   const [savedSettings, setSavedSettings] = useState(null);
   const [supersets, setSupersets] = useState([]);
-  const [savedSupersets, setSavedSupersets] = useState([]);
   const [supersetDraft, setSupersetDraft] = useState(null);
   const [supersetError, setSupersetError] = useState('');
   const [supersetSaveError, setSupersetSaveError] = useState('');
@@ -204,7 +203,6 @@ export default function Settings({ onClose, onDirtyChange }) {
         setWarmupMinutes(String((currentSettings.warmupSeconds ?? 600) / 60));
         setCooldownMinutes(String((currentSettings.cooldownSeconds ?? 300) / 60));
         setSupersets(currentSettings.supersets ?? []);
-        setSavedSupersets(currentSettings.supersets ?? []);
         setSavedSettings({
           legDayOfWeek: currentSettings.legDayOfWeek || 'None',
           defaultRestSeconds: String(currentSettings.defaultRestSeconds ?? 60),
@@ -223,7 +221,7 @@ export default function Settings({ onClose, onDirtyChange }) {
 
   const hasNewExercise = Boolean(newName || newGroup !== 'Chest' || Number(newTier) !== 3 || Number(newSets) !== 3 || newLink || newTrackingMode !== 'simple' || newStartingWeight || newTargetReps || newFloorReps || newWeightStep || newRestSeconds);
   const hasChangedSettings = savedSettings && (legDayOfWeek !== savedSettings.legDayOfWeek || defaultRestSeconds !== savedSettings.defaultRestSeconds || warmupMinutes !== savedSettings.warmupMinutes || cooldownMinutes !== savedSettings.cooldownMinutes);
-  const hasChangedSupersets = JSON.stringify(supersets) !== JSON.stringify(savedSupersets) || supersetDraft;
+  const hasChangedSupersets = Boolean(supersetDraft);
   const isDirty = Boolean(hasNewExercise || hasChangedSettings || hasChangedSupersets || (editingId && editDirty) || isCatalogMutating);
   useEffect(() => { onDirtyChange?.(isDirty); }, [isDirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
@@ -330,14 +328,14 @@ export default function Settings({ onClose, onDirtyChange }) {
 
   const supersetNames = group => group.exerciseIds.map(id => catalog.find(ex => ex.id === id)?.name ?? id).join(', ');
   const invalidSupersetMembers = group => group.exerciseIds.map(id => catalog.find(ex => ex.id === id)).filter(ex => !ex || ex.isActive === false || !isValidCatalogExercise(ex));
-  const startSuperset = (group = { exerciseIds: ['', ''], restPlacement: SUPERSET_REST_PLACEMENT.AFTER_ROUND }, index = null, invoker = null) => {
-    setSupersetDraft({ ...group, exerciseIds: [...group.exerciseIds], index, invoker });
+  const startSuperset = (group = { exerciseIds: ['', ''], restPlacement: SUPERSET_REST_PLACEMENT.AFTER_ROUND }, index = null) => {
+    setSupersetDraft({ ...group, exerciseIds: [...group.exerciseIds], index });
     setSupersetError(''); setSupersetSaveError('');
     requestAnimationFrame(() => supersetEditorRef.current?.querySelector('select')?.focus());
   };
   const saveSuperset = async () => {
     if (supersetSaveInFlight.current) return;
-    const { index, invoker: _invoker, ...draft } = supersetDraft;
+    const { index, ...draft } = supersetDraft;
     const candidate = index === null ? [...supersets, draft] : supersets.map((group, groupIndex) => groupIndex === index ? draft : group);
     if (!isValidCatalogSupersetSettings(candidate, catalog)) {
       const members = draft.exerciseIds.map(id => catalog.find(ex => ex.id === id));
@@ -352,7 +350,7 @@ export default function Settings({ onClose, onDirtyChange }) {
     setIsSavingSuperset(true);
     try {
       await saveSettings(user.uid, { supersets: candidate });
-      setSupersets(candidate); setSavedSupersets(candidate); setSupersetDraft(null); setSupersetError(''); setSupersetSaveError('');
+      setSupersets(candidate); setSupersetDraft(null); setSupersetError(''); setSupersetSaveError('');
       setPostRenderFocus(candidate[index === null ? candidate.length - 1 : index]?.exerciseIds.join('|') ?? '');
       supersetSaveInFlight.current = false;
       setIsSavingSuperset(false);
@@ -373,7 +371,7 @@ export default function Settings({ onClose, onDirtyChange }) {
     setRemovingSuperset(current => ({ ...current, pending: true, error: '' }));
     try {
       await saveSettings(user.uid, { supersets: candidate });
-      setSupersets(candidate); setSavedSupersets(candidate); setRemovingSuperset(null);
+      setSupersets(candidate); setRemovingSuperset(null);
       supersetRemoveInFlight.current = false;
       setSupersetFeedback('Superset removed. Exercises remain active and schedule normally.');
       if (focusGroup) setPostRenderFocus(focusGroup.exerciseIds.join('|'));
@@ -423,7 +421,7 @@ export default function Settings({ onClose, onDirtyChange }) {
     setDeactivationConfirm(current => ({ ...current, pending: true, error: '' }));
     try {
       await saveSettingsAndCatalogItem(user.uid, { supersets: candidate }, item);
-      setCatalog(catalog.map(ex => ex.id === item.id ? item : ex)); setSupersets(candidate); setSavedSupersets(candidate); setDeactivationConfirm(null);
+      setCatalog(catalog.map(ex => ex.id === item.id ? item : ex)); setSupersets(candidate); setDeactivationConfirm(null);
       deactivationInFlight.current = false;
       setSupersetFeedback(`${item.name} deactivated.`);
       const focusGroup = candidate[groupIndex] ?? candidate[groupIndex - 1];
@@ -765,10 +763,10 @@ export default function Settings({ onClose, onDirtyChange }) {
               {invalid.length > 0 && <div role="alert"><p>Paused: {invalid.map(ex => ex?.name ?? 'missing exercise').join(', ')} is inactive or invalid. Other exercises schedule normally.</p>
                 {invalid.filter(ex => ex?.isActive === false).map(ex => reactivatingSuperset?.exercise?.id === ex.id ? (
                   <span key={ex.id}>{reactivatingSuperset.pending ? 'Reactivating…' : <>{reactivatingSuperset.error} <button ref={supersetActionRef} type="button" className="cancel-btn" onClick={() => reactivateSuperset()}>Retry</button><button type="button" className="cancel-btn" onClick={() => { const { exercise: failedExercise } = reactivatingSuperset; setReactivatingSuperset(null); setPostRenderFocus(`reactivate:${failedExercise.id}`); }}>Cancel</button></>}</span>
-                ) : <button key={ex.id} ref={node => { supersetReactivateRefs.current[ex.id] = node; }} type="button" className="cancel-btn" onClick={event => reactivateSuperset({ exercise: ex, index, invoker: event.currentTarget, pending: false, error: '' })}>Reactivate {ex.name}</button>)}
+                ) : <button key={ex.id} ref={node => { supersetReactivateRefs.current[ex.id] = node; }} type="button" className="cancel-btn" onClick={() => reactivateSuperset({ exercise: ex, index, pending: false, error: '' })}>Reactivate {ex.name}</button>)}
               </div>}
               <div className="item-actions">
-                <button type="button" className="edit-btn" disabled={removingSuperset?.index === index && removingSuperset.pending} onClick={event => startSuperset(group, index, event.currentTarget)}>Edit superset</button>
+                <button type="button" className="edit-btn" disabled={removingSuperset?.index === index && removingSuperset.pending} onClick={() => startSuperset(group, index)}>Edit superset</button>
                 <button type="button" className="cancel-btn" disabled={removingSuperset?.index === index && removingSuperset.pending} onClick={event => { setRemovingSuperset({ index, invoker: event.currentTarget, pending: false, error: '' }); requestAnimationFrame(() => supersetConfirmRef.current?.focus()); }}>Remove superset</button>
               </div>
               {removingSuperset?.index === index && <div className="catalog-form-error" role="alert">
@@ -780,7 +778,7 @@ export default function Settings({ onClose, onDirtyChange }) {
             </div>
           );
         })}
-        {!supersetDraft ? <button ref={addSupersetRef} type="button" className="add-btn" onClick={event => startSuperset(undefined, null, event.currentTarget)}>Add superset</button> : (
+        {!supersetDraft ? <button ref={addSupersetRef} type="button" className="add-btn" onClick={() => startSuperset()}>Add superset</button> : (
           <div className="superset-editor" ref={supersetEditorRef}>
             <h4>{supersetDraft.index === null ? 'Add superset' : 'Edit superset'}</h4>
             {supersetDraft.exerciseIds.map((id, position) => <div className="superset-member" key={position}>
