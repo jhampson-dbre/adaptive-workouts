@@ -454,3 +454,23 @@ the safe method attempted and the best available alternative.
 - Observed result: Initial plans identify members only as `Superset 1 of 2` and `Superset 2 of 2`, with `Next` on the recommended member and no concatenated group name. Confirmation collapses the completed row, expands the recommendation, and focuses its ready Start button. AFTER_ROUND starts no rest after member one, then announces the owner rest once after the round and shows its persistent countdown beside the next-round Start; recovery preserves that state, and starting the next round closes it without blocking persistence. BETWEEN_EXERCISES announces and displays the rest immediately after member one, beside the focused next-member Start. The phone active control computes a solid 4px `rgb(18, 97, 160)` outline. Barbell Curl/Romanian Deadlift labels and cards remain contained. Client and scroll widths are equal at phone (375/375 inside the 390px viewport) and desktop (1265/1265 inside 1280px). The new Superset rules contain no animation, transition, or scroll-behavior declaration.
 - Rendered evidence: Live accessibility snapshots and inline screenshots of the 390px automatic handoff, AFTER_ROUND persistent rest/recovery/next-round lifecycle, BETWEEN_EXERCISES countdown, long-name member card, and 1280px layout; computed focus, outline, viewport, overflow, and authored-motion measurements.
 - Material limitation: The in-app browser exposes no console-log retrieval capability, so this pass used rendered recovery alerts as its runtime failure signal and fixed both encountered recovery-v3 integration defects before repeating the lifecycle successfully. Chromium/emulator evidence does not replace production Firestore, physical-device Safari, reduced-motion OS emulation, or assistive-technology certification.
+
+---
+
+## 2026-08-02 - TREK-292 mixed-workout Superset focus routing
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-292 changes initial exercise expansion, automatic Superset-to-ordinary handoff, recovery selection, and programmatic keyboard focus in the active workout.
+- Approved scenario or artifact: TREK-292 root-cause and acceptance criteria, preserving the TREK-290 guided Superset interaction while restoring displayed workout order outside a partial group.
+
+## Changed scenario
+
+- Scenario: Start a three-exercise Leg Day ordered as Calf Raises followed by a two-member Raised Leg Split Squat Superset, manually perform the Superset first, and verify the exhausted group returns guidance to exercise 1.
+- Build / commit: `codex/trek-292-superset-focus-routing` working tree before task commit; focused WorkoutView tests, lint, build, and diff-check green.
+- Viewport and starting state: Codex in-app Chromium at 390 x 844 with a 375px document viewport; canonical preseeded emulator authentication plus synthetic Calf Raises and one-set left/right split-squat data.
+- Actions: Generate the mixed workout; inspect initial expansion and focus; start the workout; manually expand and confirm the left member; observe automatic within-group focus on the right member; confirm the right member; inspect final expansion, keyboard focus, outline, and document containment.
+- Observed result: The generated order is Calf Raises 01, left split squat 02, and right split squat 03. Workout ready initially expands only Calf Raises even though the left member retains the Superset `Next` context. Confirming the left member collapses it, expands the right member, and focuses its Start set. Confirming the final member collapses both completed Superset rows, keeps Calf Raises expanded, and focuses `Calf Raises exercise 1 set 1 start` with a solid 4px `rgb(18, 97, 160)` outline. Client and scroll widths remain equal at 375/375 within the 390px viewport.
+- Rendered evidence: Live accessibility snapshots, computed active-element/`aria-expanded`/outline/viewport measurements, and inline phone screenshots before performance and after the exhausted-Superset handoff.
+- Material limitation: Synthetic one-set exercises keep the evidence pass bounded and do not prove every set-count permutation. Focused component tests cover multi-set incumbent Superset behavior, ordinary transitions, delayed durable focus, manual override, undo, rest modes, and recovery. Chromium/emulator evidence does not replace physical-device or assistive-technology testing.
