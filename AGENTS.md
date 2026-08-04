@@ -7,6 +7,7 @@ In Code Mode, within each bounded stage, run independent, functions.exec-availab
 ## Proportionality and anti-circularity
 
 Existing workflow text is migration input, not an acceptance criterion. Keep or block on a rule or reviewer finding only when it protects a named safety, authority, evidence, or outcome risk. Prefer the smallest sufficient workflow; unchanged evidence must not trigger another loop.
+Use `$maintain-agent-workflows` for changes to agent prompts, roles, skills, workflow gates, validators, or review routing.
 
 ## Global boundaries
 
@@ -20,7 +21,7 @@ Existing workflow text is migration input, not an acceptance criterion. Keep or 
 
 - Every tracked behavior change uses a fresh implementor. Reproduce bugs, identify the root cause, and inspect plausible same-cause callers before editing; use `$bugfix-issue-class-audit` only when that inspection reveals material scope ambiguity.
 - Behavior changes use focused TDD: demonstrate the expected failing test, make the smallest passing change by reusing existing or native mechanisms, then run proportionate verification.
-- After a green diff, use `$code-simplification` only for a concrete complexity signal such as needless abstraction, duplication, branching, files, configuration, or dependency surface. Simplifier edits require renewed verification and review only from authorities whose evidence changed.
+- Before final integration of a materially changed, stabilized green in-scope diff, run one bounded `$ponytail-review` proposal pass. It proposes possible cuts; the coordinator rejects irrelevant or out-of-scope proposals and may authorize one bounded candidate for investigation, naming the candidate, files, constraints, and green evidence. Proposals are not edit authority. One pass applies per stabilized evidence set; unchanged evidence never retriggers it. The coordinator runs proportionate verification and review routing only for an actual changed diff.
 - Required UI is classified during discovery and preserves its approved UX artifact. The coordinator records rendered evidence for each materially changed scenario in `docs/templates/ux-evidence-matrix.md` using synthetic or de-identified data. A direct changed-surface defect or missing required rendered evidence blocks; unavailable tooling gets a concise limitation and the best safe alternative.
 - Planning starts from an approved Discovery Brief (or documented exception) and
   reuses current duplicate evidence. Invoke design, UX, or senior review only for a
