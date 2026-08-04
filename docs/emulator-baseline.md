@@ -40,7 +40,7 @@ The baseline browser is intentionally isolated:
 
 ### Private-access scenarios
 
-`npm run ux:private-access -- start --scenario UX-10-XX --viewport WIDTHxHEIGHT` owns a scratch emulator stack and stages the canonical Auth user's exact claim state before Vite starts. `UX-10-02` starts pending and accepts `approve-user`; `UX-10-03` accepts `reject-next-evaluation`, `hold-next-evaluation`, or `pass`; `UX-10-04` accepts `revoke-user`, `approve-user`, or `pass`. Stage actions through the session returned by `start`; claim actions are read back from the owned Auth emulator, while only reject/hold actions are delivered once to the baseline evaluator.
+`npm run ux:private-access -- start --slot 1|2 --scenario UX-10-XX --viewport WIDTHxHEIGHT` owns a scratch emulator stack and stages the canonical Auth user's exact claim state before Vite starts. `UX-10-02` starts pending and accepts `approve-user`; `UX-10-03` accepts `reject-next-evaluation`, `hold-next-evaluation`, or `pass`; `UX-10-04` accepts `revoke-user`, `approve-user`, or `pass`. Stage actions through the session returned by `start`; claim actions are read back from the owned Auth emulator, while only reject/hold actions are delivered once to the baseline evaluator.
 
 Start the scratch owner in terminal 1:
 

@@ -30,15 +30,15 @@ describe('loopback scenario action queue', () => {
     } finally { await new Promise(resolve => server.close(resolve)); }
   });
   it('permits browser queue reads only from the fixed Vite loopback origin and handles its preflight', async () => {
-    const server = createControlServer({ sessionId: 'cors-session', onAction: ({ action }) => ({ action, queueAction: action, acknowledgement: true }) });
+    const server = createControlServer({ sessionId: 'cors-session', origin: 'http://127.0.0.1:19151', onAction: ({ action }) => ({ action, queueAction: action, acknowledgement: true }) });
     await new Promise(resolve => server.once('listening', resolve));
     const endpoint = `http://127.0.0.1:${server.address().port}/sessions/cors-session`;
     try {
-      const options = await fetch(endpoint, { method: 'OPTIONS', headers: { Origin: 'http://127.0.0.1:5175', 'Access-Control-Request-Method': 'GET' } });
-      expect(options.status).toBe(204); expect(options.headers.get('access-control-allow-origin')).toBe('http://127.0.0.1:5175'); expect(options.headers.get('access-control-allow-methods')).toContain('GET'); expect(options.headers.get('access-control-allow-credentials')).toBeNull();
-      const allowed = await fetch(endpoint, { headers: { Origin: 'http://127.0.0.1:5175' } });
-      expect(allowed.status).toBe(200); expect(allowed.headers.get('access-control-allow-origin')).toBe('http://127.0.0.1:5175');
-      expect((await fetch(endpoint, { headers: { Origin: 'http://localhost:5175' } })).status).toBe(403);
+      const options = await fetch(endpoint, { method: 'OPTIONS', headers: { Origin: 'http://127.0.0.1:19151', 'Access-Control-Request-Method': 'GET' } });
+      expect(options.status).toBe(204); expect(options.headers.get('access-control-allow-origin')).toBe('http://127.0.0.1:19151'); expect(options.headers.get('access-control-allow-methods')).toContain('GET'); expect(options.headers.get('access-control-allow-credentials')).toBeNull();
+      const allowed = await fetch(endpoint, { headers: { Origin: 'http://127.0.0.1:19151' } });
+      expect(allowed.status).toBe(200); expect(allowed.headers.get('access-control-allow-origin')).toBe('http://127.0.0.1:19151');
+      expect((await fetch(endpoint, { headers: { Origin: 'http://localhost:19151' } })).status).toBe(403);
     } finally { await new Promise(resolve => server.close(resolve)); }
   });
 });
