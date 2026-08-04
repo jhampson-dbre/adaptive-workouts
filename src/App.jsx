@@ -34,9 +34,9 @@ const ruleOrder = (rule, names) => rule.blocks.map(block => exerciseList(block.e
 const successMessageFor = (candidate, result, names) => {
   const override = result.overridden?.[0]
   const message = override
-    ? `Order saved. When ${exerciseList(JSON.parse(result.contextKey), names)} all appear, this order takes priority over your saved ${ruleOrder(override.rule, names).replaceAll(' before ', '-before-')} order. ${ruleOrder(override.rule, names)} still applies without ${exerciseList(JSON.parse(result.contextKey).filter(id => !JSON.parse(override.contextKey).includes(id)), names)}.`
-    : 'Order saved. It will be used when all of these exercises appear again.'
-  return result.evicted ? `${message} To keep up to 50 saved orders, Nudge replaced the saved order for ${exerciseList(JSON.parse(result.evicted), names)}.` : message
+    ? `Order saved for workouts with ${exerciseList(JSON.parse(result.contextKey), names)}. This order takes priority over your saved preference for ${ruleOrder(override.rule, names)}. That preference still applies in workouts without ${exerciseList(JSON.parse(result.contextKey).filter(id => !JSON.parse(override.contextKey).includes(id)), names)}.`
+    : 'Order saved for future workouts that include all these exercises.'
+  return result.evicted ? `${message} Nudge removed the saved order for ${exerciseList(JSON.parse(result.evicted), names)} to keep your 50 most recently used orders.` : message
 }
 
 const classifyBaselineError = error => {

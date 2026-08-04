@@ -161,7 +161,7 @@ describe('lazy authorized navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Generate nonempty' })); await screen.findByRole('heading', { name: 'Ready to sweat?' });
     fireEvent.click(screen.getByRole('button', { name: 'Save order' })); await waitFor(() => expect(savePreferredOrderRule).toHaveBeenCalledOnce());
     fireEvent.click(screen.getByRole('button', { name: 'Manage Catalog' })); await screen.findByRole('heading', { name: 'Catalog Management' });
-    expect(app.settingsProps().preference.operation.successMessage).toBe('Order saved. When Push-ups, Pull-ups, and Sit-ups all appear, this order takes priority over your saved Push-ups-before-Pull-ups order. Push-ups before Pull-ups still applies without Sit-ups. To keep up to 50 saved orders, Nudge replaced the saved order for Push-ups and Pull-ups.');
+    expect(app.settingsProps().preference.operation.successMessage).toBe('Order saved for workouts with Push-ups, Pull-ups, and Sit-ups. This order takes priority over your saved preference for Push-ups before Pull-ups. That preference still applies in workouts without Sit-ups. Nudge removed the saved order for Push-ups and Pull-ups to keep your 50 most recently used orders.');
   })
 
   it('captures a later dirty save instead of reusing a prior successful candidate', async () => {

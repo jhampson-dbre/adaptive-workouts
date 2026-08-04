@@ -197,12 +197,12 @@ test('keeps move focus and gives each order control its position, availability, 
   const earlier = screen.getByRole('button', { name: 'Move Carry earlier; position 1 of 2; unavailable' });
   expect(earlier.disabled).toBe(true);
   const moveSupersetEarlier = screen.getByRole('button', { name: 'Move superset Long Row Exercise Name and Long Press Exercise Name earlier; position 2 of 2; available' });
-  expect(screen.getByText('Superset: Long Row Exercise Name and Long Press Exercise Name. Moves together; change member order in Settings > Supersets.')).toBeDefined();
+  expect(screen.getByText('Superset: Long Row Exercise Name and Long Press Exercise Name. Moves together. To reorder exercises within this superset, go to Settings > Supersets.')).toBeDefined();
 
   moveSupersetEarlier.focus();
   fireEvent.click(moveSupersetEarlier);
   await waitFor(() => expect(screen.getByRole('button', { name: 'Move superset Long Row Exercise Name and Long Press Exercise Name earlier; position 1 of 2; unavailable' }).disabled).toBe(true));
-  expect(document.activeElement).toBe(screen.getByText('Superset: Long Row Exercise Name and Long Press Exercise Name. Moves together; change member order in Settings > Supersets.').closest('.order-block'));
+  expect(document.activeElement).toBe(screen.getByText('Superset: Long Row Exercise Name and Long Press Exercise Name. Moves together. To reorder exercises within this superset, go to Settings > Supersets.').closest('.order-block'));
 });
 
 test('keeps the initiating save and retry control focused across preference states', async () => {
@@ -217,12 +217,12 @@ test('keeps the initiating save and retry control focused across preference stat
   expect(onSavePreference).toHaveBeenCalledWith(candidate, { squat: 'Squat', plank: 'Plank' });
   view.rerender(props({ baseline, resolution: acceptedResolution, operation: { state: 'pending', candidate } }));
   expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Saving order…' }));
-  view.rerender(props({ baseline: candidate, resolution: acceptedResolution, operation: { state: 'success', candidate, successMessage: 'Order saved. It will be used when all of these exercises appear again.' } }));
-  await waitFor(() => expect(document.activeElement).toBe(screen.getByText('Order saved. It will be used when all of these exercises appear again.', { selector: '[role="status"]' })));
-  view.rerender(props({ baseline: candidate, operation: { state: 'success', candidate, successMessage: 'Order saved. When Squat, Plank, and Sit-ups all appear, this order takes priority over your saved Squat-before-Plank order. Squat before Plank still applies without Sit-ups. To keep up to 50 saved orders, Nudge replaced the saved order for Squat and Plank.' } }));
-  expect(screen.getByText('Order saved. When Squat, Plank, and Sit-ups all appear, this order takes priority over your saved Squat-before-Plank order. Squat before Plank still applies without Sit-ups. To keep up to 50 saved orders, Nudge replaced the saved order for Squat and Plank.', { selector: '[role="status"]' })).toBeTruthy();
+  view.rerender(props({ baseline: candidate, resolution: acceptedResolution, operation: { state: 'success', candidate, successMessage: 'Order saved for future workouts that include all these exercises.' } }));
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByText('Order saved for future workouts that include all these exercises.', { selector: '[role="status"]' })));
+  view.rerender(props({ baseline: candidate, operation: { state: 'success', candidate, successMessage: 'Order saved for workouts with Squat, Plank, and Sit-ups. This order takes priority over your saved preference for Squat before Plank. That preference still applies in workouts without Sit-ups. Nudge removed the saved order for Squat and Plank to keep your 50 most recently used orders.' } }));
+  expect(screen.getByText('Order saved for workouts with Squat, Plank, and Sit-ups. This order takes priority over your saved preference for Squat before Plank. That preference still applies in workouts without Sit-ups. Nudge removed the saved order for Squat and Plank to keep your 50 most recently used orders.', { selector: '[role="status"]' })).toBeTruthy();
   view.rerender(props({ baseline, operation: { state: 'failure', candidate } }));
-  const retry = screen.getByRole('button', { name: 'Try again' });
+  const retry = screen.getByRole('button', { name: 'Try saving this exercise order again' });
   retry.focus(); fireEvent.click(retry);
   expect(onSavePreference).toHaveBeenLastCalledWith(candidate, { squat: 'Squat', plank: 'Plank' });
   expect(document.activeElement).toBe(retry);
@@ -234,7 +234,7 @@ test('renders an applied preferred order passively without moving focus', () => 
   const start = screen.getByRole('button', { name: 'Start workout' });
   start.focus();
   view.rerender(props({ baseline: { blocks: [{ exerciseIds: ['squat'] }, { exerciseIds: ['plank'] }] }, resolution: { accepted: [{}] }, operation: null }));
-  const applied = screen.getByText('Preferred order applied');
+  const applied = screen.getByText('Saved exercise order applied');
   expect(applied.getAttribute('role')).toBeNull();
   expect(applied.getAttribute('aria-live')).toBeNull();
   expect(applied.getAttribute('aria-atomic')).toBeNull();
@@ -248,7 +248,7 @@ test('places Start workout before dirty-order guidance and the future-save actio
   const start = screen.getByRole('button', { name: 'Start workout' });
   const dirty = screen.getByText('Your changes are for this workout only unless you save them.');
   expect(start.compareDocumentPosition(dirty) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(screen.getByText('When all of these exercises appear again, Nudge keeps the order of their exercise and superset blocks. Superset member order still comes from Settings > Supersets. Other blocks may appear between them.')).toBeTruthy();
+  expect(screen.getByText('This saved order applies when a future workout includes all these exercises. Other exercises may appear between them. To reorder exercises within a superset, go to Settings > Supersets.')).toBeTruthy();
 });
 
 test('uses display order outside a superset and continues group handoff until it is exhausted', async () => {
