@@ -107,7 +107,22 @@ function TrackingFields({ prefix = '', mode, values, setters, invalid = false, e
   );
 }
 
-export default function Settings({ onClose, onDirtyChange }) {
+function OrderPreferencePanel({ preference, onClearPreferences, onSavePreference, onDismissPreference }) {
+  const state = preference?.operation?.state;
+  const busy = ['pending', 'indeterminate', 'clearing'].includes(state);
+  return <section className="order-preference-panel" aria-label="Saved exercise orders"><h3>Saved exercise orders</h3>
+    {['pending', 'clearing'].includes(state) && <p role="status">{state === 'clearing' ? 'Clearing saved exercise orders.' : 'Saving this exercise order for future workouts.'}</p>}
+    {state === 'indeterminate' && <p role="status">Saving is taking longer than expected. You can start your workout; we'll confirm when it finishes.</p>}
+    {state === 'success' && <><p role="status">{preference.operation.successMessage ?? 'Order saved for future workouts that include all these exercises.'}</p><button type="button" onClick={onDismissPreference}>Dismiss</button></>}
+    {state === 'failure' && <><p role="alert">Couldn't save this exercise order. Your saved exercise orders and today's workout order are unchanged.</p><button type="button" onClick={() => onSavePreference?.(preference.operation.candidate)}>Try saving this exercise order again</button></>}
+    {state === 'cleared' && <p role="status">Saved exercise orders cleared.</p>}
+    {state === 'clear-failure' && <><p role="alert">Couldn't clear saved exercise orders. Try again.</p><button type="button" onClick={onClearPreferences}>Try clearing saved exercise orders again</button></>}
+    <button type="button" disabled={busy} onClick={() => { if (window.confirm("Clear all saved exercise orders? Future workouts return to Nudge's planned order. Today's workout won't change.")) onClearPreferences?.(); }}>Clear all saved exercise orders</button>
+    {busy && <p>{state === 'clearing' ? 'Clearing saved exercise orders.' : 'Wait for the current save to finish before clearing saved exercise orders.'}</p>}
+  </section>;
+}
+
+export default function Settings({ onClose, onDirtyChange, preference, onClearPreferences, onSavePreference, onDismissPreference }) {
   const user = useContext(AuthContext);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -646,6 +661,7 @@ export default function Settings({ onClose, onDirtyChange }) {
         <h2>Settings</h2>
         <button className="close-btn" onClick={onClose}>Close</button>
       </div>
+      {(preference?.operation || onClearPreferences) && <OrderPreferencePanel {...{ preference, onClearPreferences, onSavePreference, onDismissPreference }} />}
       <div role="status" style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>
     </div>
   );
@@ -672,6 +688,7 @@ export default function Settings({ onClose, onDirtyChange }) {
         <button className="close-btn" onClick={onClose}>Close</button>
       </div>
 
+      <OrderPreferencePanel {...{ preference, onClearPreferences, onSavePreference, onDismissPreference }} />
       <section className="general-defaults" aria-labelledby="general-defaults-heading">
         <h3 id="general-defaults-heading">General defaults</h3>
         <div className="setting-group">

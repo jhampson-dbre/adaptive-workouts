@@ -82,6 +82,10 @@ export function createActiveWorkoutSession({ coordinator, projectId, saveImmutab
       if (next === state.activeWorkout) return false;
       const token = epoch;
       if (state.status === 'generated') {
+        if (action.type === 'moveGeneratedBlock') {
+          publish({ ...state, activeWorkout: next });
+          return true;
+        }
         if (action.type !== 'startWorkout') return false;
         const result = await coordinator.start({ projectId, uid: identity.uid, phaseTargets: state.phaseTargets, activeWorkout: next });
         if (!current(token)) return false;

@@ -4,11 +4,46 @@ import {
     isValidV2ExerciseOccurrence,
     normalizeCatalogExercise,
     normalizeWorkoutSettings,
+    normalizePreferredOrderRules,
+    preferredOrderContextKey,
+    preferredOrderRuleFingerprint,
     wasPerformed,
 } from './workoutSchema';
 import { getNextSessionRecommendation } from './progression';
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
+
+export function resolvePreferredOrder(blocks, settings = {}) {
+    const original = blocks.map(block => Array.isArray(block) ? block : [block]);
+    const byId = new Map();
+    original.forEach((block, index) => block.forEach(item => byId.set(item.id, index)));
+    const rules = normalizePreferredOrderRules(settings).preferredOrderRules
+        .map((rule, index) => ({ rule, index, key: preferredOrderContextKey(rule) }))
+        .filter(({ rule }) => rule.blocks.flatMap(block => block.exerciseIds).every(id => byId.has(id)))
+        .sort((a, b) => b.rule.blocks.flatMap(block => block.exerciseIds).length - a.rule.blocks.flatMap(block => block.exerciseIds).length || a.index - b.index);
+    const edges = new Map(original.map((_, index) => [index, new Set()])); const accepted = [];
+    const cyclic = () => {
+        const seen = new Set(), visiting = new Set();
+        const visit = node => { if (visiting.has(node)) return true; if (seen.has(node)) return false; seen.add(node); visiting.add(node); return [...edges.get(node)].some(visit) || (visiting.delete(node), false); };
+        return original.some((_, index) => visit(index));
+    };
+    for (const candidate of rules) {
+        const projected = candidate.rule.blocks.map(block => {
+            const targets = [...new Set(block.exerciseIds.map(id => byId.get(id)))] ;
+            return targets.length === 1 ? targets[0] : null;
+        });
+        const sequence = projected.filter((value, index) => index === 0 || value !== projected[index - 1]);
+        if (projected.some(value => value === null) || sequence.some((value, index) => index > 0 && sequence.indexOf(value) !== index)) continue;
+        const additions = sequence.flatMap((from, index) => sequence.slice(index + 1).map(to => [from, to]));
+        additions.forEach(([from, to]) => edges.get(from).add(to));
+        if (cyclic()) { additions.forEach(([from, to]) => edges.get(from).delete(to)); continue; }
+        accepted.push({ contextKey: candidate.key, fingerprint: preferredOrderRuleFingerprint(candidate.rule), projectedConstraints: additions.map(([from, to]) => [original[from].map(item => item.id), original[to].map(item => item.id)]) });
+    }
+    const indegree = original.map(() => 0); edges.forEach(targets => targets.forEach(target => { indegree[target] += 1; }));
+    const ordered = []; const ready = original.map((_, i) => i).filter(i => indegree[i] === 0);
+    while (ready.length) { ready.sort((a, b) => a - b); const current = ready.shift(); ordered.push(original[current]); for (const target of edges.get(current)) if (--indegree[target] === 0) ready.push(target); }
+    return { blocks: ordered, accepted };
+}
 
 function invalidCatalogExerciseError(exercise) {
     const name = exercise?.name || 'Unnamed exercise';
@@ -554,7 +589,18 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
     });
     for (const unit of selectedUnits) addMembers(unit.members);
     
-    const generatedWorkout = workout.map((exercise, ordinal) => enrichSelectedExercise(
+    const selectedIds = new Set(workout.map(exercise => exercise.id));
+    const blocks = []; const blockedIds = new Set();
+    for (const superset of validSupersets) {
+        if (!superset.exerciseIds.every(id => selectedIds.has(id))) continue;
+        const block = superset.exerciseIds.map(id => workout.find(exercise => exercise.id === id));
+        blocks.push(block); block.forEach(exercise => blockedIds.add(exercise.id));
+    }
+    for (const exercise of workout) if (!blockedIds.has(exercise.id)) blocks.push([exercise]);
+    blocks.sort((a, b) => workout.indexOf(a[0]) - workout.indexOf(b[0]));
+    const resolution = resolvePreferredOrder(blocks, settings);
+    const orderedWorkout = resolution.blocks.flat();
+    const generatedWorkout = orderedWorkout.map((exercise, ordinal) => enrichSelectedExercise(
         exercise,
         history,
         normalizedSettings.defaultRestSeconds,
@@ -576,5 +622,6 @@ export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay 
                 restPlacement: superset.restPlacement,
             })),
     });
+    Object.defineProperty(generatedWorkout, 'preferredOrderResolution', { value: resolution });
     return generatedWorkout;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { generateWorkout, getDaysSinceLastLegDay } from '../utils/engine';
+import { generateWorkout, getDaysSinceLastLegDay, resolvePreferredOrder } from '../utils/engine';
 import { isValidV2ExerciseOccurrence } from '../utils/workoutSchema';
 
 const mockCatalog = [
@@ -15,6 +15,63 @@ const mockCatalog = [
     { id: 'leg_extension', name: 'Leg Extension', muscleGroup: 'Legs', tier: 4, sets: 3, linkedTo: 'leg_curl' },
     { id: 'leg_curl', name: 'Leg Curl', muscleGroup: 'Legs', tier: 4, sets: 3 }
 ];
+
+describe('preferred order resolution', () => {
+  it('uses specific rules first and preserves planner fallback', () => {
+    const result = resolvePreferredOrder(
+      [{ id: 'push' }, { id: 'plank' }, { id: 'pull' }, { id: 'sit' }],
+      { preferredOrderRules: [
+        { blocks: [{ exerciseIds: ['pull'] }, { exerciseIds: ['sit'] }, { exerciseIds: ['push'] }] },
+        { blocks: [{ exerciseIds: ['push'] }, { exerciseIds: ['pull'] }] },
+      ] },
+    );
+    expect(result.blocks.flatMap(block => block.map(item => item.id))).toEqual(['plank', 'pull', 'sit', 'push']);
+    expect(result.accepted).toHaveLength(1);
+    expect(result.accepted[0].projectedConstraints).toEqual([[['pull'], ['sit']], [['pull'], ['push']], [['sit'], ['push']]]);
+  });
+
+  it('collapses consecutive saved members that now share one expanded superset block', () => {
+    const result = resolvePreferredOrder(
+      [[{ id: 'pull' }, { id: 'plank' }, { id: 'sit' }], [{ id: 'push' }]],
+      { preferredOrderRules: [{ blocks: [{ exerciseIds: ['pull'] }, { exerciseIds: ['sit'] }, { exerciseIds: ['push'] }] }] },
+    );
+    expect(result.blocks.flatMap(block => block.map(item => item.id))).toEqual(['pull', 'plank', 'sit', 'push']);
+    expect(result.accepted).toHaveLength(1);
+  });
+
+  it.each([
+    ['applies a subset rule with an unrelated extra block', [{ id: 'push' }, { id: 'extra' }, { id: 'pull' }], [{ blocks: [{ exerciseIds: ['push'] }, { exerciseIds: ['pull'] }] }], ['push', 'extra', 'pull'], 1],
+    ['uses newest stored rule for equal specificity', [{ id: 'a' }, { id: 'b' }, { id: 'c' }], [{ blocks: [{ exerciseIds: ['b'] }, { exerciseIds: ['c'] }] }, { blocks: [{ exerciseIds: ['c'] }, { exerciseIds: ['a'] }] }], ['b', 'c', 'a'], 2],
+    ['skips an atomic cyclic lower-priority rule', [{ id: 'a' }, { id: 'b' }, { id: 'c' }], [{ blocks: [{ exerciseIds: ['a'] }, { exerciseIds: ['b'] }, { exerciseIds: ['c'] }] }, { blocks: [{ exerciseIds: ['c'] }, { exerciseIds: ['a'] }] }], ['a', 'b', 'c'], 1],
+    ['skips a split saved superset member block', [[{ id: 'pull' }], [{ id: 'sit' }], [{ id: 'push' }]], [{ blocks: [{ exerciseIds: ['pull', 'sit'] }, { exerciseIds: ['push'] }] }], ['pull', 'sit', 'push'], 0],
+    ['skips a nonconsecutive collision', [[{ id: 'pull' }, { id: 'sit' }], [{ id: 'push' }]], [{ blocks: [{ exerciseIds: ['pull'] }, { exerciseIds: ['push'] }, { exerciseIds: ['sit'] }] }], ['pull', 'sit', 'push'], 0],
+  ])('%s', (_label, blocks, preferredOrderRules, expected, accepted) => {
+    const result = resolvePreferredOrder(blocks, { preferredOrderRules });
+    expect(result.blocks.flatMap(block => block.map(item => item.id))).toEqual(expected);
+    expect(result.accepted).toHaveLength(accepted);
+  });
+
+  it('keeps legacy linked exercises independent unless configured as a current superset', () => {
+    const result = resolvePreferredOrder([{ id: 'linked-a', linkedTo: 'linked-b' }, { id: 'linked-b' }], { preferredOrderRules: [{ blocks: [{ exerciseIds: ['linked-b'] }, { exerciseIds: ['linked-a'] }] }] });
+    expect(result.blocks.flatMap(block => block.map(item => item.id))).toEqual(['linked-b', 'linked-a']);
+  });
+
+  it('changes only selected occurrence order, not selection, prescriptions, timing, or superset membership', () => {
+    const catalog = [
+      { id: 'push', name: 'Push', muscleGroup: 'Chest', tier: 3, sets: 1 },
+      { id: 'pull', name: 'Pull', muscleGroup: 'Back', tier: 3, sets: 1 },
+      { id: 'core', name: 'Core', muscleGroup: 'Core', tier: 3, sets: 1 },
+    ];
+    const settings = { staleThreshold: 5, supersets: [{ exerciseIds: ['push', 'pull'], restPlacement: 'AFTER_ROUND' }] };
+    const baseline = generateWorkout(6, [], false, catalog, [], settings);
+    const reordered = generateWorkout(6, [], false, catalog, [], { ...settings, preferredOrderRules: [{ blocks: [{ exerciseIds: ['core'] }, { exerciseIds: ['push', 'pull'] }] }] });
+    const prescription = workout => Object.fromEntries(workout.map(item => [item.id, { sets: item.sets, trackingMode: item.trackingMode, records: item.setRecords }]));
+    expect([...baseline.map(item => item.id)].sort()).toEqual([...reordered.map(item => item.id)].sort());
+    expect(prescription(reordered)).toEqual(prescription(baseline));
+    expect(reordered.phaseTargets).toEqual(baseline.phaseTargets);
+    expect(reordered.supersets.map(group => group.occurrenceIds.map(id => id.split(':')[0]))).toEqual(baseline.supersets.map(group => group.occurrenceIds.map(id => id.split(':')[0])));
+  });
+});
 
 // Catalog with multiple Tier 1 exercises in the same pivot muscle group,
 // used to regression-test internal rotation (only one should be selected per day).

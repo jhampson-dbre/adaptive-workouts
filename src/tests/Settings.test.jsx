@@ -16,12 +16,12 @@ const exercise = {
   isActive: true,
 };
 
-function renderSettings(catalog = [], settings = {}, onDirtyChange) {
+function renderSettings(catalog = [], settings = {}, onDirtyChange, preference, onClearPreferences = vi.fn()) {
   storage.getCatalog.mockResolvedValue(catalog);
   storage.getSettings.mockResolvedValue(settings);
   return render(
     <AuthContext.Provider value={{ uid: 'user-1' }}>
-      <Settings onClose={vi.fn()} onDirtyChange={onDirtyChange} />
+      <Settings onClose={vi.fn()} onDirtyChange={onDirtyChange} preference={preference} onClearPreferences={onClearPreferences} />
     </AuthContext.Provider>,
   );
 }
@@ -34,6 +34,35 @@ describe('Settings tracking configuration', () => {
   });
 
   afterEach(cleanup);
+
+  it('always provides saved-order clearing and explains why it is disabled during a save', async () => {
+    const clear = vi.fn();
+    renderSettings([], {}, undefined, { operation: null }, clear);
+    await screen.findByRole('heading', { name: 'General defaults' });
+    expect(screen.getByRole('heading', { name: 'Saved exercise orders' })).toBeTruthy();
+    const clearButton = screen.getByRole('button', { name: 'Clear all saved exercise orders' });
+    expect(clearButton.disabled).toBe(false);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    fireEvent.click(clearButton);
+    expect(confirm).toHaveBeenCalledWith("Clear all saved exercise orders? Future workouts return to Nudge's planned order. Today's workout won't change.");
+    confirm.mockRestore();
+
+    cleanup();
+    renderSettings([], {}, undefined, { operation: { state: 'indeterminate' } }, clear);
+    await screen.findByRole('heading', { name: 'General defaults' });
+    expect(screen.getByRole('button', { name: 'Clear all saved exercise orders' }).disabled).toBe(true);
+    expect(screen.getByText('Wait for the current save to finish before clearing saved exercise orders.')).toBeTruthy();
+  });
+
+  it('shows ordinary, override, and eviction save outcomes in the order preference panel', async () => {
+    const ordinary = { operation: { state: 'success', successMessage: 'Order saved for future workouts that include all these exercises.' } };
+    renderSettings([], {}, undefined, ordinary);
+    expect((await screen.findByRole('status')).textContent).toContain(ordinary.operation.successMessage);
+    cleanup();
+    const combined = 'Order saved for workouts with Push-ups, Pull-ups, and Sit-ups. This order takes priority over your saved preference for Push-ups before Pull-ups. That preference still applies in workouts without Sit-ups. Nudge removed the saved order for Push-ups and Pull-ups to keep your 50 most recently used orders.';
+    renderSettings([], {}, undefined, { operation: { state: 'success', successMessage: combined } });
+    expect((await screen.findByRole('status')).textContent).toContain(combined);
+  });
 
   it('creates an ordered superset with native member selects and saves it with settings', async () => {
     renderSettings([

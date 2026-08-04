@@ -1,4 +1,4 @@
-import { normalizeCatalogExercise, normalizeWorkoutSettings } from './workoutSchema';
+import { normalizeCatalogExercise, normalizeWorkoutSettings, normalizePreferredOrderRules, preferredOrderContextKey, preferredOrderRuleFingerprint } from './workoutSchema';
 
 const loadFirestore = () => import('./firestoreClient').then(({ loadFirestoreClient }) => loadFirestoreClient());
 
@@ -66,6 +66,45 @@ export async function getSettings(userId) {
 export async function saveSettings(userId, settings) {
   const { db, doc, setDoc } = await loadFirestore();
   await setDoc(doc(db, 'users', userId), settings, { merge: true });
+}
+
+export async function savePreferredOrderRule(userId, candidate) {
+  const { db, doc, runTransaction } = await loadFirestore();
+  return runTransaction(db, async transaction => {
+    const ref = doc(db, 'users', userId); const current = (await transaction.get(ref)).data() ?? {};
+    const normalized = normalizePreferredOrderRules(current); const key = preferredOrderContextKey(candidate);
+    const rules = [candidate, ...normalized.preferredOrderRules.filter(rule => preferredOrderContextKey(rule) !== key)];
+    const usage = [key, ...normalized.preferredOrderRuleUsage.filter(value => value !== key)];
+    const next = normalizePreferredOrderRules({ preferredOrderRules: rules, preferredOrderRuleUsage: usage });
+    const evicted = normalized.preferredOrderRuleUsage.find(value => !next.preferredOrderRuleUsage.includes(value)) ?? null;
+    const candidateIds = new Set(JSON.parse(key));
+    const overridden = next.preferredOrderRules.filter(rule => {
+      const ids = JSON.parse(preferredOrderContextKey(rule));
+      return preferredOrderContextKey(rule) !== key && ids.length < candidateIds.size && ids.every(id => candidateIds.has(id));
+    }).map(rule => ({ contextKey: preferredOrderContextKey(rule), rule }));
+    transaction.set(ref, next, { merge: true }); return { evicted, overridden, contextKey: key, fingerprint: preferredOrderRuleFingerprint(candidate) };
+  });
+}
+
+export async function clearPreferredOrderRules(userId) {
+  const { db, doc, runTransaction } = await loadFirestore();
+  return runTransaction(db, async transaction => transaction.set(doc(db, 'users', userId), { preferredOrderRules: [], preferredOrderRuleUsage: [] }, { merge: true }));
+}
+
+export async function touchPreferredOrderRuleUsage(userId, acceptedRules) {
+  if (!Array.isArray(acceptedRules) || !acceptedRules.length) return;
+  const { db, doc, runTransaction } = await loadFirestore();
+  return runTransaction(db, async transaction => {
+    const ref = doc(db, 'users', userId); const current = (await transaction.get(ref)).data() ?? {};
+    const normalized = normalizePreferredOrderRules(current);
+    const matching = acceptedRules.filter(({ contextKey, fingerprint }) => normalized.preferredOrderRules.some(rule =>
+      preferredOrderContextKey(rule) === contextKey && preferredOrderRuleFingerprint(rule) === fingerprint,
+    ));
+    const keys = matching.map(rule => rule.contextKey);
+    const usage = [...keys, ...normalized.preferredOrderRuleUsage.filter(key => !keys.includes(key))];
+    if (usage.every((key, index) => key === normalized.preferredOrderRuleUsage[index])) return;
+    transaction.set(ref, { preferredOrderRuleUsage: usage }, { merge: true });
+  });
 }
 
 export async function saveSettingsAndCatalogItem(userId, settings, item) {

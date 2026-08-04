@@ -20,6 +20,39 @@ const isObject = value => value !== null && typeof value === 'object' && !Array.
 const isNonEmptyString = value => typeof value === 'string' && value.trim().length > 0;
 const isFiniteNonnegative = value => Number.isFinite(value) && value >= 0;
 const isNonnegativeInteger = value => Number.isInteger(value) && value >= 0;
+
+export const preferredOrderContextKey = rule => JSON.stringify(
+  [...new Set(rule.blocks.flatMap(block => block.exerciseIds))].sort(),
+);
+
+export const preferredOrderRuleFingerprint = rule => JSON.stringify(rule.blocks);
+
+export function normalizePreferredOrderRules(value = {}) {
+  const rules = [];
+  const seen = new Set();
+  for (const rule of value.preferredOrderRules ?? []) {
+    if (!isObject(rule) || Object.keys(rule).length !== 1 || !Array.isArray(rule.blocks) || rule.blocks.length < 2) continue;
+    const ids = new Set();
+    const blocks = [];
+    let valid = true;
+    for (const block of rule.blocks) {
+      if (!isObject(block) || Object.keys(block).length !== 1 || !Array.isArray(block.exerciseIds) || !block.exerciseIds.length
+        || block.exerciseIds.some(id => !isNonEmptyString(id)) || new Set(block.exerciseIds).size !== block.exerciseIds.length
+        || block.exerciseIds.some(id => ids.has(id))) { valid = false; break; }
+      block.exerciseIds.forEach(id => ids.add(id));
+      blocks.push({ exerciseIds: [...block.exerciseIds] });
+    }
+    if (!valid) continue;
+    const normalized = { blocks }; const key = preferredOrderContextKey(normalized);
+    if (!seen.has(key)) { seen.add(key); rules.push(normalized); }
+  }
+  const validKeys = new Set(rules.map(preferredOrderContextKey));
+  const usage = [];
+  for (const key of value.preferredOrderRuleUsage ?? []) if (typeof key === 'string' && validKeys.has(key) && !usage.includes(key)) usage.push(key);
+  for (const rule of rules) { const key = preferredOrderContextKey(rule); if (!usage.includes(key)) usage.push(key); }
+  const retained = new Set(usage.slice(0, 50));
+  return { preferredOrderRules: rules.filter(rule => retained.has(preferredOrderContextKey(rule))), preferredOrderRuleUsage: usage.slice(0, 50) };
+}
 const isPositiveInteger = value => Number.isInteger(value) && value > 0;
 const isValidPlannedRestSeconds = value => Number.isInteger(value) && value >= 5 && value <= 600;
 const isValidPhaseTargetSeconds = value => Number.isInteger(value)

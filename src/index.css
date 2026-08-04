@@ -1510,3 +1510,7 @@ input:focus-visible {
     grid-column: 1 / -1;
   }
 }
+ .order-controls, .order-preference-panel { display: grid; gap: .75rem; }
+ .order-block { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+ .order-block span { flex: 1 1 12rem; }
+ .order-block button, .order-preference-panel button { min-height: 44px; }

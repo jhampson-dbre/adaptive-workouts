@@ -288,6 +288,20 @@ export function initializeActiveWorkout(exercises, { phaseTimingEnabled = false 
 }
 
 export function activeWorkoutReducer(state, action) {
+  if (action.type === 'moveGeneratedBlock') {
+    if (state.phase !== 'generated' || state.workoutStartedAt !== null || !['earlier', 'later'].includes(action.direction)) return state;
+    const index = state.exercises.findIndex(exercise => exercise.occurrenceId === action.occurrenceId);
+    if (index < 0) return state;
+    const group = supersetFor(state, state.exercises[index]);
+    const memberIds = group?.occurrenceIds ?? [action.occurrenceId];
+    const positions = memberIds.map(id => state.exercises.findIndex(exercise => exercise.occurrenceId === id));
+    if (positions.some(position => position < 0) || Math.max(...positions) - Math.min(...positions) + 1 !== positions.length) return state;
+    const first = Math.min(...positions); const last = Math.max(...positions); const target = action.direction === 'earlier' ? first - 1 : last + 1;
+    if (target < 0 || target >= state.exercises.length) return state;
+    const exercises = [...state.exercises]; const block = exercises.splice(first, last - first + 1);
+    exercises.splice(action.direction === 'earlier' ? target : target - block.length + 1, 0, ...block);
+    return { ...state, exercises };
+  }
   if (action.type === 'startWorkout') {
     if (!state._phaseTimingEnabled) {
       if (state.workoutStartedAt !== null || !isTimestamp(action.timestamp)) return state;

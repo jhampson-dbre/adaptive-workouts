@@ -18,7 +18,7 @@ afterEach(() => {
 
 vi.mock('../utils/storage', () => ({ saveWorkout: vi.fn(), saveImmutableWorkout: vi.fn(), getHistoryPage: vi.fn(() => Promise.resolve({ items: [], nextCursor: null, hasMore: false })) }));
 
-function SessionHarness({ workout, phaseTargets, onFinish, user, api }) {
+function SessionHarness({ workout, phaseTargets, onFinish, user, api, preference, onSavePreference }) {
   const [activeWorkout, setActiveWorkout] = useState(() => initializeActiveWorkout(workout, { phaseTimingEnabled: true }));
   const [state, setState] = useState({ status: 'owned', activeWorkout, phaseTargets: phaseTargets ?? { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, error: null, blocked: false });
   const session = {
@@ -42,14 +42,14 @@ function SessionHarness({ workout, phaseTargets, onFinish, user, api }) {
     },
     async discard() { await api.discard(); setState(previous => ({ ...previous, activeWorkout: null })); },
   };
-  return <AuthContext.Provider value={user}><WorkoutView session={session} sessionState={{ ...state, activeWorkout }} onFinish={onFinish} /></AuthContext.Provider>;
+  return <AuthContext.Provider value={user}><WorkoutView session={session} sessionState={{ ...state, activeWorkout }} onFinish={onFinish} preference={preference} onSavePreference={onSavePreference} /></AuthContext.Provider>;
 }
 
-const renderWorkout = (workout, onFinish = () => {}, user = { uid: 'test-user-id' }, phaseTargets, api = {}) => {
+const renderWorkout = (workout, onFinish = () => {}, user = { uid: 'test-user-id' }, phaseTargets, api = {}, preference, onSavePreference) => {
   const sessionApi = {
     action: vi.fn(), save: vi.fn(), discard: vi.fn(), ...api,
   };
-  const view = render(<SessionHarness workout={workout} phaseTargets={phaseTargets} onFinish={onFinish} user={user} api={sessionApi} />);
+  const view = render(<SessionHarness workout={workout} phaseTargets={phaseTargets} onFinish={onFinish} user={user} api={sessionApi} preference={preference} onSavePreference={onSavePreference} />);
   return Object.assign(view, { api: sessionApi });
 };
 
@@ -187,6 +187,69 @@ const mixedSupersetWorkout = () => {
   exercises.supersets = [{ occurrenceIds: ['row:0', 'press:1'], restPlacement: 'AFTER_ROUND' }];
   return exercises;
 };
+
+test('keeps move focus and gives each order control its position, availability, and superset context', async () => {
+  const workout = mixedSupersetWorkout();
+  renderWorkout(workout, () => {}, { uid: 'test-user-id' }, undefined, {}, {
+    baseline: { blocks: [{ exerciseIds: ['carry'] }, { exerciseIds: ['row', 'press'] }] },
+  });
+
+  const earlier = screen.getByRole('button', { name: 'Move Carry earlier; position 1 of 2; unavailable' });
+  expect(earlier.disabled).toBe(true);
+  const moveSupersetEarlier = screen.getByRole('button', { name: 'Move superset Long Row Exercise Name and Long Press Exercise Name earlier; position 2 of 2; available' });
+  expect(screen.getByText('Superset: Long Row Exercise Name and Long Press Exercise Name. Moves together. To reorder exercises within this superset, go to Settings > Supersets.')).toBeDefined();
+
+  moveSupersetEarlier.focus();
+  fireEvent.click(moveSupersetEarlier);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Move superset Long Row Exercise Name and Long Press Exercise Name earlier; position 1 of 2; unavailable' }).disabled).toBe(true));
+  expect(document.activeElement).toBe(screen.getByText('Superset: Long Row Exercise Name and Long Press Exercise Name. Moves together. To reorder exercises within this superset, go to Settings > Supersets.').closest('.order-block'));
+});
+
+test('keeps the initiating save and retry control focused across preference states', async () => {
+  const onSavePreference = vi.fn();
+  const baseline = { blocks: [{ exerciseIds: ['squat'] }, { exerciseIds: ['plank'] }] };
+  const candidate = { blocks: [{ exerciseIds: ['plank'] }, { exerciseIds: ['squat'] }] };
+  const props = preference => <SessionHarness workout={timedWorkout} user={{ uid: 'test-user-id' }} api={{ action: vi.fn(), save: vi.fn(), discard: vi.fn() }} onFinish={() => {}} preference={preference} onSavePreference={onSavePreference} />;
+  const acceptedResolution = { accepted: [{}] };
+  const view = render(props({ baseline, resolution: acceptedResolution, operation: null }));
+  const save = screen.getByRole('button', { name: 'Use this order in future workouts' });
+  save.focus(); fireEvent.click(save);
+  expect(onSavePreference).toHaveBeenCalledWith(candidate, { squat: 'Squat', plank: 'Plank' });
+  view.rerender(props({ baseline, resolution: acceptedResolution, operation: { state: 'pending', candidate } }));
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Saving order…' }));
+  view.rerender(props({ baseline: candidate, resolution: acceptedResolution, operation: { state: 'success', candidate, successMessage: 'Order saved for future workouts that include all these exercises.' } }));
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByText('Order saved for future workouts that include all these exercises.', { selector: '[role="status"]' })));
+  view.rerender(props({ baseline: candidate, operation: { state: 'success', candidate, successMessage: 'Order saved for workouts with Squat, Plank, and Sit-ups. This order takes priority over your saved preference for Squat before Plank. That preference still applies in workouts without Sit-ups. Nudge removed the saved order for Squat and Plank to keep your 50 most recently used orders.' } }));
+  expect(screen.getByText('Order saved for workouts with Squat, Plank, and Sit-ups. This order takes priority over your saved preference for Squat before Plank. That preference still applies in workouts without Sit-ups. Nudge removed the saved order for Squat and Plank to keep your 50 most recently used orders.', { selector: '[role="status"]' })).toBeTruthy();
+  view.rerender(props({ baseline, operation: { state: 'failure', candidate } }));
+  const retry = screen.getByRole('button', { name: 'Try saving this exercise order again' });
+  retry.focus(); fireEvent.click(retry);
+  expect(onSavePreference).toHaveBeenLastCalledWith(candidate, { squat: 'Squat', plank: 'Plank' });
+  expect(document.activeElement).toBe(retry);
+});
+
+test('renders an applied preferred order passively without moving focus', () => {
+  const props = preference => <SessionHarness workout={timedWorkout} user={{ uid: 'test-user-id' }} api={{ action: vi.fn(), save: vi.fn(), discard: vi.fn() }} onFinish={() => {}} preference={preference} />;
+  const view = render(props({ baseline: { blocks: [{ exerciseIds: ['squat'] }, { exerciseIds: ['plank'] }] }, operation: null }));
+  const start = screen.getByRole('button', { name: 'Start workout' });
+  start.focus();
+  view.rerender(props({ baseline: { blocks: [{ exerciseIds: ['squat'] }, { exerciseIds: ['plank'] }] }, resolution: { accepted: [{}] }, operation: null }));
+  const applied = screen.getByText('Saved exercise order applied');
+  expect(applied.getAttribute('role')).toBeNull();
+  expect(applied.getAttribute('aria-live')).toBeNull();
+  expect(applied.getAttribute('aria-atomic')).toBeNull();
+  expect(document.activeElement).toBe(start);
+});
+
+test('places Start workout before dirty-order guidance and the future-save action', () => {
+  const baseline = { blocks: [{ exerciseIds: ['plank'] }, { exerciseIds: ['squat'] }] };
+  renderWorkout(timedWorkout, () => {}, { uid: 'test-user-id' }, undefined, {}, { baseline });
+  fireEvent.click(screen.getByRole('button', { name: 'Move Squat earlier; position 2 of 2; available' }));
+  const start = screen.getByRole('button', { name: 'Start workout' });
+  const dirty = screen.getByText('Your changes are for this workout only unless you save them.');
+  expect(start.compareDocumentPosition(dirty) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByText('This saved order applies when a future workout includes all these exercises. Other exercises may appear between them. To reorder exercises within a superset, go to Settings > Supersets.')).toBeTruthy();
+});
 
 test('uses display order outside a superset and continues group handoff until it is exhausted', async () => {
   renderWorkout(mixedSupersetWorkout());
