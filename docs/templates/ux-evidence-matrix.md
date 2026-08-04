@@ -504,3 +504,33 @@ the safe method attempted and the best available alternative.
 - Observed result: Plan says `Nudge uses your recent workouts and available time to plan today's workout.` with focus on `How much time do you have?`. The active phase heading and announcement say `Main workout`, and the accessible exercise region is named `Main workout exercises`. Valid saved entries list `Main workout` between Warmup and Cooldown. Production recommendation provenance uses `the previous workout`, set explanations use `minimum reps`, and save recovery names the problem and next action without ownership, floor, exact-save, or pending-state vocabulary. Client and scroll widths remain equal at 375/375.
 - Rendered evidence: Live accessibility snapshots of recovery, Plan, active work, and saved history; an inline mobile screenshot of the active phase; and computed focus, viewport, and overflow measurements. Exact focused assertions cover the deterministic recommendation and rare save-recovery branches.
 - Material limitation: The timing harness retains internal scenario metadata that names the persisted `performance` phase and synthetic recovery actions; production-facing headings, summaries, announcements, recovery states, and history labels use the approved plain language. Synthetic Chromium evidence does not replace physical-device or assistive-technology testing.
+
+---
+
+## 2026-08-03 - Completed workout clipboard export
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-286 adds an explicit saved-workout action, success and failure feedback, retry behavior, and first-class superset text output at the Review endpoint.
+- Approved scenario or artifact: Trekker comments CMT-512 and CMT-558 plus `.impeccable/surfaces/src-app-jsx.md`; preserve the focused `Workout saved` heading, factual completion status, equally neutral Copy/Back actions, collapsed lazy history, visible accessible feedback, and phone-first Clear Signal presentation.
+
+## Changed scenario
+
+- Scenario: Copy a frozen mixed workout containing one standalone exercise and one two-member superset from the saved endpoint.
+- Build / commit: `codex/trek-286-copy-workout` working tree after 81 focused tests, lint, build, code review, and task-conformance review passed.
+- Viewport and starting state: Local Chromium at 1280 x 720 and 390 x 844; synthetic production `WorkoutView` fixture with completed Carry, Long Row Exercise Name, and Long Press Exercise Name records and exact row/press superset membership.
+- Actions: Save the frozen Review candidate; confirm the saved heading focus and collapsed history; activate Copy workout results; inspect feedback, focus, geometry, overflow, console, and the browser clipboard.
+- Observed result: `Workout saved` received focus before interaction. Copy workout results appears before Back to plan with the same neutral styling. Native clipboard output was exactly `Carry\n1 set\n0:12\n\nA1. Long Row Exercise Name\n1 set\n0:23\n\nA2. Long Press Exercise Name\n1 set\n0:34`. Success rendered `Workout results copied.` in a separate polite status; Copy workout results remained enabled and focused. Copy, Back, and History measured 51.19px high; the phone document measured 390/390 client/scroll width and desktop measured 1280/1280. History remained collapsed (`aria-expanded=false`), and a fresh browser request check found no failed responses.
+- Rendered evidence: `.impeccable/evidence/trek-286-copy-saved-desktop.png` and `.impeccable/evidence/trek-286-copy-success-mobile.png`.
+- Material limitation: A temporary synthetic timing-harness fixture rendered the production component without storage, routing, or personal data and was removed after capture. The selected browser's synthetic keyboard injection did not advance Tab or create trusted Clipboard user activation, so exact Tab/Enter/Space traversal is supported by the native `button` element, visible focus evidence, and focused component tests rather than claimed as a browser-observed keyboard sequence. Chromium evidence does not replace physical-device or assistive-technology testing.
+
+## Changed scenario
+
+- Scenario: Recover from clipboard rejection and retry without losing the saved workout or action focus.
+- Build / commit: Same TREK-286 working tree.
+- Viewport and starting state: Local Chromium at 390 x 844 on the same synthetic mixed saved workout; harness rejected the first native `writeText` call and delegated the next call to the browser clipboard.
+- Actions: Activate Copy workout results once to reject, inspect the error and focus, then activate the same enabled control again.
+- Observed result: First activation rendered the sole assertive alert `Couldn’t copy workout results. Try again.` while Copy workout results stayed enabled and focused. Retry removed the alert, rendered the polite `Workout results copied.` status, retained focus, and wrote the exact standalone/A1/A2 text. The viewport remained 390/390 with no horizontal overflow and History stayed collapsed.
+- Rendered evidence: `.impeccable/evidence/trek-286-copy-error-mobile.png`; the succeeding state is `.impeccable/evidence/trek-286-copy-success-mobile.png`.
+- Material limitation: Rejection was deterministic synthetic browser behavior; it proves the production recovery presentation and transition, not every browser permission prompt or secure-context policy.
