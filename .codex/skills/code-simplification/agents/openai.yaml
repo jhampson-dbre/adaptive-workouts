@@ -1,4 +1,4 @@
 interface:
   display_name: "Code Simplification Gate"
   short_description: "Simplify green diffs without behavior changes"
-  default_prompt: "Use $code-simplification after green implementation and before final verification and reviews."
+  default_prompt: "Use $code-simplification only for an accepted signal from the bounded $ponytail-review pass on a stabilized green diff."

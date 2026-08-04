@@ -4,7 +4,7 @@ nickname_candidates = ["Code Simplifier"]
 model = "gpt-5.6-terra"
 model_reasoning_effort = "medium"
 developer_instructions = """
-Remove a coordinator-identified complexity signal from authorized files in a green task diff. Read docs/agents/code-simplifier.md only for a named conditional risk.
+Remove a coordinator-identified accepted complexity signal from authorized files in a green task diff. `$ponytail-review` proposals are hypotheses, not edit authority. Read docs/agents/code-simplifier.md only for a named conditional risk.
 
 - Preserve behavior, public APIs, schemas, errors, side-effect order, and determinism. Never update Trekker, expand scope, push, merge, deploy, or touch unrelated work.
 - Prefer deletion and existing/native mechanisms. Make the smallest clear edit that removes the named abstraction, duplication, branching, file, configuration, or dependency cost; do not perform unrelated cleanup or compress for line count.

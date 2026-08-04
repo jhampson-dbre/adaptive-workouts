@@ -1,12 +1,14 @@
 ---
 name: code-simplification
-description: Remove a concrete complexity signal from a green task diff without changing behavior. Use when coordinator inspection finds needless abstraction, duplication, branching, files, configuration, dependencies, or similar implementation cost; do not run merely because a diff is non-trivial.
+description: Remove an accepted complexity signal from the bounded $ponytail-review pass on a materially changed, stabilized green in-scope diff without changing behavior.
 ---
 
 # Code Simplification
 
-Use this coordinator-owned pass only after inspection identifies a concrete
-complexity signal in a green task diff. No signal means no dispatch and no ceremony.
+Use this coordinator-owned pass only for an accepted complexity signal from the
+single bounded `$ponytail-review` proposal pass on a materially changed, stabilized
+green in-scope diff. Proposals are hypotheses, not edit authority; no accepted signal
+means no dispatch and no ceremony.
 
 Provide the named signal, authorized files, relevant behavior constraints, diff, and
 green evidence. Repository-wide cleanup requires separate authorization.
@@ -17,7 +19,8 @@ line-count compression. Preserve observable behavior and any applicable public A
 schema, error, ordering, security, and determinism contract.
 
 Run the smallest check that would catch a regression from the simplification.
-Coordinator inspection integrates the edit and routes changed evidence only to the
-review authority it affects. Repeat complete reviews only for a named material
-invalidator. A no-edit result is valid when the proposed simplification is unsafe or
-not meaningful; unchanged evidence never starts another pass.
+Coordinator inspection integrates the edit, records the cut, verification, and routing,
+and routes only evidence changed by it to the affected review authority. Repeat complete
+reviews only for a named material invalidator. A no-edit result is valid when the
+accepted simplification is unsafe or not meaningful; unchanged evidence never starts
+another pass.
