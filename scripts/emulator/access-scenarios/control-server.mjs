@@ -1,26 +1,24 @@
 import http from 'node:http';
 
 // Claim actions execute through the owned emulator Admin client; only evaluator faults enter this queue.
-const VITE_LOOPBACK_ORIGIN = 'http://127.0.0.1:5175';
-
-const allowBrowserOrigin = (request, response) => {
+const allowBrowserOrigin = (request, response, allowedOrigin) => {
   const origin = request.headers.origin;
   if (!origin) return true;
-  if (origin !== VITE_LOOPBACK_ORIGIN) { response.writeHead(403); response.end(); return false; }
-  response.setHeader('Access-Control-Allow-Origin', VITE_LOOPBACK_ORIGIN);
+  if (origin !== allowedOrigin) { response.writeHead(403); response.end(); return false; }
+  response.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   response.setHeader('Access-Control-Allow-Headers', 'content-type');
   response.setHeader('Vary', 'Origin');
   return true;
 };
 
-export function createControlServer({ sessionId, onAction, onStop = () => {} }) {
+export function createControlServer({ sessionId, origin: allowedOrigin, onAction, onStop = () => {} }) {
   let nextAction;
   return http.createServer(async (request, response) => {
     const endpoint = `/sessions/${sessionId}`;
     const stopEndpoint = request.url === `${endpoint}/stop`;
     if (request.url !== endpoint && !stopEndpoint) { response.writeHead(404); return response.end(); }
-    if (!allowBrowserOrigin(request, response)) return;
+    if (!allowBrowserOrigin(request, response, allowedOrigin)) return;
     if (request.method === 'OPTIONS') { response.writeHead(204); return response.end(); }
     if (stopEndpoint && request.method === 'POST') { await onStop(); response.end(JSON.stringify({ acknowledgement: true })); return; }
     if (request.method === 'GET') {
