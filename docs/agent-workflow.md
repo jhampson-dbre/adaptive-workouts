@@ -50,7 +50,8 @@ verification. A dispatch packet contains only the goal, approved scope, relevant
 files and context, dirty-worktree notes, constraints, expected verification, and
 expected output.
 
-- Every tracked behavior change uses a fresh `implementor`.
+- Follow the task-lifetime implementor ownership rule in `AGENTS.md`; freshness is at
+  the Trekker task boundary, not each same-task dispatch.
 - Use `code-simplifier` only after identifying a concrete complexity signal in a
   green task diff.
 - Use `code-reviewer` for substantive behavior or material correctness/regression
