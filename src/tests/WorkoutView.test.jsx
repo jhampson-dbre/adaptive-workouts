@@ -864,14 +864,14 @@ test('copies the frozen saved workout, keeps focus, reannounces success, and lea
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  const copy = await screen.findByRole('button', { name: 'Copy workout' });
+  const copy = await screen.findByRole('button', { name: 'Copy workout results' });
   expect(storage.getHistoryPage).not.toHaveBeenCalled();
   fireEvent.click(copy);
   await waitFor(() => expect(writeText).toHaveBeenCalledWith('Squat\n1 set\n0:00'));
-  expect(screen.getByText('Workout copied.', { selector: '[role="status"]' })).toBeDefined();
+  expect(screen.getByText('Workout results copied.', { selector: '[role="status"]' })).toBeDefined();
   expect(copy).toBe(document.activeElement);
   fireEvent.click(copy);
-  await waitFor(() => expect(screen.getByText(/^Workout copied\.\u2060$/, { selector: '[role="status"]' })).toBeDefined());
+  await waitFor(() => expect(screen.getByText(/^Workout results copied\.\u2060$/, { selector: '[role="status"]' })).toBeDefined());
   expect(view.api.save).toHaveBeenCalledOnce();
 });
 
@@ -890,31 +890,31 @@ test('copies the frozen mixed saved candidate after live workout state is replac
   const view = render(renderState({ status: 'review', activeWorkout: review, blocked: false }));
   await screen.findByRole('heading', { level: 2, name: 'Review' });
   view.rerender(renderState({ status: 'saved', activeWorkout: { exercises: [] }, blocked: false }));
-  const copy = await screen.findByRole('button', { name: 'Copy workout' });
+  const copy = await screen.findByRole('button', { name: 'Copy workout results' });
   expect(storage.getHistoryPage).not.toHaveBeenCalled();
   fireEvent.click(copy);
   await waitFor(() => expect(writeText).toHaveBeenCalledWith('Carry\n1 set\n0:00\n\nA1. Long Row Exercise Name\n1 set\n0:00\n\nA2. Long Press Exercise Name\n1 set\n0:00'));
 });
 
-test('keeps Copy workout enabled and focused after clipboard absence or rejection, then replaces the error on retry', async () => {
+test('keeps Copy workout results enabled and focused after clipboard absence or rejection, then replaces the error on retry', async () => {
   const view = renderWorkout([{ ...timedWorkout[1] }]);
   fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  const copy = await screen.findByRole('button', { name: 'Copy workout' });
+  const copy = await screen.findByRole('button', { name: 'Copy workout results' });
   Object.assign(navigator, { clipboard: undefined });
   fireEvent.click(copy);
-  expect(screen.getByRole('alert').textContent).toBe('Couldn\u2019t copy workout. Try again.');
+  expect(screen.getByRole('alert').textContent).toBe('Couldn\u2019t copy workout results. Try again.');
   expect(copy.disabled).toBe(false); expect(copy).toBe(document.activeElement);
   const writeText = vi.fn().mockRejectedValueOnce(new Error('denied')).mockResolvedValueOnce(undefined);
   Object.assign(navigator, { clipboard: { writeText } });
   fireEvent.click(copy);
-  await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('Couldn\u2019t copy workout. Try again.'));
+  await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('Couldn\u2019t copy workout results. Try again.'));
   expect(copy).toBe(document.activeElement);
   fireEvent.click(copy);
-  await waitFor(() => expect(screen.getByText('Workout copied.', { selector: '[role="status"]' })).toBeDefined());
+  await waitFor(() => expect(screen.getByText('Workout results copied.', { selector: '[role="status"]' })).toBeDefined());
   expect(screen.queryByRole('alert')).toBeNull();
   expect(view.api.save).toHaveBeenCalledOnce();
 });

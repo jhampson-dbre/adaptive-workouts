@@ -574,9 +574,9 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
     try {
       if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
       await navigator.clipboard.writeText(formatWorkoutClipboard(finishCandidate));
-      setClipboardFeedback(current => refreshRepeatedLiveMessage(current, 'Workout copied.'));
+      setClipboardFeedback(current => refreshRepeatedLiveMessage(current, 'Workout results copied.'));
     } catch {
-      setClipboardFeedback('Couldn\u2019t copy workout. Try again.');
+      setClipboardFeedback('Couldn\u2019t copy workout results. Try again.');
     }
     copyRef.current?.focus();
   };
@@ -671,7 +671,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
       </section>
     </div>;
   }
-  if (sessionState?.status === 'saved') return <div className="workout-view"><JourneyProgress current="Review" /><section className="workout-summary"><h2 ref={savedRef} tabIndex="-1">Workout saved</h2><p role="status">This workout is complete.</p><button ref={copyRef} type="button" className="recovery-secondary" onClick={copyWorkout}>Copy workout</button>{clipboardFeedback && <p role={normalizeLiveMessage(clipboardFeedback) === 'Workout copied.' ? 'status' : 'alert'} aria-live={normalizeLiveMessage(clipboardFeedback) === 'Workout copied.' ? 'polite' : 'assertive'} aria-atomic="true">{clipboardFeedback}</p>}<button type="button" className="recovery-secondary" onClick={() => onFinish?.()}>Back to plan</button></section><WorkoutHistory key={user?.uid ?? null} historyKey={user?.uid ?? null} loadPage={({ cursor, pageSize }) => getHistoryPage(user?.uid, { cursor, pageSize })} /></div>;
+  if (sessionState?.status === 'saved') return <div className="workout-view"><JourneyProgress current="Review" /><section className="workout-summary"><h2 ref={savedRef} tabIndex="-1">Workout saved</h2><p role="status">This workout is complete.</p><button ref={copyRef} type="button" className="recovery-secondary" onClick={copyWorkout}>Copy workout results</button>{clipboardFeedback && <p role={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'status' : 'alert'} aria-live={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'polite' : 'assertive'} aria-atomic="true">{clipboardFeedback}</p>}<button type="button" className="recovery-secondary" onClick={() => onFinish?.()}>Back to plan</button></section><WorkoutHistory key={user?.uid ?? null} historyKey={user?.uid ?? null} loadPage={({ cursor, pageSize }) => getHistoryPage(user?.uid, { cursor, pageSize })} /></div>;
   return <div className={`workout-view phase-${activeWorkout.phase}`}>
     <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{restAnnouncement || recoveryAcknowledgement}</div>
     <JourneyProgress current={finishCandidate ? 'Review' : journeyStep} />
