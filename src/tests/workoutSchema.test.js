@@ -19,6 +19,7 @@ import {
   isValidV4WorkoutDocument,
   isValidV5WorkoutDocument,
   normalizeCatalogExercise,
+  normalizePreferredOrderRules,
   normalizeWorkoutSettings,
   wasPerformed,
 } from '../utils/workoutSchema';
@@ -71,6 +72,32 @@ const weightedExercise = {
     },
   ],
 };
+
+describe('preferred order rule normalization', () => {
+  it('keeps the newest valid context and normalizes independent LRU usage', () => {
+    expect(normalizePreferredOrderRules({
+      preferredOrderRules: [
+        { blocks: [{ exerciseIds: ['pull'] }, { exerciseIds: ['push'] }] },
+        { blocks: [{ exerciseIds: ['push'] }, { exerciseIds: ['pull'] }] },
+        { blocks: [{ exerciseIds: ['bad', 'bad'] }, { exerciseIds: ['core'] }] },
+      ],
+      preferredOrderRuleUsage: ['["push","pull"]'],
+    })).toEqual({
+      preferredOrderRules: [{ blocks: [{ exerciseIds: ['pull'] }, { exerciseIds: ['push'] }] }],
+      preferredOrderRuleUsage: ['["pull","push"]'],
+    });
+  });
+
+  it.each([
+    ['malformed records', { preferredOrderRules: [null, { blocks: [] }, { blocks: [{ exerciseIds: ['a', 'a'] }, { exerciseIds: ['b'] }] }] }, 0],
+    ['duplicate contexts with different block order', { preferredOrderRules: [{ blocks: [{ exerciseIds: ['a'] }, { exerciseIds: ['b'] }] }, { blocks: [{ exerciseIds: ['b'] }, { exerciseIds: ['a'] }] }] }, 1],
+    ['stale and duplicate usage keys', { preferredOrderRules: [{ blocks: [{ exerciseIds: ['a'] }, { exerciseIds: ['b'] }] }], preferredOrderRuleUsage: ['bad', '["a","b"]', '["a","b"]'] }, 1],
+  ])('drops %s without rejecting the remaining preference settings', (_label, value, retained) => {
+    const normalized = normalizePreferredOrderRules(value);
+    expect(normalized.preferredOrderRules).toHaveLength(retained);
+    expect(normalized.preferredOrderRuleUsage).toHaveLength(retained);
+  });
+});
 
 const bodyweightExercise = {
   id: 'pull-up',

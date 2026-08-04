@@ -283,7 +283,7 @@ function exerciseTimingStatus(exercise, exerciseIndex, activeTimer, now) {
   return `${remaining} ${remaining === 1 ? 'set' : 'sets'} remaining`;
 }
 
-export default function WorkoutView({ session, sessionState, onFinish, onResume }) {
+export default function WorkoutView({ session, sessionState, onFinish, onComplete, onDiscard, onResume, preference, onSavePreference, onStarted, onDismissPreference }) {
   const user = useContext(AuthContext);
   const activeWorkout = sessionState?.activeWorkout ?? EMPTY_ACTIVE_WORKOUT;
   const durableEpochFloor = durableDisplayEpoch(activeWorkout, sessionState?.snapshot);
@@ -297,6 +297,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
   });
   const [restAnnouncement, setRestAnnouncement] = useState('');
   const [recoveryAcknowledgement, setRecoveryAcknowledgement] = useState('');
+  const [orderAnnouncement, setOrderAnnouncement] = useState('');
   const dispatch = action => { void (async () => { if (await session.action(action)) setRecoveryAcknowledgement(''); })(); };
   const [exerciseErrors, setExerciseErrors] = useState({});
   const [finishError, setFinishError] = useState('');
@@ -320,11 +321,31 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
   const announcedRestStartsRef = useRef(new Set());
   const restAnnouncementsRef = useRef(new Map());
   const pendingFocusRef = useRef(null);
+  const pendingOrderFocusRef = useRef(null);
+  const orderBlockRefs = useRef({});
+  const saveOutcomeRef = useRef(null);
   const saveInFlightRef = useRef(false);
   const acceptedDisplayEpochMsRef = useRef(initialDisplayEpochMs);
   const backPendingRef = useRef(false);
   const wasShowingRecoveryRef = useRef(false);
   const started = activeWorkout.workoutStartedAt !== null;
+  const orderBlocks = activeWorkout.exercises.reduce((blocks, exercise, index) => {
+    const group = supersetFor(activeWorkout, exercise)?.occurrenceIds ?? [exercise.occurrenceId];
+    if (blocks.some(block => block.ids.join('|') === group.join('|'))) return blocks;
+    blocks.push({ ids: group, index, exercises: group.map(id => activeWorkout.exercises.find(item => item.occurrenceId === id)).filter(Boolean) }); return blocks;
+  }, []);
+  const orderRule = { blocks: orderBlocks.map(block => ({ exerciseIds: block.exercises.map(exercise => exercise.id) })) };
+  const dirtyOrder = Boolean(preference?.baseline) && JSON.stringify(orderRule) !== JSON.stringify(preference.baseline);
+  const orderBusy = ['pending', 'indeterminate', 'clearing'].includes(preference?.operation?.state);
+  const moveBlock = async (block, direction) => {
+    const key = block.ids.join('|');
+    pendingOrderFocusRef.current = { key, direction };
+    const accepted = await session.action({ type: 'moveGeneratedBlock', occurrenceId: block.exercises[0].occurrenceId, direction });
+    if (!accepted) { pendingOrderFocusRef.current = null; return; }
+    setRecoveryAcknowledgement('');
+    const next = direction === 'earlier' ? block.index : block.index + 2;
+    setOrderAnnouncement(`${block.exercises.map(exercise => exercise.name).join(' / ')} moved to position ${next} of ${orderBlocks.length}. This change is for this workout only.`);
+  };
   const journeyStep = activeWorkout.phase === 'cooldown'
     ? 'Cooldown'
     : activeWorkout.phase === 'review' ? 'Review'
@@ -350,6 +371,20 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
   useEffect(() => {
     if (durableEpochFloor > acceptedDisplayEpochMsRef.current) acceptDisplayTime(durableEpochFloor);
   }, [acceptDisplayTime, durableEpochFloor]);
+
+  useEffect(() => {
+    const pending = pendingOrderFocusRef.current;
+    if (!pending) return;
+    const block = orderBlockRefs.current[pending.key];
+    const control = block?.querySelector(`button[data-order-direction="${pending.direction}"]`);
+    (control && !control.disabled ? control : block)?.focus();
+    pendingOrderFocusRef.current = null;
+  }, [activeWorkout.exercises]);
+
+  useEffect(() => {
+    if (started || preference?.operation?.state !== 'success') return;
+    saveOutcomeRef.current?.focus();
+  }, [started, preference?.operation?.state]);
 
   useEffect(() => {
     if (wasShowingRecoveryRef.current && !showingRecovery) {
@@ -542,7 +577,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
   const cancelWorkout = async () => {
     setEarlyFinishPrompt(null);
     await session.discard();
-    onFinish?.();
+    (onDiscard ?? onFinish)?.();
   };
 
   const dismissEarlyFinish = () => {
@@ -666,19 +701,26 @@ export default function WorkoutView({ session, sessionState, onFinish, onResume 
         {!checking && <div className="recovery-actions">
           {resumable && <button className="recovery-primary" type="button" onClick={async () => { if (await session.resume()) { setRecoveryAcknowledgement('Workout resumed.'); onResume?.(); } }}>Resume workout</button>}
           {canAcquireRetainedDraft && ['timeout', 'conflict'].includes(sessionState?.error) && <><button className="recovery-primary" type="button" onClick={async () => { if (await session.requestHandoff?.()) { setRecoveryAcknowledgement('Workout resumed.'); onResume?.(); } }}>Take over workout in this tab</button><button className="recovery-secondary" type="button" onClick={async () => { if (await session.resume?.()) { setRecoveryAcknowledgement('Workout resumed.'); onResume?.(); } }}>Try again in this tab</button></>}
-          <button className="recovery-secondary" type="button" onClick={async () => { if (discardable) await session.discard(); else { await session.exit(); onFinish?.(); } }}>{discardable ? 'Discard workout' : 'Exit to Plan'}</button>
+          <button className="recovery-secondary" type="button" onClick={async () => { if (discardable) { await session.discard(); (onDiscard ?? onFinish)?.(); } else { await session.exit(); (onComplete ?? onFinish)?.(); } }}>{discardable ? 'Discard workout' : 'Exit to Plan'}</button>
         </div>}
       </section>
     </div>;
   }
-  if (sessionState?.status === 'saved') return <div className="workout-view"><JourneyProgress current="Review" /><section className="workout-summary"><h2 ref={savedRef} tabIndex="-1">Workout saved</h2><p role="status">This workout is complete.</p><button ref={copyRef} type="button" className="recovery-secondary" onClick={copyWorkout}>Copy workout results</button>{clipboardFeedback && <p role={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'status' : 'alert'} aria-live={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'polite' : 'assertive'} aria-atomic="true">{clipboardFeedback}</p>}<button type="button" className="recovery-secondary" onClick={() => onFinish?.()}>Back to plan</button></section><WorkoutHistory key={user?.uid ?? null} historyKey={user?.uid ?? null} loadPage={({ cursor, pageSize }) => getHistoryPage(user?.uid, { cursor, pageSize })} /></div>;
+  if (sessionState?.status === 'saved') return <div className="workout-view"><JourneyProgress current="Review" /><section className="workout-summary"><h2 ref={savedRef} tabIndex="-1">Workout saved</h2><p role="status">This workout is complete.</p><button ref={copyRef} type="button" className="recovery-secondary" onClick={copyWorkout}>Copy workout results</button>{clipboardFeedback && <p role={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'status' : 'alert'} aria-live={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'polite' : 'assertive'} aria-atomic="true">{clipboardFeedback}</p>}<button type="button" className="recovery-secondary" onClick={() => (onComplete ?? onFinish)?.()}>Back to plan</button></section><WorkoutHistory key={user?.uid ?? null} historyKey={user?.uid ?? null} loadPage={({ cursor, pageSize }) => getHistoryPage(user?.uid, { cursor, pageSize })} /></div>;
   return <div className={`workout-view phase-${activeWorkout.phase}`}>
-    <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{restAnnouncement || recoveryAcknowledgement}</div>
+    <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{orderAnnouncement || restAnnouncement || recoveryAcknowledgement}</div>
     <JourneyProgress current={finishCandidate ? 'Review' : journeyStep} />
-    {finishCandidate ? <WorkoutSummary candidate={finishCandidate} phaseTargets={sessionState?.phaseTargets} isSaving={isSaving} saveError={saveError} saveStatus={saveStatus} blockedConflict={blockedSaveConflict} onBack={handleBack} onSave={handleSave} onKeepPending={() => setRecoveryAcknowledgement('This workout is still open.')} onExit={async () => { await session.exit(); onFinish?.(); }} summaryRef={summaryRef} /> : <>
+    {finishCandidate ? <WorkoutSummary candidate={finishCandidate} phaseTargets={sessionState?.phaseTargets} isSaving={isSaving} saveError={saveError} saveStatus={saveStatus} blockedConflict={blockedSaveConflict} onBack={handleBack} onSave={handleSave} onKeepPending={() => setRecoveryAcknowledgement('This workout is still open.')} onExit={async () => { await session.exit(); (onComplete ?? onFinish)?.(); }} summaryRef={summaryRef} /> : <>
       <div className="workout-header"><h2 className="workout-title" ref={phaseHeadingRef} tabIndex="-1">{phaseTitle}</h2>{started && <div className="timer" aria-label={`Total elapsed ${formatTime(displayedElapsedSeconds)}`}>{formatTime(displayedElapsedSeconds)}</div>}</div>
       <p id="workout-start-help" className="workout-help">{['warmup', 'cooldown'].includes(activeWorkout.phase) && activeWorkout.phaseLedger ? phaseReadout(activeWorkout.phase === 'warmup' ? 'Warmup' : 'Cooldown', sessionState?.phaseTargets?.[`${activeWorkout.phase}Seconds`] ?? 0, getPhaseElapsedSeconds(activeWorkout, activeWorkout.phase, now), true) : started ? 'Start an available set. You can time one set at a time.' : 'Start the workout to time your sets.'}</p>
-      {!started && activeWorkout.phase !== 'cancelled' && <button className="start-btn" onClick={() => { const timestamp = acceptDisplayTime(Date.now()); dispatch({ type: 'startWorkout', timestamp }); }}>Start workout</button>}
+      {started && preference?.operation && <section className="order-preference-panel" aria-label="Order preference">{['pending', 'indeterminate'].includes(preference.operation.state) && <p role="status">{preference.operation.state === 'pending' ? 'Saving this order for future workouts.' : 'Saving is taking longer than expected. We’ll confirm when it finishes.'}</p>}{preference.operation.state === 'success' && <><p role="status">{preference.operation.successMessage ?? 'Order saved. It will be used when all of these exercises appear again.'}</p><button type="button" onClick={onDismissPreference}>Dismiss</button></>}{preference.operation.state === 'failure' && <><p role="alert">Couldn't save this order for future workouts. This workout's order is unchanged.</p><button type="button" onClick={() => onSavePreference?.(preference.operation.candidate)}>Try again</button></>}</section>}
+      {!started && activeWorkout.phase !== 'cancelled' && <section className="order-controls" aria-label="Exercise order">
+        {preference?.resolution?.accepted?.length ? <p>Preferred order applied</p> : null}
+        {orderBlocks.map((block, index) => { const isSuperset = block.exercises.length > 1; const names = block.exercises.map(exercise => exercise.name).join(' and '); const description = isSuperset ? `Superset: ${names}. Moves together; change member order in Settings > Supersets.` : block.exercises[0].name; const position = `position ${index + 1} of ${orderBlocks.length}`; return <div className="order-block" key={block.ids.join('|')} ref={node => { orderBlockRefs.current[block.ids.join('|')] = node; }} tabIndex="-1"><span>{index + 1} {isSuperset ? `Superset · ${block.exercises.map(exercise => exercise.name).join(' / ')}` : names}</span>{isSuperset && <span className="order-superset-help">{description}</span>}<button type="button" data-order-direction="earlier" aria-label={`Move ${isSuperset ? `superset ${names}` : names} earlier; ${position}; ${index === 0 ? 'unavailable' : 'available'}`} disabled={orderBusy || index === 0} onClick={() => moveBlock(block, 'earlier')}>Move earlier</button><button type="button" data-order-direction="later" aria-label={`Move ${isSuperset ? `superset ${names}` : names} later; ${position}; ${index === orderBlocks.length - 1 ? 'unavailable' : 'available'}`} disabled={orderBusy || index === orderBlocks.length - 1} onClick={() => moveBlock(block, 'later')}>Move later</button></div>; })}
+        <button className="start-btn" disabled={preference?.operation?.state === 'pending'} onClick={async () => { const timestamp = acceptDisplayTime(Date.now()); if (await session.action({ type: 'startWorkout', timestamp })) { setRecoveryAcknowledgement(''); onStarted?.(activeWorkout.exercises); } }}>Start workout</button>
+        {dirtyOrder && <><p>Your changes are for this workout only unless you save them.</p><p>When all of these exercises appear again, Nudge keeps the order of their exercise and superset blocks. Superset member order still comes from Settings &gt; Supersets. Other blocks may appear between them.</p><button type="button" disabled={orderBusy} onClick={() => onSavePreference?.(orderRule, Object.fromEntries(activeWorkout.exercises.map(exercise => [exercise.id, exercise.name])))}>{preference?.operation?.state === 'pending' || preference?.operation?.state === 'indeterminate' ? 'Saving order…' : preference?.operation?.state === 'failure' ? 'Try again' : 'Use this order in future workouts'}</button></>}
+        {preference?.operation?.state === 'pending' && <p role="status">Saving this order for future workouts.</p>}{preference?.operation?.state === 'indeterminate' && <p role="status">Saving is taking longer than expected. You can start your workout; we'll confirm when it finishes.</p>}{preference?.operation?.state === 'failure' && <p role="alert">Couldn't save this order for future workouts. This workout's order is unchanged.</p>}{preference?.operation?.state === 'success' && <p ref={saveOutcomeRef} role="status" tabIndex="-1">{preference.operation.successMessage ?? 'Order saved. It will be used when all of these exercises appear again.'}</p>}
+      </section>}
       {activeWorkout.phase === 'cooldown' && <div className="summary-actions"><button ref={finishRef} className="finish-btn" aria-describedby={finishError ? 'finish-feedback' : undefined} onClick={handleFinish}>Finish workout</button><button type="button" onClick={() => dispatch({ type: 'resumeWorkout', timestamp: acceptDisplayTime(Date.now()) })}>Resume workout</button>{finishError && <p id="finish-feedback" className="error-message" role="alert">{finishError}</p>}</div>}
       {activeWorkout.phase === 'cooldown' ? <details className="remaining-work"><summary>Return to remaining work</summary>{exerciseList}</details> : exerciseList}
       {(activeWorkout.phase === 'performance' || (!activeWorkout._phaseTimingEnabled && started)) && <div className="summary-actions"><button ref={finishRef} className="finish-btn" aria-describedby={finishError ? 'finish-feedback' : undefined} onClick={handleFinish}>Finish workout</button>{finishError && <p id="finish-feedback" className="error-message" role="alert">{finishError}</p>}{earlyFinishPrompt === 'partial' && <section className="early-finish-confirmation" role="region" aria-label="Finish workout early"><h2 ref={promptHeadingRef} tabIndex="-1">Finish workout early?</h2><p>Unfinished work:</p><ul>{activeWorkout.exercises.filter(exercise => exercise.setRecords.some(record => !record.completed)).map(exercise => <li key={exercise.occurrenceId || exercise.id}>{exercise.name}: {exercise.setRecords.filter(record => !record.completed).length} {exercise.setRecords.filter(record => !record.completed).length === 1 ? 'set' : 'sets'} remaining</li>)}</ul><button type="button" className="return-to-workout" onClick={dismissEarlyFinish}>Return to workout</button><button type="button" onClick={confirmEarlyFinish}>Continue to cooldown</button></section>}{earlyFinishPrompt === 'zero' && <section className="early-finish-confirmation" role="region" aria-label="Cancel workout"><h2 ref={promptHeadingRef} tabIndex="-1">Cancel workout?</h2><p>No work has been confirmed.</p><button type="button" onClick={() => void cancelWorkout()}>Cancel workout</button><button type="button" onClick={dismissEarlyFinish}>Keep working</button></section>}</div>}

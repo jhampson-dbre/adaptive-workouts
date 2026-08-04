@@ -13,6 +13,15 @@ const topReason = {
   reasonCode: 'STARTING_NO_ANCHOR',
 };
 
+it('moves a generated superset as one block', () => {
+  const state = initializeActiveWorkout(Object.assign([
+    { id: 'a', occurrenceId: 'a:0', trackingMode: 'simple', sets: 1 },
+    { id: 'b', occurrenceId: 'b:1', trackingMode: 'simple', sets: 1 },
+    { id: 'c', occurrenceId: 'c:2', trackingMode: 'simple', sets: 1 },
+  ], { supersets: [{ occurrenceIds: ['b:1', 'c:2'], restPlacement: 'AFTER_ROUND' }] }));
+  expect(activeWorkoutReducer(state, { type: 'moveGeneratedBlock', occurrenceId: 'b:1', direction: 'earlier' }).exercises.map(exercise => exercise.id)).toEqual(['b', 'c', 'a']);
+});
+
 function weighted(id = 'bench', sets = 3) {
   return {
     id, name: 'Bench Press', muscleGroup: 'Chest', tier: 1, trackingMode: 'weighted',

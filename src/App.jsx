@@ -16,6 +16,28 @@ const isBaselineBuild = import.meta.env.DEV && import.meta.env.MODE === 'baselin
 const ACCESS_TIMEOUT = 15_000
 const ACTIVE_WORKOUT_STALE_AFTER_MS = 86_400_000
 const retryModuleUrl = (url, generation) => `${url.split('#')[0]}#retry=${generation}`
+const orderRuleFor = exercises => {
+  const groups = exercises?.supersets ?? []; const members = new Map();
+  groups.forEach(group => group.occurrenceIds.forEach(id => members.set(id, group.occurrenceIds)));
+  const seen = new Set();
+  return { blocks: (exercises ?? []).flatMap(exercise => {
+    const ids = members.get(exercise.occurrenceId) ?? [exercise.occurrenceId]; const key = ids.join('|');
+    if (seen.has(key)) return []; seen.add(key);
+    return [{ exerciseIds: ids.map(id => exercises.find(item => item.occurrenceId === id)?.id).filter(Boolean) }];
+  }) };
+}
+const exerciseList = (ids, names) => {
+  const values = ids.map(id => names?.[id] ?? id)
+  return values.length < 3 ? values.join(' and ') : `${values.slice(0, -1).join(', ')}, and ${values.at(-1)}`
+}
+const ruleOrder = (rule, names) => rule.blocks.map(block => exerciseList(block.exerciseIds, names)).join(' before ')
+const successMessageFor = (candidate, result, names) => {
+  const override = result.overridden?.[0]
+  const message = override
+    ? `Order saved. When ${exerciseList(JSON.parse(result.contextKey), names)} all appear, this order takes priority over your saved ${ruleOrder(override.rule, names).replaceAll(' before ', '-before-')} order. ${ruleOrder(override.rule, names)} still applies without ${exerciseList(JSON.parse(result.contextKey).filter(id => !JSON.parse(override.contextKey).includes(id)), names)}.`
+    : 'Order saved. It will be used when all of these exercises appear again.'
+  return result.evicted ? `${message} To keep up to 50 saved orders, Nudge replaced the saved order for ${exerciseList(JSON.parse(result.evicted), names)}.` : message
+}
 
 const classifyBaselineError = error => {
   if (error?.code === 'baseline/identity-mismatch') return {
@@ -55,6 +77,9 @@ function App() {
   const [authRetry, setAuthRetry] = useState(0)
   const [baselineStage, setBaselineStage] = useState(isBaselineBuild ? 'preparing' : 'shared')
   const [baselineError, setBaselineError] = useState(null)
+  const [preference, setPreference] = useState({ baseline: null, resolution: null, operation: null })
+  const preferenceTimer = useRef(null)
+  const preferenceOperation = useRef(0)
   const generation = useRef(0)
   const deadlines = useRef(new Map())
   const session = useRef(null)
@@ -66,6 +91,15 @@ function App() {
   const [activeWorkoutSession, activeWorkout] = useActiveWorkoutSession({ projectId: app.options.projectId, user: access === 'authorized' ? user : null, staleAfterMs: ACTIVE_WORKOUT_STALE_AFTER_MS })
   const workout = activeWorkoutSession.activeWorkout?.exercises ?? null
 
+  const clearPreferenceTimer = useCallback(() => {
+    if (preferenceTimer.current) clearTimeout(preferenceTimer.current.timer)
+    preferenceTimer.current = null
+  }, [])
+  const retirePreferenceOperation = useCallback(() => {
+    preferenceOperation.current += 1
+    clearPreferenceTimer()
+  }, [clearPreferenceTimer])
+
   const clearAuthorizedState = useCallback(({ retireIdentity = false } = {}) => {
     if (retireIdentity) void activeWorkout.retireIdentity()
     setTimeBudget(45)
@@ -73,12 +107,51 @@ function App() {
     setSettingsDirty(false)
     setDestination('plan')
     setDestinationGeneration(value => value + 1)
-  }, [activeWorkout])
+    retirePreferenceOperation()
+    setPreference({ baseline: null, resolution: null, operation: null })
+  }, [activeWorkout, retirePreferenceOperation])
   const chooseDestination = useCallback(next => {
     setDestination(next)
     setDestinationGeneration(value => value + 1)
   }, [])
   const onSettingsDirtyChange = useCallback(value => setSettingsDirty(value), [])
+  const savePreference = useCallback((candidate, names) => {
+    if (!user || ['pending', 'indeterminate', 'clearing'].includes(preference.operation?.state)) return
+    const retry = preference.operation?.state === 'failure' ? preference.operation : null
+    const captured = retry?.candidate ?? candidate
+    const capturedNames = retry?.names ?? names
+    const operationId = ++preferenceOperation.current; const uid = user.uid
+    setPreference(current => ({ ...current, operation: { state: 'pending', id: operationId, candidate: captured, names: capturedNames } }))
+    clearPreferenceTimer()
+    preferenceTimer.current = { id: operationId, timer: setTimeout(() => setPreference(current => current.operation?.id === operationId && current.operation?.state === 'pending' ? { ...current, operation: { ...current.operation, state: 'indeterminate' } } : current), 15_000) }
+    void import('./utils/storage').then(({ savePreferredOrderRule }) => savePreferredOrderRule(user.uid, captured)).then(result => {
+      if (preferenceTimer.current?.id === operationId) clearPreferenceTimer()
+      setPreference(current => current.operation?.id === operationId && session.current === uid ? { ...current, baseline: captured, operation: { state: 'success', id: operationId, result, candidate: captured, names: capturedNames, successMessage: successMessageFor(captured, result, capturedNames) } } : current)
+    }, () => {
+      if (preferenceTimer.current?.id === operationId) clearPreferenceTimer()
+      setPreference(current => current.operation?.id === operationId && session.current === uid ? { ...current, operation: { state: 'failure', id: operationId, candidate: captured, names: capturedNames } } : current)
+    })
+  }, [clearPreferenceTimer, preference.operation, user])
+  const clearPreferences = useCallback(() => {
+    if (!user || ['pending', 'indeterminate', 'clearing'].includes(preference.operation?.state)) return
+    const retry = preference.operation?.state === 'failure' ? preference.operation : null
+    const operationId = ++preferenceOperation.current; const uid = user.uid
+    clearPreferenceTimer()
+    setPreference(current => ({ ...current, operation: { state: 'clearing', id: operationId, retry } }))
+    void import('./utils/storage').then(({ clearPreferredOrderRules }) => clearPreferredOrderRules(user.uid)).then(
+      () => setPreference(current => current.operation?.id === operationId && session.current === uid ? { ...current, operation: { state: 'cleared', id: operationId } } : current),
+      () => setPreference(current => current.operation?.id === operationId && session.current === uid ? { ...current, operation: retry ? { ...retry, id: operationId } : { state: 'clear-failure', id: operationId } } : current),
+    )
+  }, [clearPreferenceTimer, preference.operation, user])
+  const dismissPreference = useCallback(() => setPreference(current => current.operation?.state === 'success' ? { ...current, operation: null } : current), [])
+  const onStarted = useCallback(exercises => {
+    const positions = new Map(exercises.map((exercise, index) => [exercise.id, index]))
+    const accepted = (preference.resolution?.accepted ?? []).filter(rule => rule.projectedConstraints?.every(([before, after]) =>
+      Math.max(...before.map(id => positions.get(id) ?? -1)) < Math.min(...after.map(id => positions.get(id) ?? Infinity)),
+    ))
+    if (accepted.length && user) void import('./utils/storage').then(({ touchPreferredOrderRuleUsage }) => touchPreferredOrderRuleUsage(user.uid, accepted)).catch(() => {})
+    setPreference(current => ({ ...current, resolution: null }))
+  }, [preference.resolution, user])
 
   const invalidate = useCallback(() => {
     generation.current += 1
@@ -309,9 +382,9 @@ function App() {
             : activeDestination === 'settings' ? () => import('./components/Settings') : () => import('./components/WorkoutView')}
           retryLoader={generation => import(/* @vite-ignore */ retryModuleUrl(lazyEntryUrls[activeDestination], generation))}
           componentProps={activeDestination === 'plan'
-            ? { workout, timeBudget, setTimeBudget, unrecoveredGroups, setUnrecoveredGroups, onGenerate: async (generated, options = {}) => { const staged = await activeWorkout.stageGenerated(generated, options.phaseTargets ?? { warmupSeconds: 0, performanceSeconds: timeBudget * 60, cooldownSeconds: 0 }); if (staged && generated?.length) chooseDestination('workout') } }
-            : activeDestination === 'settings' ? { onClose: () => chooseDestination(workout?.length ? 'workout' : 'plan'), onDirtyChange: onSettingsDirtyChange }
-              : { session: activeWorkout, sessionState: activeWorkoutSession, onFinish: () => { chooseDestination('plan') }, onResume: () => { setDestination('workout') } }}
+            ? { workout, timeBudget, setTimeBudget, unrecoveredGroups, setUnrecoveredGroups, onGenerate: async (generated, options = {}) => { const staged = await activeWorkout.stageGenerated(generated, options.phaseTargets ?? { warmupSeconds: 0, performanceSeconds: timeBudget * 60, cooldownSeconds: 0 }); if (staged && generated?.length) { retirePreferenceOperation(); setPreference({ baseline: orderRuleFor(generated), resolution: options.preferredOrderResolution, operation: null }); chooseDestination('workout') } } }
+            : activeDestination === 'settings' ? { onClose: () => chooseDestination(workout?.length ? 'workout' : 'plan'), onDirtyChange: onSettingsDirtyChange, preference, onClearPreferences: clearPreferences, onSavePreference: savePreference, onDismissPreference: dismissPreference }
+              : { session: activeWorkout, sessionState: activeWorkoutSession, onComplete: () => chooseDestination('plan'), onDiscard: () => { retirePreferenceOperation(); setPreference({ baseline: null, resolution: null, operation: null }); chooseDestination('plan') }, onResume: () => { setDestination('workout') }, preference, onSavePreference: savePreference, onStarted, onDismissPreference: dismissPreference }}
           onReady={() => {}}
           isCurrent={() => access === 'authorized'}
         />

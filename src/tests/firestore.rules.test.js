@@ -75,6 +75,32 @@ describeFirestore('Firestore rules', () => {
     expect(snapshot.data()).toEqual({ settings: { staleThreshold: 5 } });
   });
 
+  it('round-trips preference block maps through concurrent saves, two-field LRU eviction, and commit-ordered touches', async () => {
+    const db = testEnv.authenticatedContext('alex', { approved: true }).firestore();
+    const ref = db.doc('users/alex');
+    const key = id => JSON.stringify([id]);
+    const rule = id => ({ blocks: [{ exerciseIds: [id] }] });
+    const save = id => db.runTransaction(async transaction => {
+      const data = (await transaction.get(ref)).data() ?? {}; const rules = data.preferredOrderRules ?? []; const usage = data.preferredOrderRuleUsage ?? [];
+      transaction.set(ref, { preferredOrderRules: [rule(id), ...rules.filter(item => JSON.stringify(item.blocks.flatMap(block => block.exerciseIds).sort()) !== key(id))], preferredOrderRuleUsage: [key(id), ...usage.filter(item => item !== key(id))] }, { merge: true });
+    });
+    await Promise.all([save('a'), save('b')]);
+    let data = (await ref.get()).data();
+    expect(data.preferredOrderRules.map(item => item.blocks)).toEqual(expect.arrayContaining([[{ exerciseIds: ['a'] }], [{ exerciseIds: ['b'] }]]));
+    const fiftyRules = Array.from({ length: 50 }, (_, index) => rule(String(index)));
+    const fiftyUsage = Array.from({ length: 50 }, (_, index) => key(String(index)));
+    await ref.set({ preferredOrderRules: fiftyRules, preferredOrderRuleUsage: fiftyUsage }, { merge: true });
+    await db.runTransaction(async transaction => {
+      const current = (await transaction.get(ref)).data(); const rules = [rule('new'), ...current.preferredOrderRules]; const usage = [key('new'), ...current.preferredOrderRuleUsage];
+      const retainedUsage = usage.slice(0, 50); transaction.set(ref, { preferredOrderRules: rules.filter(item => retainedUsage.includes(key(item.blocks.flatMap(block => block.exerciseIds)[0]))), preferredOrderRuleUsage: retainedUsage }, { merge: true });
+    });
+    data = (await ref.get()).data(); expect(data.preferredOrderRules).toHaveLength(50); expect(data.preferredOrderRuleUsage).toHaveLength(50); expect(data.preferredOrderRuleUsage).not.toContain(key('49')); expect(data.preferredOrderRules.flatMap(item => item.blocks.flatMap(block => block.exerciseIds))).not.toContain('49');
+    const touch = id => db.runTransaction(async transaction => {
+      const current = (await transaction.get(ref)).data(); transaction.set(ref, { preferredOrderRuleUsage: [key(id), ...current.preferredOrderRuleUsage.filter(item => item !== key(id))] }, { merge: true });
+    });
+    await touch('10'); await touch('11'); data = (await ref.get()).data(); expect(data.preferredOrderRuleUsage.slice(0, 2)).toEqual([key('11'), key('10')]);
+  });
+
   it('denies a strict approved user access to another user root and subtree', async () => {
     const db = testEnv.authenticatedContext('alex', { approved: true }).firestore();
 

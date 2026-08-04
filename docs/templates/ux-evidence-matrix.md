@@ -534,3 +534,63 @@ the safe method attempted and the best available alternative.
 - Observed result: First activation rendered the sole assertive alert `Couldn’t copy workout results. Try again.` while Copy workout results stayed enabled and focused. Retry removed the alert, rendered the polite `Workout results copied.` status, retained focus, and wrote the exact standalone/A1/A2 text. The viewport remained 390/390 with no horizontal overflow and History stayed collapsed.
 - Rendered evidence: `.impeccable/evidence/trek-286-copy-error-mobile.png`; the succeeding state is `.impeccable/evidence/trek-286-copy-success-mobile.png`.
 - Material limitation: Rejection was deterministic synthetic browser behavior; it proves the production recovery presentation and transition, not every browser permission prompt or secure-context policy.
+
+---
+
+## 2026-08-04 - TREK-294 contextual exercise ordering
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-294 adds pre-start exercise/superset order controls, contextual preference save and clear actions, asynchronous feedback, and programmatic focus.
+- Approved scenario or artifact: `docs/specs/2026-08-03-contextual-exercise-ordering.md`; preserve planner selection and prescriptions while applying or changing only generated run order.
+
+## Changed scenario
+
+- Scenario: UX-ORDER-01/03 - Reorder an ordinary generated exercise at the first-position boundary and save the resulting context.
+- Build / commit: `codex/trek-294-contextual-order` working tree after focused tests, emulator transaction tests, lint, build, and diff-check passed.
+- Viewport and starting state: Codex in-app Chromium at 390 x 844 with a 375px document viewport; canonical synthetic emulator identity and an eight-exercise generated workout.
+- Actions: Move Back Squat from position 2 to position 1, inspect boundary focus, then select Use this order in future workouts.
+- Observed result: The whole Back Squat block moved without changing prescriptions; the unavailable earlier control was not focused and focus moved to the reordered block. The save outcome received focus as a polite status. Move controls exposed exercise name, position, direction, and availability. Document client and scroll widths remained 375/375.
+- Rendered evidence: Live accessibility snapshots of the generated order, today-only disclosure, save action, and focused terminal outcome; computed active-element and viewport measurements.
+- Material limitation: Chromium/emulator evidence does not replace physical-device or assistive-technology testing.
+
+## Changed scenario
+
+- Scenario: UX-ORDER-04 - Apply a saved two-exercise context, create a more-specific eight-exercise order, and disclose precedence without focusing stale feedback.
+- Build / commit: Same TREK-294 working tree after the rendered focus regression was fixed and its focused test passed.
+- Viewport and starting state: Codex in-app Chromium at 390 x 844; synthetic saved Back Squat-before-Barbell Curl pair and canonical generated workout.
+- Actions: Generate the workout, confirm Preferred order applied, move Barbell Curl earlier, and save the full context.
+- Observed result: The generated pair order applied before editing. The terminal status named the full context, the superseded pair order, and when the pair still applies. With both statuses rendered, focus reached the new terminal save outcome. Document client and scroll widths remained 375/375.
+- Rendered evidence: Live accessibility snapshots and computed active-element/status/viewport measurements. A focused component regression mounts both statuses and asserts terminal-outcome focus.
+- Material limitation: The 51st-context eviction disclosure is covered by focused rendered component tests and emulator transaction evidence rather than a second browser seed containing 50 synthetic contexts.
+
+## Changed scenario
+
+- Scenario: UX-ORDER-02/06/07/08 - Verify grouped movement, Settings clearing, and narrow-screen reflow.
+- Build / commit: Same TREK-294 working tree.
+- Viewport and starting state: Codex in-app Chromium at 390 x 844 and 320 x 640; canonical synthetic emulator with a configured Barbell Curl/Cable Row superset.
+- Actions: Generate the configured superset, move it later, open Manage Catalog, clear saved order preferences through the native confirmation, and inspect the generated order controls at 320px.
+- Observed result: The named two-member superset rendered and moved as one consecutive block, retained focus after movement, and explained that member order remains in Settings. Clear rendered a focused success outcome. At 320px all order controls remained inside the viewport, the minimum control height was 44px, and document client and scroll widths were equal at 305/305.
+- Rendered evidence: Live accessibility snapshots of the grouped block, Settings action/outcome, and computed focus, control-height, clipping, and viewport measurements.
+- Material limitation: The grouped scenario uses a two-member superset; resolver tests cover expansion, split membership, and nonconsecutive collision variants.
+
+## Changed scenario
+
+- Scenario: UX-ORDER-05 - Recover from a future-order save that cannot reach Firestore.
+- Build / commit: Same TREK-294 working tree after final lifecycle review remediation.
+- Viewport and starting state: Codex in-app Chromium at 390 x 844 with a 375px document viewport; canonical synthetic generated workout reordered today, then the exact local Firestore emulator process was stopped before save.
+- Actions: Select Use this order in future workouts, observe the pending state, and wait for the Firestore client to definitively reject.
+- Observed result: While pending, Start workout and order controls were disabled and the status said `Saving this order for future workouts.` After rejection, Start workout and order controls were restored, Try again appeared, and an assertive alert said the future order was not saved while today's workout order remained unchanged. Document client and scroll widths remained 375/375.
+- Rendered evidence: Live accessibility snapshots of pending and rejected states plus computed Start/viewport measurements. Focused lifecycle tests independently prove the 15-second indeterminate branch restores Start without exposing retry before definitive rejection.
+- Material limitation: The rejection was induced by terminating only the synthetic local Firestore emulator; it does not represent production outage timing or every Firebase SDK retry schedule.
+
+## Changed scenario
+
+- Scenario: UX-ORDER-07 - Recover when Clear saved exercise-order preferences cannot reach Firestore.
+- Build / commit: Same TREK-294 working tree after final usability review.
+- Viewport and starting state: Codex in-app Chromium at 390 x 844 with a 375px document viewport; canonical synthetic Settings state, then the exact local Firestore emulator process was stopped before clearing.
+- Actions: Select Clear saved exercise-order preferences, accept the native confirmation naming future workouts and today's unchanged workout, and wait for definitive rejection.
+- Observed result: Settings retained the Order preference region and original Clear action, rendered the assertive alert `Couldn't clear saved exercise-order preferences. Try again.`, and exposed the distinct `Try clearing again` recovery action. Document client and scroll widths remained 375/375. The successful clear outcome is covered by the preceding grouped browser scenario.
+- Rendered evidence: Live accessibility snapshot of the Settings failure/retry state and computed alert/action/viewport measurements.
+- Material limitation: The rejection was induced by terminating only the synthetic local Firestore emulator; it does not represent production outage timing or every Firebase SDK retry schedule.

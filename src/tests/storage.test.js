@@ -19,7 +19,8 @@ const firestore = vi.hoisted(() => ({
 vi.mock('../utils/firestoreClient', () => ({
     loadFirestoreClient: async () => ({ ...firestore, db: { name: 'test-db' } }),
 }));
-import { getGenerationHistory, getHistoryPage, saveWorkout, saveImmutableWorkout, readImmutableWorkoutFromServer, getSettings, getCatalog, migrateLocalData, saveSettingsAndCatalogItem } from '../utils/storage';
+import { getGenerationHistory, getHistoryPage, saveWorkout, saveImmutableWorkout, readImmutableWorkoutFromServer, getSettings, getCatalog, migrateLocalData, saveSettingsAndCatalogItem, savePreferredOrderRule, clearPreferredOrderRules, touchPreferredOrderRuleUsage } from '../utils/storage';
+import { runTransaction } from '../utils/firestoreOperations';
 
 describe('Storage Layer (Async)', () => {
     beforeEach(() => {
@@ -36,6 +37,46 @@ describe('Storage Layer (Async)', () => {
         expect(typeof getCatalog).toBe('function');
         expect(typeof migrateLocalData).toBe('function');
         expect(typeof saveSettingsAndCatalogItem).toBe('function');
+        expect(typeof touchPreferredOrderRuleUsage).toBe('function');
+    });
+
+    it('exposes the transaction operation required by the production preferred-order save path', () => {
+        expect(typeof runTransaction).toBe('function');
+    });
+
+    it('touches only matching rule fingerprints and avoids a write when usage is unchanged', async () => {
+        const transaction = { get: vi.fn().mockResolvedValue({ data: () => ({
+            preferredOrderRules: [{ blocks: [{ exerciseIds: ['a'] }, { exerciseIds: ['b'] }] }],
+            preferredOrderRuleUsage: ['["a","b"]'],
+        }) }), set: vi.fn() };
+        firestore.runTransaction = vi.fn(async (_db, callback) => callback(transaction));
+        firestore.doc.mockReturnValue({ path: 'users/test-user' });
+        await touchPreferredOrderRuleUsage('test-user', [{ contextKey: '["a","b"]', fingerprint: '[[{"exerciseIds":["a"]}],[{"exerciseIds":["b"]}]]' }]);
+        expect(transaction.set).not.toHaveBeenCalled();
+    });
+
+    it('uses transactions for order save and clear without replacing unrelated settings', async () => {
+        const transaction = { get: vi.fn().mockResolvedValue({ data: () => ({ staleThreshold: 7, preferredOrderRules: [], preferredOrderRuleUsage: [] }) }), set: vi.fn() };
+        firestore.runTransaction = vi.fn(async (_db, callback) => callback(transaction)); firestore.doc.mockReturnValue({ path: 'users/test-user' });
+        await savePreferredOrderRule('test-user', { blocks: [{ exerciseIds: ['a'] }, { exerciseIds: ['b'] }] });
+        expect(transaction.set).toHaveBeenCalledWith({ path: 'users/test-user' }, expect.objectContaining({ preferredOrderRules: expect.any(Array), preferredOrderRuleUsage: ['["a","b"]'] }), { merge: true });
+        transaction.set.mockClear(); await clearPreferredOrderRules('test-user');
+        expect(transaction.set).toHaveBeenCalledWith({ path: 'users/test-user' }, { preferredOrderRules: [], preferredOrderRuleUsage: [] }, { merge: true });
+    });
+
+    it('returns transient override and eviction contexts without persisting outcome metadata', async () => {
+        const oldRules = [
+            { blocks: [{ exerciseIds: ['a'] }, { exerciseIds: ['b'] }] },
+            ...Array.from({ length: 49 }, (_, index) => ({ blocks: [{ exerciseIds: [`x${index}`] }, { exerciseIds: [`y${index}`] }] })),
+        ];
+        const oldUsage = oldRules.map(rule => JSON.stringify(rule.blocks.flatMap(block => block.exerciseIds).sort()));
+        const transaction = { get: vi.fn().mockResolvedValue({ data: () => ({ preferredOrderRules: oldRules, preferredOrderRuleUsage: oldUsage }) }), set: vi.fn() };
+        firestore.runTransaction = vi.fn(async (_db, callback) => callback(transaction)); firestore.doc.mockReturnValue({ path: 'users/test-user' });
+
+        await expect(savePreferredOrderRule('test-user', { blocks: [{ exerciseIds: ['a'] }, { exerciseIds: ['b'] }, { exerciseIds: ['c'] }] })).resolves.toMatchObject({
+            contextKey: '["a","b","c"]', evicted: '["x48","y48"]', overridden: [{ contextKey: '["a","b"]' }],
+        });
+        expect(Object.keys(transaction.set.mock.calls[0][1]).sort()).toEqual(['preferredOrderRuleUsage', 'preferredOrderRules']);
     });
 
     it('atomically saves a catalog change with its superset membership', async () => {

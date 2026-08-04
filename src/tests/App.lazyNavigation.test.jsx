@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const approved = uid => ({ uid, email: `${uid}@example.test` })
 
-async function mount({ evaluate = vi.fn(async () => ({ claims: { approved: true } })), settingsFactory, initialSessionState = { status: 'idle', activeWorkout: null }, resumedWorkout } = {}) {
+async function mount({ evaluate = vi.fn(async () => ({ claims: { approved: true } })), settingsFactory, initialSessionState = { status: 'idle', activeWorkout: null }, resumedWorkout, storage = {} } = {}) {
   const observers = []
   let updateSessionState; let settingsProps
   vi.doMock('../utils/auth', () => ({
@@ -12,7 +12,7 @@ async function mount({ evaluate = vi.fn(async () => ({ claims: { approved: true 
     isApprovedTokenResult: value => value?.claims?.approved === true,
     signOutUser: vi.fn(),
   }))
-  vi.doMock('../utils/storage', () => ({ migrateLocalData: vi.fn() }))
+  vi.doMock('../utils/storage', () => ({ migrateLocalData: vi.fn(), savePreferredOrderRule: vi.fn(), clearPreferredOrderRules: vi.fn(), touchPreferredOrderRuleUsage: vi.fn(), ...storage }))
   vi.doMock('../utils/useActiveWorkoutSession', async () => {
     const React = await import('react')
     return {
@@ -40,12 +40,12 @@ async function mount({ evaluate = vi.fn(async () => ({ claims: { approved: true 
   })
   vi.doMock('../components/Generator', () => ({ default: ({ timeBudget, setTimeBudget, unrecoveredGroups, setUnrecoveredGroups, onGenerate }) => <section><h2>Generate Workout</h2><p>Budget {timeBudget}; groups {unrecoveredGroups.join(',')}</p><label>Time Budget<input aria-label="Time Budget" type="range" value={timeBudget} onChange={event => setTimeBudget(Number(event.target.value))} /></label><label><input aria-label="Back unrecovered" type="checkbox" checked={unrecoveredGroups.includes('Back')} onChange={event => setUnrecoveredGroups(event.target.checked ? ['Back'] : [])} />Back</label><button onClick={() => setTimeBudget(60)}>Set 60</button><button onClick={() => setUnrecoveredGroups(['Back'])}>Set Back</button><button onClick={() => onGenerate([{ id: 'same-workout' }])}>Generate nonempty</button></section> }))
   vi.doMock('../components/Settings', settingsFactory ?? (() => ({ default: props => { settingsProps = props; return <section><h2>Catalog Management</h2><button onClick={props.onClose}>Close</button></section> } })))
-  vi.doMock('../components/WorkoutView', () => ({ default: ({ session, sessionState, onResume, onFinish }) => <section><h2>Ready to sweat?</h2><p>Status {sessionState.status}</p><p>Workout {sessionState.activeWorkout?.exercises?.[0]?.id}</p>{sessionState.status === 'recovery-available' && <button onClick={async () => { if (await session.resume()) onResume?.() }}>Resume</button>}{sessionState.status === 'generated' && <button onClick={async () => { await session.discard(); onFinish?.(); }}>Cancel generated</button>}</section> }))
+  vi.doMock('../components/WorkoutView', () => ({ default: ({ session, sessionState, onResume, onFinish, onComplete, onDiscard, preference, onSavePreference }) => <section><h2>Ready to sweat?</h2><p>Status {sessionState.status}</p><p>Workout {sessionState.activeWorkout?.exercises?.[0]?.id}</p><p>Preference {preference?.operation?.state ?? 'none'}</p>{sessionState.status === 'recovery-available' && <button onClick={async () => { if (await session.resume()) onResume?.() }}>Resume</button>}{sessionState.status === 'generated' && <><button onClick={() => onSavePreference?.({ blocks: [{ exerciseIds: ['a'] }, { exerciseIds: ['b'] }, { exerciseIds: ['c'] }] }, { a: 'Push-ups', b: 'Pull-ups', c: 'Sit-ups' })}>Save order</button><button onClick={() => onSavePreference?.({ blocks: [{ exerciseIds: ['c'] }, { exerciseIds: ['b'] }, { exerciseIds: ['a'] }] }, { a: 'Push-ups', b: 'Pull-ups', c: 'Sit-ups' })}>Save newer order</button><button onClick={() => (onComplete ?? onFinish)?.()}>Completed back to plan</button><button onClick={async () => { await session.discard(); (onDiscard ?? onFinish)?.() }}>Cancel generated</button></>}</section> }))
   const { default: App } = await import('../App'); render(<App />)
   return { emit: value => act(async () => observers[0](value)), emitSync: value => act(() => observers[0](value)), setSessionState: value => act(() => updateSessionState(value)), settingsProps: () => settingsProps, evaluate }
 }
 
-afterEach(() => { cleanup(); vi.resetModules(); vi.doUnmock('../utils/auth'); vi.doUnmock('../utils/storage'); vi.doUnmock('../utils/useActiveWorkoutSession'); vi.doUnmock('../components/Generator'); vi.doUnmock('../components/Settings'); vi.doUnmock('../components/WorkoutView') })
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.resetModules(); vi.doUnmock('../utils/auth'); vi.doUnmock('../utils/storage'); vi.doUnmock('../utils/useActiveWorkoutSession'); vi.doUnmock('../components/Generator'); vi.doUnmock('../components/Settings'); vi.doUnmock('../components/WorkoutView') })
 
 describe('lazy authorized navigation', () => {
   it('routes an active acquisition blocker to WorkoutView', async () => {
@@ -122,6 +122,76 @@ describe('lazy authorized navigation', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel generated' }));
     expect(await screen.findByRole('heading', { name: 'Generate Workout' })).toBeTruthy();
     expect(screen.queryByText('Workout same-workout')).toBeNull();
+  })
+
+  it('keeps one captured save operation across a Settings detour and releases only Start after 15 seconds', async () => {
+    let settle;
+    const savePreferredOrderRule = vi.fn(() => new Promise(resolve => { settle = resolve }));
+    const app = await mount({ storage: { savePreferredOrderRule } }); await app.emit(approved('u1')); await screen.findByRole('heading', { name: 'Generate Workout' });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate nonempty' })); await screen.findByRole('heading', { name: 'Ready to sweat?' });
+    vi.useFakeTimers();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save order' })) }); expect(screen.getByText('Preference pending')).toBeTruthy();
+    await act(async () => { vi.advanceTimersByTime(15_000) });
+    expect(screen.getByText('Preference indeterminate')).toBeTruthy(); vi.useRealTimers();
+    fireEvent.click(screen.getByRole('button', { name: 'Manage Catalog' })); await screen.findByRole('heading', { name: 'Catalog Management' });
+    expect(app.settingsProps().preference.operation.state).toBe('indeterminate');
+    await act(async () => settle({ contextKey: '["a","b"]' }));
+    expect(app.settingsProps().preference.operation.state).toBe('success');
+    expect(savePreferredOrderRule).toHaveBeenCalledOnce();
+  })
+
+  it('keeps an indeterminate save after completed-workout exit but clears it after discard', async () => {
+    let settle;
+    const savePreferredOrderRule = vi.fn(() => new Promise(resolve => { settle = resolve }));
+    const app = await mount({ storage: { savePreferredOrderRule } }); await app.emit(approved('u1')); await screen.findByRole('heading', { name: 'Generate Workout' });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate nonempty' })); await screen.findByRole('heading', { name: 'Ready to sweat?' }); vi.useFakeTimers(); fireEvent.click(screen.getByRole('button', { name: 'Save order' })); expect(screen.getByText('Preference pending')).toBeTruthy();
+    await act(async () => { vi.advanceTimersByTime(15_000) }); expect(screen.getByText('Preference indeterminate')).toBeTruthy(); vi.useRealTimers();
+    fireEvent.click(screen.getByRole('button', { name: 'Completed back to plan' })); await screen.findByRole('heading', { name: 'Generate Workout' }); fireEvent.click(screen.getByRole('button', { name: 'Manage Catalog' })); await screen.findByRole('heading', { name: 'Catalog Management' });
+    expect(app.settingsProps().preference.operation.state).toBe('indeterminate');
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Workout' })); await screen.findByRole('heading', { name: 'Ready to sweat?' }); fireEvent.click(screen.getByRole('button', { name: 'Cancel generated' }));
+    await screen.findByRole('heading', { name: 'Generate Workout' }); fireEvent.click(screen.getByRole('button', { name: 'Manage Catalog' })); await screen.findByRole('heading', { name: 'Catalog Management' });
+    expect(app.settingsProps().preference.operation).toBeNull();
+    await act(async () => settle({ contextKey: '["a","b","c"]', evicted: null, overridden: [] }));
+    expect(app.settingsProps().preference.operation).toBeNull();
+  })
+
+  it('keeps named override and eviction outcome copy above lazy destinations', async () => {
+    const savePreferredOrderRule = vi.fn().mockResolvedValue({ contextKey: '["a","b","c"]', evicted: '["a","b"]', overridden: [{ contextKey: '["a","b"]', rule: { blocks: [{ exerciseIds: ['a'] }, { exerciseIds: ['b'] }] } }] });
+    const app = await mount({ storage: { savePreferredOrderRule } }); await app.emit(approved('u1')); await screen.findByRole('heading', { name: 'Generate Workout' });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate nonempty' })); await screen.findByRole('heading', { name: 'Ready to sweat?' });
+    fireEvent.click(screen.getByRole('button', { name: 'Save order' })); await waitFor(() => expect(savePreferredOrderRule).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole('button', { name: 'Manage Catalog' })); await screen.findByRole('heading', { name: 'Catalog Management' });
+    expect(app.settingsProps().preference.operation.successMessage).toBe('Order saved. When Push-ups, Pull-ups, and Sit-ups all appear, this order takes priority over your saved Push-ups-before-Pull-ups order. Push-ups before Pull-ups still applies without Sit-ups. To keep up to 50 saved orders, Nudge replaced the saved order for Push-ups and Pull-ups.');
+  })
+
+  it('captures a later dirty save instead of reusing a prior successful candidate', async () => {
+    const savePreferredOrderRule = vi.fn().mockResolvedValue({ contextKey: '["a","b","c"]', evicted: null, overridden: [] });
+    const app = await mount({ storage: { savePreferredOrderRule } }); await app.emit(approved('u1')); await screen.findByRole('heading', { name: 'Generate Workout' });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate nonempty' })); await screen.findByRole('heading', { name: 'Ready to sweat?' });
+    fireEvent.click(screen.getByRole('button', { name: 'Save order' })); await waitFor(() => expect(screen.getByText('Preference success')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Save newer order' }));
+    await waitFor(() => expect(savePreferredOrderRule).toHaveBeenCalledTimes(2));
+    expect(savePreferredOrderRule.mock.calls[1][1]).toEqual({ blocks: [{ exerciseIds: ['c'] }, { exerciseIds: ['b'] }, { exerciseIds: ['a'] }] });
+  })
+
+  it('keeps a definitive save retry after a clear failure', async () => {
+    const candidate = { blocks: [{ exerciseIds: ['a'] }, { exerciseIds: ['b'] }, { exerciseIds: ['c'] }] };
+    const app = await mount({ storage: { savePreferredOrderRule: vi.fn().mockRejectedValue(new Error('offline')), clearPreferredOrderRules: vi.fn().mockRejectedValue(new Error('offline')) } }); await app.emit(approved('u1')); await screen.findByRole('heading', { name: 'Generate Workout' });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate nonempty' })); await screen.findByRole('heading', { name: 'Ready to sweat?' }); fireEvent.click(screen.getByRole('button', { name: 'Save order' }));
+    await waitFor(() => expect(screen.getByText('Preference failure')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Manage Catalog' })); await screen.findByRole('heading', { name: 'Catalog Management' });
+    await act(async () => { app.settingsProps().onClearPreferences() });
+    await waitFor(() => expect(app.settingsProps().preference.operation).toMatchObject({ state: 'failure', candidate }));
+  })
+
+  it('ignores a delayed save settlement after identity reset', async () => {
+    let settle;
+    const savePreferredOrderRule = vi.fn(() => new Promise(resolve => { settle = resolve }));
+    const app = await mount({ storage: { savePreferredOrderRule } }); await app.emit(approved('u1')); await screen.findByRole('heading', { name: 'Generate Workout' });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate nonempty' })); await screen.findByRole('heading', { name: 'Ready to sweat?' }); fireEvent.click(screen.getByRole('button', { name: 'Save order' }));
+    await app.emit(null); await screen.findByRole('button', { name: 'Sign in with Google' }); await act(async () => settle({ contextKey: '["a","b","c"]', evicted: null, overridden: [] }));
+    await app.emit(approved('u2')); await screen.findByRole('heading', { name: 'Generate Workout' }); fireEvent.click(screen.getByRole('button', { name: 'Manage Catalog' })); await screen.findByRole('heading', { name: 'Catalog Management' });
+    expect(app.settingsProps().preference.operation).toBeNull();
   })
 
   it('preserves same-UID lifted state but clears it for changed UID, pending access, and signout/reapproval', async () => {

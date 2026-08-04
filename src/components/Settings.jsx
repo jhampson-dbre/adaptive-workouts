@@ -107,7 +107,22 @@ function TrackingFields({ prefix = '', mode, values, setters, invalid = false, e
   );
 }
 
-export default function Settings({ onClose, onDirtyChange }) {
+function OrderPreferencePanel({ preference, onClearPreferences, onSavePreference, onDismissPreference }) {
+  const state = preference?.operation?.state;
+  const busy = ['pending', 'indeterminate', 'clearing'].includes(state);
+  return <section className="order-preference-panel" aria-label="Order preference"><h3>Order preference</h3>
+    {['pending', 'clearing'].includes(state) && <p role="status">{state === 'clearing' ? 'Clearing saved exercise-order preferences.' : 'Saving this order for future workouts.'}</p>}
+    {state === 'indeterminate' && <p role="status">Saving is taking longer than expected. You can start your workout; we'll confirm when it finishes.</p>}
+    {state === 'success' && <><p role="status">{preference.operation.successMessage ?? 'Order saved. It will be used when all of these exercises appear again.'}</p><button type="button" onClick={onDismissPreference}>Dismiss</button></>}
+    {state === 'failure' && <><p role="alert">Couldn't save this order for future workouts. This workout's order is unchanged.</p><button type="button" onClick={() => onSavePreference?.(preference.operation.candidate)}>Try again</button></>}
+    {state === 'cleared' && <p role="status">Saved exercise-order preferences cleared.</p>}
+    {state === 'clear-failure' && <><p role="alert">Couldn't clear saved exercise-order preferences. Try again.</p><button type="button" onClick={onClearPreferences}>Try clearing again</button></>}
+    <button type="button" disabled={busy} onClick={() => { if (window.confirm('Clear saved exercise-order preferences? Future workouts return to planner order. Today’s workout is unchanged.')) onClearPreferences?.(); }}>Clear saved exercise-order preferences</button>
+    {busy && <p>{state === 'clearing' ? 'Clearing saved exercise-order preferences.' : 'Wait for the current save to finish before clearing saved exercise-order preferences.'}</p>}
+  </section>;
+}
+
+export default function Settings({ onClose, onDirtyChange, preference, onClearPreferences, onSavePreference, onDismissPreference }) {
   const user = useContext(AuthContext);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -646,6 +661,7 @@ export default function Settings({ onClose, onDirtyChange }) {
         <h2>Settings</h2>
         <button className="close-btn" onClick={onClose}>Close</button>
       </div>
+      {(preference?.operation || onClearPreferences) && <OrderPreferencePanel {...{ preference, onClearPreferences, onSavePreference, onDismissPreference }} />}
       <div role="status" style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>
     </div>
   );
@@ -672,6 +688,7 @@ export default function Settings({ onClose, onDirtyChange }) {
         <button className="close-btn" onClick={onClose}>Close</button>
       </div>
 
+      <OrderPreferencePanel {...{ preference, onClearPreferences, onSavePreference, onDismissPreference }} />
       <section className="general-defaults" aria-labelledby="general-defaults-heading">
         <h3 id="general-defaults-heading">General defaults</h3>
         <div className="setting-group">

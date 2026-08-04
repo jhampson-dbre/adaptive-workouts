@@ -69,6 +69,7 @@ export default function Generator({
             performanceSeconds: timeBudget * 60,
             cooldownSeconds: settings.cooldownSeconds ?? generated.phaseTargets?.cooldownSeconds ?? 0,
           },
+          preferredOrderResolution: generated.preferredOrderResolution,
         });
       };
       
@@ -121,6 +122,7 @@ export default function Generator({
           performanceSeconds: timeBudget * 60,
           cooldownSeconds: legDayChoice.settings.cooldownSeconds ?? generated.phaseTargets?.cooldownSeconds ?? 0,
         },
+        preferredOrderResolution: generated.preferredOrderResolution,
       });
       setLegDayChoice(null);
     } catch (err) {

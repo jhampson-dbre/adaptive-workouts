@@ -16,12 +16,12 @@ const exercise = {
   isActive: true,
 };
 
-function renderSettings(catalog = [], settings = {}, onDirtyChange) {
+function renderSettings(catalog = [], settings = {}, onDirtyChange, preference, onClearPreferences = vi.fn()) {
   storage.getCatalog.mockResolvedValue(catalog);
   storage.getSettings.mockResolvedValue(settings);
   return render(
     <AuthContext.Provider value={{ uid: 'user-1' }}>
-      <Settings onClose={vi.fn()} onDirtyChange={onDirtyChange} />
+      <Settings onClose={vi.fn()} onDirtyChange={onDirtyChange} preference={preference} onClearPreferences={onClearPreferences} />
     </AuthContext.Provider>,
   );
 }
@@ -34,6 +34,30 @@ describe('Settings tracking configuration', () => {
   });
 
   afterEach(cleanup);
+
+  it('always provides saved-order clearing and explains why it is disabled during a save', async () => {
+    const clear = vi.fn();
+    renderSettings([], {}, undefined, { operation: null }, clear);
+    await screen.findByRole('heading', { name: 'General defaults' });
+    const clearButton = screen.getByRole('button', { name: 'Clear saved exercise-order preferences' });
+    expect(clearButton.disabled).toBe(false);
+
+    cleanup();
+    renderSettings([], {}, undefined, { operation: { state: 'indeterminate' } }, clear);
+    await screen.findByRole('heading', { name: 'General defaults' });
+    expect(screen.getByRole('button', { name: 'Clear saved exercise-order preferences' }).disabled).toBe(true);
+    expect(screen.getByText('Wait for the current save to finish before clearing saved exercise-order preferences.')).toBeTruthy();
+  });
+
+  it('shows ordinary, override, and eviction save outcomes in the order preference panel', async () => {
+    const ordinary = { operation: { state: 'success', successMessage: 'Order saved. It will be used when all of these exercises appear again.' } };
+    renderSettings([], {}, undefined, ordinary);
+    expect((await screen.findByRole('status')).textContent).toContain(ordinary.operation.successMessage);
+    cleanup();
+    const combined = 'Order saved. When Push-ups, Pull-ups, and Sit-ups all appear, this order takes priority over your saved Push-ups-before-Pull-ups order. Push-ups before Pull-ups still applies without Sit-ups. To keep up to 50 saved orders, Nudge replaced the saved order for Push-ups and Pull-ups.';
+    renderSettings([], {}, undefined, { operation: { state: 'success', successMessage: combined } });
+    expect((await screen.findByRole('status')).textContent).toContain(combined);
+  });
 
   it('creates an ordered superset with native member selects and saves it with settings', async () => {
     renderSettings([
