@@ -7,6 +7,7 @@ In Code Mode, within each bounded stage, run independent, functions.exec-availab
 ## Proportionality and anti-circularity
 
 Existing workflow text is migration input, not an acceptance criterion. Keep or block on a rule or reviewer finding only when it protects a named safety, authority, evidence, or outcome risk. Prefer the smallest sufficient workflow; unchanged evidence must not trigger another loop.
+Use `$maintain-agent-workflows` for changes to agent prompts, roles, skills, workflow gates, validators, or review routing.
 
 ## Global boundaries
 
