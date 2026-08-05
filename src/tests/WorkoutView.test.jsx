@@ -1,4 +1,6 @@
 import { act, render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { useState } from 'react';
 import { expect, test, vi, afterEach } from 'vitest';
 import WorkoutView from '../components/WorkoutView';
@@ -7,6 +9,7 @@ import { AuthContext } from '../context/AuthContext';
 import { activeWorkoutReducer, initializeActiveWorkout } from '../utils/activeWorkout';
 import { createActiveWorkoutSession } from '../utils/activeWorkoutSession';
 import { createActiveWorkoutCoordinator } from '../utils/activeWorkoutCoordinator';
+const styles = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8');
 
 afterEach(() => {
   cleanup();
@@ -249,6 +252,12 @@ test('places Start workout before dirty-order guidance and the future-save actio
   const dirty = screen.getByText('Your changes are for this workout only unless you save them.');
   expect(start.compareDocumentPosition(dirty) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(screen.getByText('This saved order applies when a future workout includes all these exercises. Other exercises may appear between them. To reorder exercises within a superset, go to Settings > Supersets.')).toBeTruthy();
+});
+
+test('insets WorkoutView ordering content without insetting Start workout or Settings panels', () => {
+  expect(styles).toMatch(/\.workout-view > \.order-controls > :is\(\.order-block, p\),\s*\.workout-view > \.order-preference-panel\s*\{\s*padding-inline: clamp\(22px, 7vw, 52px\);/);
+  expect(styles).toMatch(/@media \(max-width: 420px\)\s*\{\s*\.workout-view > \.order-controls > \.order-block > span\s*\{\s*flex-basis: 100%;/);
+  expect(styles).toMatch(/\.start-btn\s*\{\s*width: 100%;/);
 });
 
 test('uses display order outside a superset and continues group handoff until it is exhausted', async () => {

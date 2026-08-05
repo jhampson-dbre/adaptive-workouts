@@ -1511,6 +1511,12 @@ input:focus-visible {
   }
 }
  .order-controls, .order-preference-panel { display: grid; gap: .75rem; }
+ .workout-view > .order-controls > :is(.order-block, p),
+ .workout-view > .order-preference-panel { padding-inline: clamp(22px, 7vw, 52px); }
  .order-block { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
  .order-block span { flex: 1 1 12rem; }
  .order-block button, .order-preference-panel button { min-height: 44px; }
+
+@media (max-width: 420px) {
+ .workout-view > .order-controls > .order-block > span { flex-basis: 100%; min-width: 0; overflow-wrap: anywhere; }
+}
