@@ -486,18 +486,20 @@ test('starts explicitly with set controls disabled and one shared total timer', 
   expect(screen.queryByText('Ready when you are')).toBeNull();
   expect(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }).disabled).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
-  expect(screen.getByText('Perform').closest('li').getAttribute('aria-current')).toBe('step');
+  expect(screen.getByText('Workout').closest('li').getAttribute('aria-current')).toBe('step');
   act(() => vi.advanceTimersByTime(2000));
   expect(screen.getByLabelText('Total elapsed 0:02')).toBeDefined();
   expect(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }).disabled).toBe(false);
 });
 
-test('orients a started legacy workout as Performance', () => {
+test('orients a started legacy workout as Main workout', () => {
   const generated = initializeActiveWorkout(timedWorkout);
   const activeWorkout = activeWorkoutReducer(generated, { type: 'startWorkout', timestamp: Date.now() });
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'owned', activeWorkout, blocked: false }} /></AuthContext.Provider>);
   expect(screen.getByRole('heading', { name: 'Main workout' })).toBeDefined();
-  expect(screen.getByText('Perform').closest('li').getAttribute('aria-current')).toBe('step');
+  expect(screen.queryByRole('heading', { name: 'Performance' })).toBeNull();
+  expect(screen.getByText('Start each set as you begin it, then confirm when you finish.')).toBeDefined();
+  expect(screen.getByText('Workout').closest('li').getAttribute('aria-current')).toBe('step');
 });
 
 test('makes Finish primary in Cooldown and discloses remaining work', () => {
