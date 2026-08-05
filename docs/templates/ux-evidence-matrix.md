@@ -594,3 +594,43 @@ the safe method attempted and the best available alternative.
 - Observed result: Settings retained the Order preference region and original Clear action, rendered the assertive alert `Couldn't clear saved exercise-order preferences. Try again.`, and exposed the distinct `Try clearing again` recovery action. Document client and scroll widths remained 375/375. The successful clear outcome is covered by the preceding grouped browser scenario.
 - Rendered evidence: Live accessibility snapshot of the Settings failure/retry state and computed alert/action/viewport measurements.
 - Material limitation: The rejection was induced by terminating only the synthetic local Firestore emulator; it does not represent production outage timing or every Firebase SDK retry schedule.
+
+---
+
+## 2026-08-05 - TREK-296 mobile workout-order insets
+
+## Planning
+
+- Classification: `required`
+- Rationale: Workout-ready ordering labels and movement controls touched opposite phone edges, weakening hierarchy and tap clearance.
+- Approved scenario or artifact: Preserve the Nudge generated-workout hierarchy: inset supporting order content, keep movement controls at least 44px high, and retain the full-bleed signal-yellow Start workout action.
+
+## Changed scenario
+
+- Scenario: Generate the canonical eight-exercise workout and inspect ordinary ordering rows at phone and narrow reflow widths.
+- Build / commit: `codex/trek-296-297-workout-ux-fixes` working tree before the TREK-296 task commit.
+- Viewport and starting state: Codex in-app Chromium at 390 x 844 (375px document viewport) and 320 x 844 (305px document viewport); canonical synthetic emulator identity on Workout ready.
+- Actions: Plan the workout, inspect the first and subsequent ordering rows, and compare label, movement-control, viewport, and Start-workout geometry at both widths.
+- Observed result: At 390px, order content begins 27.29px from the left and ends at least 27.62px from the right; at 320px, the corresponding clearances are 22.40px and 22.73px. Narrow labels occupy their own line so Move earlier and Move later remain a coherent pair. Movement controls retain a 44px minimum height, document client and scroll widths remain equal at 375/375 and 305/305, and Start workout remains full-bleed.
+- Rendered evidence: `.impeccable/evidence/trek-296-order-inset-mobile.png` and `.impeccable/evidence/trek-296-order-inset-reflow-320.png`.
+- Material limitation: Chromium/emulator evidence does not replace physical-device Safari font rendering or touch testing.
+
+---
+
+## 2026-08-05 - TREK-297 adjacent completed-exercise details
+
+## Planning
+
+- Classification: `required`
+- Rationale: Expanding a completed exercise changed its toggle to Collapse while revealing the associated disclosure only below the entire exercise list, outside the phone viewport.
+- Approved scenario or artifact: Preserve the one-guided-action active-workout hierarchy and existing optional-set disclosure; place completed-exercise details inside the exercise toggle's own controlled reading context without adding scroll behavior or changing workout state.
+
+## Changed scenario
+
+- Scenario: Complete the first exercise during an active canonical workout, then activate its collapsed exercise toggle once.
+- Build / commit: `codex/trek-296-297-workout-ux-fixes` working tree before the TREK-297 task commit.
+- Viewport and starting state: Codex in-app Chromium at 390 x 844 (375px document viewport); canonical synthetic emulator workout with all three Barbell Curl sets confirmed and Back Squat still guided.
+- Actions: Expand the completed Barbell Curl exercise, inspect its aria-controlled region and visible viewport placement, then collapse it again.
+- Observed result: The first activation keeps focus on the expanded toggle and renders `Other sets in Barbell Curl` directly against the toggle bottom inside `exercise-0-sets`; the summary is visible in the current viewport and precedes the next exercise. The shared optional-disclosure styling preserves the 27.3px content inset, heading type, border, pointer affordance, and a 57.2px summary target in both placements. The unfinished Back Squat keeps its focused set and deferred optional details. Collapsing removes the controlled region while retaining toggle focus. Document client and scroll widths remain equal at 375/375.
+- Rendered evidence: `.impeccable/evidence/trek-297-completed-exercise-adjacent-mobile.png` plus live accessibility and computed DOM-placement measurements.
+- Material limitation: Chromium/emulator evidence does not replace physical-device Safari or assistive-technology testing.
