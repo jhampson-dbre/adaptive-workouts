@@ -1,4 +1,4 @@
-const STEPS = ['Plan', 'Perform', 'Cooldown', 'Review'];
+const STEPS = ['Plan', 'Workout', 'Cooldown', 'Review'];
 
 export default function JourneyProgress({ current }) {
   return (
