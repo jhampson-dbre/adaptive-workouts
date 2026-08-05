@@ -1,4 +1,4 @@
-import { act, render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { useState } from 'react';
@@ -428,6 +428,21 @@ test('presents one guided action before the optional exercise list', () => {
   const deferredSets = screen.getByText('Other sets in Plank');
   expect(startSet.compareDocumentPosition(alternateExercise) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(alternateExercise.compareDocumentPosition(deferredSets) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+test('keeps completed exercise details in its expanded controlled region', () => {
+  const completed = {
+    ...timedWorkout[0],
+    setRecords: timedWorkout[0].setRecords.map(record => ({ ...record, completed: true })),
+  };
+  renderWorkout([completed]);
+
+  const toggle = screen.getByRole('button', { name: /Plank.*expand/i });
+  fireEvent.click(toggle);
+
+  const details = within(document.getElementById(toggle.getAttribute('aria-controls'))).getByText('Other sets in Plank').closest('details');
+  expect(details.className).toBe('optional-set-details');
+  expect(styles).toContain('.optional-set-details');
 });
 
 test('a reconfirmed set returns to compact presentation after details and Undo', () => {

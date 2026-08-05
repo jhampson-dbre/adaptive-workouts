@@ -654,6 +654,14 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
     })()}
   />;
 
+  const renderOptionalSetDetails = (exercise, exerciseIndex, focusedSet, key) => {
+    const otherSets = exercise.setRecords.map((_, setIndex) => setIndex).filter(setIndex => setIndex !== focusedSet);
+    return otherSets.length > 0 && <details className="optional-set-details" key={key}>
+      <summary>Other sets in {exercise.name}</summary>
+      <div className="set-list">{otherSets.map(setIndex => renderSetRow(exercise, exerciseIndex, setIndex))}</div>
+    </details>;
+  };
+
   const exerciseList = <>
     <h2 className="exercise-list-heading">Exercises</h2>
     <ul className="workout-checklist">{activeWorkout.exercises.map((exercise, exerciseIndex) => {
@@ -669,17 +677,13 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
           <span className="exercise-number" aria-hidden="true">{String(exerciseIndex + 1).padStart(2, '0')}</span><span className="exercise-name"><strong>{exercise.name}</strong> <small>{exercise.muscleGroup}</small></span><span className="exercise-status">{confirmed}/{exercise.setRecords.length} · {timing} · {isExpanded ? 'Collapse' : 'Expand'}</span>
         </button>
         {supersetContext && <span className="superset-context">{supersetContext}</span>}
-        {isExpanded && <div id={`exercise-${exerciseIndex}-sets`} className="set-list">{focusedSet >= 0 && renderSetRow(exercise, exerciseIndex, focusedSet)}</div>}
+        {isExpanded && <div id={`exercise-${exerciseIndex}-sets`} className="set-list">{focusedSet >= 0 && renderSetRow(exercise, exerciseIndex, focusedSet)}{focusedSet < 0 && renderOptionalSetDetails(exercise, exerciseIndex, focusedSet)}</div>}
       </li>;
     })}</ul>
     <div className="deferred-set-details">{activeWorkout.exercises.map((exercise, exerciseIndex) => {
       if (!expanded[exerciseIndex]) return null;
       const focusedSet = focusedSetIndex(exercise, exerciseIndex);
-      const otherSets = exercise.setRecords.map((_, setIndex) => setIndex).filter(setIndex => setIndex !== focusedSet);
-      return otherSets.length > 0 && <details key={exercise.occurrenceId || `${exercise.id}-${exerciseIndex}`}>
-        <summary>Other sets in {exercise.name}</summary>
-        <div className="set-list">{otherSets.map(setIndex => renderSetRow(exercise, exerciseIndex, setIndex))}</div>
-      </details>;
+      return focusedSet >= 0 && renderOptionalSetDetails(exercise, exerciseIndex, focusedSet, exercise.occurrenceId || `${exercise.id}-${exerciseIndex}`);
     })}</div>
   </>;
 

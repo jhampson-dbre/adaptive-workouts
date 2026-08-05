@@ -622,15 +622,16 @@ input:focus-visible {
   margin: 0;
 }
 
-.deferred-set-details {
+.deferred-set-details,
+.optional-set-details {
   background: var(--bg);
 }
 
-.deferred-set-details details {
+.optional-set-details {
   border-bottom: 1px solid var(--border);
 }
 
-.deferred-set-details summary {
+.optional-set-details summary {
   padding: 16px clamp(22px, 7vw, 52px);
   color: var(--border);
   cursor: pointer;
