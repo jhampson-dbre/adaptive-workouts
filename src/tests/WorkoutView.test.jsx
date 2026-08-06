@@ -215,17 +215,20 @@ test('keeps the initiating save and retry control focused across preference stat
   const props = preference => <SessionHarness workout={timedWorkout} user={{ uid: 'test-user-id' }} api={{ action: vi.fn(), save: vi.fn(), discard: vi.fn() }} onFinish={() => {}} preference={preference} onSavePreference={onSavePreference} />;
   const acceptedResolution = { accepted: [{}] };
   const view = render(props({ baseline, resolution: acceptedResolution, operation: null }));
-  const save = screen.getByRole('button', { name: 'Use this order in future workouts' });
+  const save = screen.getByRole('button', { name: 'Save order for future workouts' });
   save.focus(); fireEvent.click(save);
   expect(onSavePreference).toHaveBeenCalledWith(candidate, { squat: 'Squat', plank: 'Plank' });
   view.rerender(props({ baseline, resolution: acceptedResolution, operation: { state: 'pending', candidate } }));
   expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Saving order…' }));
+  expect(screen.getByText('Saving this exercise order for future workouts.').compareDocumentPosition(screen.getByRole('button', { name: 'Start workout' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   view.rerender(props({ baseline: candidate, resolution: acceptedResolution, operation: { state: 'success', candidate, successMessage: 'Order saved for future workouts that include all these exercises.' } }));
   await waitFor(() => expect(document.activeElement).toBe(screen.getByText('Order saved for future workouts that include all these exercises.', { selector: '[role="status"]' })));
+  expect(screen.getByText('Order saved for future workouts that include all these exercises.', { selector: '[role="status"]' }).compareDocumentPosition(screen.getByRole('button', { name: 'Start workout' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   view.rerender(props({ baseline: candidate, operation: { state: 'success', candidate, successMessage: 'Order saved for workouts with Squat, Plank, and Sit-ups. This order takes priority over your saved preference for Squat before Plank. That preference still applies in workouts without Sit-ups. Nudge removed the saved order for Squat and Plank to keep your 50 most recently used orders.' } }));
   expect(screen.getByText('Order saved for workouts with Squat, Plank, and Sit-ups. This order takes priority over your saved preference for Squat before Plank. That preference still applies in workouts without Sit-ups. Nudge removed the saved order for Squat and Plank to keep your 50 most recently used orders.', { selector: '[role="status"]' })).toBeTruthy();
   view.rerender(props({ baseline, operation: { state: 'failure', candidate } }));
   const retry = screen.getByRole('button', { name: 'Try saving this exercise order again' });
+  expect(screen.getByRole('alert').compareDocumentPosition(screen.getByRole('button', { name: 'Start workout' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   retry.focus(); fireEvent.click(retry);
   expect(onSavePreference).toHaveBeenLastCalledWith(candidate, { squat: 'Squat', plank: 'Plank' });
   expect(document.activeElement).toBe(retry);
@@ -244,14 +247,18 @@ test('renders an applied preferred order passively without moving focus', () => 
   expect(document.activeElement).toBe(start);
 });
 
-test('places Start workout before dirty-order guidance and the future-save action', () => {
+test('places the compact future-save action after reordered blocks and before Start workout', () => {
   const baseline = { blocks: [{ exerciseIds: ['plank'] }, { exerciseIds: ['squat'] }] };
   renderWorkout(timedWorkout, () => {}, { uid: 'test-user-id' }, undefined, {}, { baseline });
   fireEvent.click(screen.getByRole('button', { name: 'Move Squat earlier; position 2 of 2; available' }));
+  const lastBlock = screen.getByRole('button', { name: 'Move Plank later; position 2 of 2; unavailable' }).closest('.order-block');
+  const save = screen.getByRole('button', { name: 'Save order for future workouts' });
   const start = screen.getByRole('button', { name: 'Start workout' });
-  const dirty = screen.getByText('Your changes are for this workout only unless you save them.');
-  expect(start.compareDocumentPosition(dirty) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(screen.getByText('This saved order applies when a future workout includes all these exercises. Other exercises may appear between them. To reorder exercises within a superset, go to Settings > Supersets.')).toBeTruthy();
+  expect(lastBlock.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(save.compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByText('Order changes apply only to today unless you save them.')).toBeTruthy();
+  expect(screen.queryByText(/This saved order applies when a future workout includes all these exercises/)).toBeNull();
+  expect(screen.queryByText(/To reorder exercises within a superset, go to Settings > Supersets/)).toBeNull();
 });
 
 test('insets WorkoutView ordering content without insetting Start workout or Settings panels', () => {
