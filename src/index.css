@@ -664,6 +664,9 @@ input:focus-visible {
 }
 
 .set-row-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
   font-size: var(--type-body);
   text-transform: capitalize;
 }

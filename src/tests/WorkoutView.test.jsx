@@ -641,11 +641,23 @@ test('times work inline, confirms a set, and exposes persistent overtime when co
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
   act(() => vi.advanceTimersByTime(2000));
   expect(screen.getByText('Work: 0:02')).toBeDefined();
+  expect(screen.getByText('Set 1: Working')).toBeDefined();
+  expect(screen.queryByText('Set 1: Ready')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: /Plank.*collapse/i }));
   act(() => vi.advanceTimersByTime(3000));
   expect(screen.getByRole('button', { name: /Plank.*rest overtime/i })).toBeDefined();
   expect(screen.getByRole('status').textContent).toMatch(/Plank set 1 rest is complete/i);
+});
+
+test('separates an active set status from its target structurally', () => {
+  renderWorkout(weighted);
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Bench Press exercise 1 set 1 start/i }));
+
+  const heading = screen.getByText('Set 1: Working').parentElement;
+  expect(heading.querySelector('.set-heading-status')).toBeDefined();
+  expect(heading.querySelector('.set-heading-target')).toBeDefined();
 });
 
 test('announces every rest that completes on the same shared tick', () => {

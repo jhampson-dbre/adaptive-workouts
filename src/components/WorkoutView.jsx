@@ -260,7 +260,7 @@ function SetRow({ exercise, exerciseIndex, setIndex, started, activeTimer, activ
     onStart(exerciseIndex, setIndex);
   };
   return <section className={`set-row ${status}${isActive ? ' active-work' : ''}`} aria-label={prefix}>
-    <div className="set-row-heading"><strong>Set {setIndex + 1}: {isResting ? 'Resting' : status === 'ready' ? 'Ready' : status}</strong>{exercise.trackingMode === 'weighted' && <span>Target: {record.targetWeight} lb × {record.targetReps}</span>}{exercise.trackingMode === 'bodyweight' && <span>Target: {record.targetReps} reps</span>}</div>
+    <div className="set-row-heading"><strong className="set-heading-status">Set {setIndex + 1}: {isActive ? 'Working' : isResting ? 'Resting' : status === 'ready' ? 'Ready' : status}</strong>{exercise.trackingMode === 'weighted' && <span className="set-heading-target">Target: {record.targetWeight} lb × {record.targetReps}</span>}{exercise.trackingMode === 'bodyweight' && <span className="set-heading-target">Target: {record.targetReps} reps</span>}</div>
     {(!record.completed || showDetails) && <><div className="set-inputs"><PerformanceInputs {...{ exercise, exerciseIndex, setIndex, disabled: inputDisabled, dispatch: action => { onClearError(); dispatch(action); } }} /></div>
       {exercise.trackingMode === 'weighted' && <p className="recommendation-reason" aria-label={`${prefix} recommendation reason`}>{recommendationText(exercise, record)}</p>}</>}
     {error && <p id={errorId} className="error-message" role="alert">{error}</p>}
