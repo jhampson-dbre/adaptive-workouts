@@ -208,6 +208,20 @@ test('keeps move focus and gives each order control its position, availability, 
   expect(document.activeElement).toBe(screen.getByText('Superset: Long Row Exercise Name and Long Press Exercise Name. Moves together. To reorder exercises within this superset, go to Settings > Supersets.').closest('.order-block'));
 });
 
+test('retires the temporary order-move announcement after saving that order', async () => {
+  const baseline = { blocks: [{ exerciseIds: ['plank'] }, { exerciseIds: ['squat'] }] };
+  const candidate = { blocks: [{ exerciseIds: ['squat'] }, { exerciseIds: ['plank'] }] };
+  const props = preference => <SessionHarness workout={timedWorkout} user={{ uid: 'test-user-id' }} api={{ action: vi.fn(), save: vi.fn(), discard: vi.fn() }} onFinish={() => {}} preference={preference} />;
+  const view = render(props({ baseline, operation: null }));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Move Squat earlier; position 2 of 2; available' }));
+  await screen.findByText('Squat moved to position 1 of 2. This change is for this workout only.');
+
+  view.rerender(props({ baseline: candidate, operation: { state: 'success', candidate, successMessage: 'Order saved.' } }));
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByText('Order saved.', { selector: '[role="status"]' })));
+  expect(screen.queryByText(/This change is for this workout only/)).toBeNull();
+});
+
 test('keeps the initiating save and retry control focused across preference states', async () => {
   const onSavePreference = vi.fn();
   const baseline = { blocks: [{ exerciseIds: ['squat'] }, { exerciseIds: ['plank'] }] };

@@ -744,3 +744,13 @@ the safe method attempted and the best available alternative.
 - Observed result: The 304.67px-wide result panel contains one `Order saved.` status and one full-width Dismiss action without clipping. Focus remains on the Plank exercise toggle, the following Start set action remains dominant and usable, and document client/scroll widths remain equal at 305/305.
 - Rendered evidence: `.impeccable/evidence/trek-301-late-success-reflow-320.jpg`, plus live panel geometry, status/action inventory, active-element, and viewport measurements.
 - Material limitation: The synthetic fixture proves the production presentation and focus-preserving rerender; it does not simulate Firebase latency or every browser announcement cadence.
+
+## Remediation recheck
+
+- Scenario: Move one generated exercise, save the resulting order for future workouts, and verify that the temporary current-workout-only announcement retires after success.
+- Build / commit: `bd36dea` working tree with the focused TREK-301 journey-review remediation; full WorkoutView suite 92/92, diff-check, scoped code review, and scoped task-conformance review green.
+- Viewport and starting state: Fresh coordinator-owned UX-10-01 lease in Codex in-app Chromium at 390 x 844; approved synthetic identity and clean Plan start.
+- Actions: Generate a workout; move Barbell Curl from position 1 to position 2; inspect the temporary semantic movement announcement; save the order for future workouts; wait for success; inspect the whole viewport, live-region inventory, and active element after an additional 1.2 seconds.
+- Observed result: Before save, the semantic status correctly said the move was for this workout only. After save, the viewport showed focused `Order saved.` before Start workout; semantic inventory contained one empty status and one nonempty `Order saved.` status, with no current `this workout only`, `current workout only`, or `only to today` content. The affected ux-usability-reviewer recheck returned `ready` with no direct defect.
+- Rendered evidence: Live final-build viewport inspection, semantic status inventory, and programmatic focus evidence from isolated lease `f03afe5c-e526-47ec-953d-0e38e7422981`.
+- Material limitation: Semantic structure and focus were verified without a real screen-reader announcement or a next-workout persistence check. Existing transaction tests and ordering evidence cover persistence behavior; this remediation changes only the temporary local movement announcement.

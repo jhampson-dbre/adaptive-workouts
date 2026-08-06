@@ -384,8 +384,9 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
   }, [activeWorkout.exercises]);
 
   useEffect(() => {
-    if (started || preference?.operation?.state !== 'success') return;
-    saveOutcomeRef.current?.focus();
+    if (preference?.operation?.state !== 'success') return;
+    setOrderAnnouncement('');
+    if (!started) saveOutcomeRef.current?.focus();
   }, [started, preference?.operation?.state]);
 
   useEffect(() => {
