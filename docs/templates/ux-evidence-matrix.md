@@ -634,3 +634,33 @@ the safe method attempted and the best available alternative.
 - Observed result: The first activation keeps focus on the expanded toggle and renders `Other sets in Barbell Curl` directly against the toggle bottom inside `exercise-0-sets`; the summary is visible in the current viewport and precedes the next exercise. The shared optional-disclosure styling preserves the 27.3px content inset, heading type, border, pointer affordance, and a 57.2px summary target in both placements. The unfinished Back Squat keeps its focused set and deferred optional details. Collapsing removes the controlled region while retaining toggle focus. Document client and scroll widths remain equal at 375/375.
 - Rendered evidence: `.impeccable/evidence/trek-297-completed-exercise-adjacent-mobile.png` plus live accessibility and computed DOM-placement measurements.
 - Material limitation: Chromium/emulator evidence does not replace physical-device Safari or assistive-technology testing.
+
+---
+
+## 2026-08-06 - TREK-299 active set timer clarity
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-299 changes live set/rest hierarchy, wording across the planned-rest boundary, collapsed discovery, and the legibility of time-sensitive guidance during a phone-at-a-distance workout.
+- Approved scenario or artifact: Preserve the Nudge core-journey one-signal rule and guided-set placement while showing one instance of each visible timer identity, retaining collapsed discovery, and distinguishing optional early start from ready-to-start states.
+
+## Changed scenario
+
+- Scenario: Start and confirm a set in an expanded exercise, compare its detailed active-work and planned-rest states with the same exercise collapsed, then observe the rest reach overtime.
+- Build / commit: `f88b4f7` (including the TREK-299 implementation in `6d576f7`); full WorkoutView suite 89/89, lint, code review, task-conformance review, independent usability review, Ponytail proposal pass, and diff-check green.
+- Viewport and starting state: Codex in-app Chromium at 390 x 844 with a 375px document viewport; canonical synthetic emulator workout with Barbell Curl expanded.
+- Actions: Start Barbell Curl set 1; inspect active work; confirm the set; inspect planned rest; collapse and re-expand Barbell Curl; wait through planned-rest completion; inspect the ready/overtime state.
+- Observed result: Expanded active work shows `Set 3: Working`, a separately spaced target, one 320.08 x 60px detailed work timer, and no matching compact header timer. Expanded planned rest shows one 320.08 x 132px tabular-numeral countdown, `Set 2: Resting`, and a 320.08 x 116.4px `Start set early` action; the matching header says only `2 sets remaining`. Collapsing removes the detailed timer and restores `rest 1:23 remaining` in the accessible header. After planned rest, re-expansion shows `Set 2: Ready`, `Start set`, and factual `Rest overtime +0:58` while suppressing the matching compact copy. Document client and scroll widths remain equal at 375/375.
+- Rendered evidence: `.impeccable/evidence/trek-299-active-work-mobile.jpg`, `.impeccable/evidence/trek-299-active-work-reflow-320.jpg`, `.impeccable/evidence/trek-299-planned-rest-mobile.jpg`, `.impeccable/evidence/trek-299-collapsed-concurrent-mobile.jpg`, and `.impeccable/evidence/trek-299-overtime-mobile.jpg`, plus live accessibility snapshots and computed timer/action/viewport measurements.
+- Material limitation: The exact zero instant is covered by the focused component regression because a one-second live browser snapshot is nondeterministic. Chromium/emulator evidence does not replace physical-device or assistive-technology testing.
+
+## Changed scenario
+
+- Scenario: Keep one exercise's rest discoverable while expanding a different exercise with its own active rest, then verify the same detailed state at narrow reflow width.
+- Build / commit: Same `f88b4f7` build.
+- Viewport and starting state: Codex in-app Chromium at 390 x 844 and 320 x 844 with 375px and 305px document viewports; canonical synthetic emulator workout with concurrent Barbell Curl and Back Squat rests.
+- Actions: Collapse Barbell Curl during its active rest; start and confirm Back Squat set 1; keep Back Squat expanded; inspect both timer identities at 390px; resize to 320px and inspect the detailed rest and early-start action.
+- Observed result: Collapsed Barbell Curl retains `rest 1:13 remaining` while expanded Back Squat shows one `Rest: 3:00 remaining / 3:00 planned` detail and suppresses only Back Squat's matching compact copy. At 320px the detailed timer remains dominant at 259.88 x 132px with tabular numerals, `Set 2: Resting` remains coherent with `Start set early`, the action remains 116.4px high, and document client and scroll widths remain equal at 305/305.
+- Rendered evidence: `.impeccable/evidence/trek-299-collapsed-concurrent-mobile.jpg` and `.impeccable/evidence/trek-299-planned-rest-reflow-320.jpg`, plus live accessibility snapshots and computed timer/action/viewport measurements at both widths.
+- Material limitation: Superset owner/recommended-next identity splitting is covered by a focused production-component regression rather than a separately seeded browser workout. The rendered concurrent-rest scenario proves distinct timer identities remain discoverable. Chromium/emulator evidence does not replace physical-device or assistive-technology testing.
