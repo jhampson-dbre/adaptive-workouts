@@ -17,6 +17,18 @@ actions, observed result, rendered evidence, and any material limitation in
 `docs/templates/ux-evidence-matrix.md`. Never require sensitive, personal, or
 production evidence.
 
+For required core-journey UI whose outcome depends on context across screens, phases,
+time, or physical usage, review one goal-first continuation journey per stabilized
+combined evidence set. Start before the changed action and continue through the next
+meaningful boundary, using the whole viewport and the real usage context; where
+realistic, proceed without optional cleanup such as dismissing transient feedback.
+Give the ux-usability-reviewer the user goal, usage context, build and starting state,
+and safe scenario controls, but withhold expected labels, layout, and implementation
+rationale until its independent assessment. Related tasks on one branch may share this
+journey and one remediation batch. If the approved UX artifact itself causes a direct
+usability defect, route it back for design reconsideration; the reviewer does not
+redesign it. Unchanged evidence does not trigger another review.
+
 When a changed interaction opens a browser-owned dialog, an active-dialog click
 timeout is incomplete changed-surface evidence, not an unavailable-tooling
 limitation; automation must handle the dialog concurrently with its trigger and
