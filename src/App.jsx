@@ -144,13 +144,13 @@ function App() {
     )
   }, [clearPreferenceTimer, preference.operation, user])
   const dismissPreference = useCallback(() => setPreference(current => current.operation?.state === 'success' ? { ...current, operation: null } : current), [])
-  const onStarted = useCallback(exercises => {
+  const onStarted = useCallback((exercises, successOperationId) => {
     const positions = new Map(exercises.map((exercise, index) => [exercise.id, index]))
     const accepted = (preference.resolution?.accepted ?? []).filter(rule => rule.projectedConstraints?.every(([before, after]) =>
       Math.max(...before.map(id => positions.get(id) ?? -1)) < Math.min(...after.map(id => positions.get(id) ?? Infinity)),
     ))
     if (accepted.length && user) void import('./utils/storage').then(({ touchPreferredOrderRuleUsage }) => touchPreferredOrderRuleUsage(user.uid, accepted)).catch(() => {})
-    setPreference(current => ({ ...current, resolution: null, operation: current.operation?.state === 'success' ? null : current.operation }))
+    setPreference(current => ({ ...current, resolution: null, operation: successOperationId != null && current.operation?.state === 'success' && current.operation.id === successOperationId ? null : current.operation }))
   }, [preference.resolution, user])
 
   const invalidate = useCallback(() => {

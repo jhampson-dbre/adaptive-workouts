@@ -249,6 +249,19 @@ test('keeps focus when an in-progress save settles after Start and lets the succ
   expect(onDismissPreference).toHaveBeenCalledOnce();
 });
 
+test('passes no success operation ID when a save settles during Start', async () => {
+  let settleStart;
+  const onStarted = vi.fn();
+  const activeWorkout = initializeActiveWorkout(timedWorkout, { phaseTimingEnabled: true });
+  const session = { action: vi.fn(() => new Promise(resolve => { settleStart = resolve })), save: vi.fn(), discard: vi.fn() };
+  const props = preference => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={session} sessionState={{ status: 'owned', activeWorkout, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 } }} preference={preference} onStarted={onStarted} /></AuthContext.Provider>;
+  const view = render(props({ operation: { state: 'indeterminate' } }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+  view.rerender(props({ operation: { state: 'success', id: 7 } }));
+  await act(async () => settleStart(true));
+  expect(onStarted).toHaveBeenCalledWith(activeWorkout.exercises, null);
+});
+
 test('renders an applied preferred order passively without moving focus', () => {
   const props = preference => <SessionHarness workout={timedWorkout} user={{ uid: 'test-user-id' }} api={{ action: vi.fn(), save: vi.fn(), discard: vi.fn() }} onFinish={() => {}} preference={preference} />;
   const view = render(props({ baseline: { blocks: [{ exerciseIds: ['squat'] }, { exerciseIds: ['plank'] }] }, operation: null }));
