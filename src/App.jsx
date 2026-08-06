@@ -35,7 +35,7 @@ const successMessageFor = (candidate, result, names) => {
   const override = result.overridden?.[0]
   const message = override
     ? `Order saved for workouts with ${exerciseList(JSON.parse(result.contextKey), names)}. This order takes priority over your saved preference for ${ruleOrder(override.rule, names)}. That preference still applies in workouts without ${exerciseList(JSON.parse(result.contextKey).filter(id => !JSON.parse(override.contextKey).includes(id)), names)}.`
-    : 'Order saved for future workouts that include all these exercises.'
+    : 'Order saved.'
   return result.evicted ? `${message} Nudge removed the saved order for ${exerciseList(JSON.parse(result.evicted), names)} to keep your 50 most recently used orders.` : message
 }
 
@@ -144,13 +144,13 @@ function App() {
     )
   }, [clearPreferenceTimer, preference.operation, user])
   const dismissPreference = useCallback(() => setPreference(current => current.operation?.state === 'success' ? { ...current, operation: null } : current), [])
-  const onStarted = useCallback(exercises => {
+  const onStarted = useCallback((exercises, successOperationId) => {
     const positions = new Map(exercises.map((exercise, index) => [exercise.id, index]))
     const accepted = (preference.resolution?.accepted ?? []).filter(rule => rule.projectedConstraints?.every(([before, after]) =>
       Math.max(...before.map(id => positions.get(id) ?? -1)) < Math.min(...after.map(id => positions.get(id) ?? Infinity)),
     ))
     if (accepted.length && user) void import('./utils/storage').then(({ touchPreferredOrderRuleUsage }) => touchPreferredOrderRuleUsage(user.uid, accepted)).catch(() => {})
-    setPreference(current => ({ ...current, resolution: null }))
+    setPreference(current => ({ ...current, resolution: null, operation: successOperationId != null && current.operation?.state === 'success' && current.operation.id === successOperationId ? null : current.operation }))
   }, [preference.resolution, user])
 
   const invalidate = useCallback(() => {

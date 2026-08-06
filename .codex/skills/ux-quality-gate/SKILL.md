@@ -17,6 +17,49 @@ actions, observed result, rendered evidence, and any material limitation in
 `docs/templates/ux-evidence-matrix.md`. Never require sensitive, personal, or
 production evidence.
 
+For required core-journey UI whose outcome depends on context across screens, phases,
+time, or physical usage, review one goal-first continuation journey per stabilized
+combined evidence set. Keep the final task represented by a shared journey in progress
+until this review is ready; earlier tasks may complete.
+
+Dispatch a fresh ux-usability-reviewer with only the user goal, usage context, final
+build and starting state, and safe scenario controls. Do not initially provide task
+descriptions, acceptance criteria, approved artifacts, diffs, the evidence matrix,
+captioned screenshots, expected labels or layout, observed-result narratives, or
+implementation rationale. The reviewer traverses the final build live from before the
+changed action through the next meaningful boundary, using the whole viewport and,
+where realistic, proceeding without optional cleanup. If the reviewer cannot control
+the live final build, the journey review is blocked. Screenshots, recordings, narrated
+transitions, and previously collected evidence belong to changed-surface review and do
+not substitute for an independent journey.
+
+After the reviewer records its independent findings, disclose approved intent or
+changed-surface evidence only when needed to reconcile coverage or scope. Matching the
+artifact does not erase an observed usability defect. A material claim about physical
+usage needs representative evidence or a safe proxy; viewport fit alone does not prove
+contextual legibility. Missing evidence for the named risk blocks. Related tasks on one
+branch may share this journey and one remediation batch. Route defects caused by the
+approved artifact back for design reconsideration; the reviewer does not redesign it.
+Unchanged evidence does not trigger another review.
+
+After reconciliation, the coordinator owns readiness and disposition. A defect caused
+by or directly affecting the branch's changed area blocks and returns to its owning
+task. A defect in approved intent blocks for product or design reconsideration unless
+the proper authority explicitly defers it. Pre-existing friction does not silently
+expand the branch: track it separately, and block only when it prevents, makes unsafe,
+or materially invalidates the reviewed goal, or the branch worsens it. Repair an
+environment or start-state problem immediately and repeat only the affected observation
+when it blocks the named journey risk; otherwise treat it as an evidence limitation,
+not a product defect. A missing observation blocks only when it covers the named
+material risk. Severity sets priority, not scope.
+
+Log each environment or start-state occurrence on the current Trekker task with a
+stable issue-class label, observed state and effect, review lease or build context, and
+immediate repair. Search Trekker for that label and adjacent terms. On the second
+distinct occurrence, search EPIC-6 for a duplicate, then create or extend one workflow
+improvement task linking the encounters and owning durable resolution; this follow-up
+does not replace immediate repair. Do not create a new task for a lone occurrence.
+
 When a changed interaction opens a browser-owned dialog, an active-dialog click
 timeout is incomplete changed-surface evidence, not an unavailable-tooling
 limitation; automation must handle the dialog concurrently with its trigger and

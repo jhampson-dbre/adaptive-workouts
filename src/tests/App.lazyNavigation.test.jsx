@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const approved = uid => ({ uid, email: `${uid}@example.test` })
 
-async function mount({ evaluate = vi.fn(async () => ({ claims: { approved: true } })), settingsFactory, initialSessionState = { status: 'idle', activeWorkout: null }, resumedWorkout, storage = {} } = {}) {
+async function mount({ evaluate = vi.fn(async () => ({ claims: { approved: true } })), settingsFactory, initialSessionState = { status: 'idle', activeWorkout: null }, resumedWorkout, storage = {}, startWorkout = vi.fn(async () => true) } = {}) {
   const observers = []
   let updateSessionState; let settingsProps
   vi.doMock('../utils/auth', () => ({
@@ -40,7 +40,7 @@ async function mount({ evaluate = vi.fn(async () => ({ claims: { approved: true 
   })
   vi.doMock('../components/Generator', () => ({ default: ({ timeBudget, setTimeBudget, unrecoveredGroups, setUnrecoveredGroups, onGenerate }) => <section><h2>Generate Workout</h2><p>Budget {timeBudget}; groups {unrecoveredGroups.join(',')}</p><label>Time Budget<input aria-label="Time Budget" type="range" value={timeBudget} onChange={event => setTimeBudget(Number(event.target.value))} /></label><label><input aria-label="Back unrecovered" type="checkbox" checked={unrecoveredGroups.includes('Back')} onChange={event => setUnrecoveredGroups(event.target.checked ? ['Back'] : [])} />Back</label><button onClick={() => setTimeBudget(60)}>Set 60</button><button onClick={() => setUnrecoveredGroups(['Back'])}>Set Back</button><button onClick={() => onGenerate([{ id: 'same-workout' }])}>Generate nonempty</button></section> }))
   vi.doMock('../components/Settings', settingsFactory ?? (() => ({ default: props => { settingsProps = props; return <section><h2>Catalog Management</h2><button onClick={props.onClose}>Close</button></section> } })))
-  vi.doMock('../components/WorkoutView', () => ({ default: ({ session, sessionState, onResume, onFinish, onComplete, onDiscard, preference, onSavePreference }) => <section><h2>Ready to sweat?</h2><p>Status {sessionState.status}</p><p>Workout {sessionState.activeWorkout?.exercises?.[0]?.id}</p><p>Preference {preference?.operation?.state ?? 'none'}</p>{sessionState.status === 'recovery-available' && <button onClick={async () => { if (await session.resume()) onResume?.() }}>Resume</button>}{sessionState.status === 'generated' && <><button onClick={() => onSavePreference?.({ blocks: [{ exerciseIds: ['a'] }, { exerciseIds: ['b'] }, { exerciseIds: ['c'] }] }, { a: 'Push-ups', b: 'Pull-ups', c: 'Sit-ups' })}>Save order</button><button onClick={() => onSavePreference?.({ blocks: [{ exerciseIds: ['c'] }, { exerciseIds: ['b'] }, { exerciseIds: ['a'] }] }, { a: 'Push-ups', b: 'Pull-ups', c: 'Sit-ups' })}>Save newer order</button><button onClick={() => (onComplete ?? onFinish)?.()}>Completed back to plan</button><button onClick={async () => { await session.discard(); (onDiscard ?? onFinish)?.() }}>Cancel generated</button></>}</section> }))
+  vi.doMock('../components/WorkoutView', () => ({ default: ({ session, sessionState, onResume, onFinish, onComplete, onDiscard, preference, onSavePreference, onStarted }) => <section><h2>Ready to sweat?</h2><p>Status {sessionState.status}</p><p>Workout {sessionState.activeWorkout?.exercises?.[0]?.id}</p><p>Preference {preference?.operation?.state ?? 'none'}</p>{sessionState.status === 'recovery-available' && <button onClick={async () => { if (await session.resume()) onResume?.() }}>Resume</button>}{sessionState.status === 'generated' && <><button onClick={() => onSavePreference?.({ blocks: [{ exerciseIds: ['a'] }, { exerciseIds: ['b'] }, { exerciseIds: ['c'] }] }, { a: 'Push-ups', b: 'Pull-ups', c: 'Sit-ups' })}>Save order</button><button onClick={() => onSavePreference?.({ blocks: [{ exerciseIds: ['c'] }, { exerciseIds: ['b'] }, { exerciseIds: ['a'] }] }, { a: 'Push-ups', b: 'Pull-ups', c: 'Sit-ups' })}>Save newer order</button><button onClick={async () => { const successId = preference?.operation?.state === 'success' ? preference.operation.id : undefined; if (await startWorkout()) onStarted?.(sessionState.activeWorkout.exercises, successId) }}>Start workout</button><button onClick={() => (onComplete ?? onFinish)?.()}>Completed back to plan</button><button onClick={async () => { await session.discard(); (onDiscard ?? onFinish)?.() }}>Cancel generated</button></>}</section> }))
   const { default: App } = await import('../App'); render(<App />)
   return { emit: value => act(async () => observers[0](value)), emitSync: value => act(() => observers[0](value)), setSessionState: value => act(() => updateSessionState(value)), settingsProps: () => settingsProps, evaluate }
 }
@@ -130,14 +130,38 @@ describe('lazy authorized navigation', () => {
     const app = await mount({ storage: { savePreferredOrderRule } }); await app.emit(approved('u1')); await screen.findByRole('heading', { name: 'Generate Workout' });
     fireEvent.click(screen.getByRole('button', { name: 'Generate nonempty' })); await screen.findByRole('heading', { name: 'Ready to sweat?' });
     vi.useFakeTimers();
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save order' })) }); expect(screen.getByText('Preference pending')).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save order' })) }); expect(screen.getByText('Preference pending')).toBeTruthy(); fireEvent.click(screen.getByRole('button', { name: 'Start workout' })); expect(screen.getByText('Preference pending')).toBeTruthy();
     await act(async () => { vi.advanceTimersByTime(15_000) });
-    expect(screen.getByText('Preference indeterminate')).toBeTruthy(); vi.useRealTimers();
+    expect(screen.getByText('Preference indeterminate')).toBeTruthy(); vi.useRealTimers(); fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
     fireEvent.click(screen.getByRole('button', { name: 'Manage Catalog' })); await screen.findByRole('heading', { name: 'Catalog Management' });
     expect(app.settingsProps().preference.operation.state).toBe('indeterminate');
     await act(async () => settle({ contextKey: '["a","b"]' }));
     expect(app.settingsProps().preference.operation.state).toBe('success');
     expect(savePreferredOrderRule).toHaveBeenCalledOnce();
+  })
+
+  it('retires only a successful preference save when the workout starts', async () => {
+    const candidate = { blocks: [{ exerciseIds: ['a'] }, { exerciseIds: ['b'] }, { exerciseIds: ['c'] }] };
+    const savePreferredOrderRule = vi.fn().mockResolvedValue({ contextKey: '["a","b","c"]', evicted: null, overridden: [] });
+    const app = await mount({ storage: { savePreferredOrderRule } }); await app.emit(approved('u1')); await screen.findByRole('heading', { name: 'Generate Workout' });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate nonempty' })); await screen.findByRole('heading', { name: 'Ready to sweat?' });
+    fireEvent.click(screen.getByRole('button', { name: 'Save order' })); await waitFor(() => expect(screen.getByText('Preference success')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Manage Catalog' })); await screen.findByRole('heading', { name: 'Catalog Management' });
+    expect(app.settingsProps().preference.operation.successMessage).toBe('Order saved.');
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Workout' })); await screen.findByRole('heading', { name: 'Ready to sweat?' });
+    fireEvent.click(screen.getByRole('button', { name: 'Start workout' })); fireEvent.click(screen.getByRole('button', { name: 'Manage Catalog' })); await screen.findByRole('heading', { name: 'Catalog Management' });
+    expect(app.settingsProps().preference).toMatchObject({ baseline: candidate, resolution: null, operation: null });
+  })
+
+  it('keeps a save that settles while Start is pending', async () => {
+    let settleSave; let settleStart;
+    const savePreferredOrderRule = vi.fn(() => new Promise(resolve => { settleSave = resolve }));
+    const startWorkout = vi.fn(() => new Promise(resolve => { settleStart = resolve }));
+    const app = await mount({ storage: { savePreferredOrderRule }, startWorkout }); await app.emit(approved('u1')); await screen.findByRole('heading', { name: 'Generate Workout' });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate nonempty' })); await screen.findByRole('heading', { name: 'Ready to sweat?' }); vi.useFakeTimers(); fireEvent.click(screen.getByRole('button', { name: 'Save order' })); await act(async () => { vi.advanceTimersByTime(15_000) }); vi.useRealTimers();
+    fireEvent.click(screen.getByRole('button', { name: 'Start workout' })); await act(async () => settleSave({ contextKey: '["a","b","c"]', evicted: null, overridden: [] })); await waitFor(() => expect(screen.getByText('Preference success')).toBeTruthy());
+    await act(async () => settleStart(true)); fireEvent.click(screen.getByRole('button', { name: 'Manage Catalog' })); await screen.findByRole('heading', { name: 'Catalog Management' });
+    expect(app.settingsProps().preference.operation).toMatchObject({ state: 'success' });
   })
 
   it('keeps an indeterminate save after completed-workout exit but clears it after discard', async () => {
@@ -178,8 +202,9 @@ describe('lazy authorized navigation', () => {
     const candidate = { blocks: [{ exerciseIds: ['a'] }, { exerciseIds: ['b'] }, { exerciseIds: ['c'] }] };
     const app = await mount({ storage: { savePreferredOrderRule: vi.fn().mockRejectedValue(new Error('offline')), clearPreferredOrderRules: vi.fn().mockRejectedValue(new Error('offline')) } }); await app.emit(approved('u1')); await screen.findByRole('heading', { name: 'Generate Workout' });
     fireEvent.click(screen.getByRole('button', { name: 'Generate nonempty' })); await screen.findByRole('heading', { name: 'Ready to sweat?' }); fireEvent.click(screen.getByRole('button', { name: 'Save order' }));
-    await waitFor(() => expect(screen.getByText('Preference failure')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Preference failure')).toBeTruthy()); fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
     fireEvent.click(screen.getByRole('button', { name: 'Manage Catalog' })); await screen.findByRole('heading', { name: 'Catalog Management' });
+    expect(app.settingsProps().preference.operation).toMatchObject({ state: 'failure', candidate });
     await act(async () => { app.settingsProps().onClearPreferences() });
     await waitFor(() => expect(app.settingsProps().preference.operation).toMatchObject({ state: 'failure', candidate }));
   })

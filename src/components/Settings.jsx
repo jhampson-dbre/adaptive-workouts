@@ -113,7 +113,7 @@ function OrderPreferencePanel({ preference, onClearPreferences, onSavePreference
   return <section className="order-preference-panel" aria-label="Saved exercise orders"><h3>Saved exercise orders</h3>
     {['pending', 'clearing'].includes(state) && <p role="status">{state === 'clearing' ? 'Clearing saved exercise orders.' : 'Saving this exercise order for future workouts.'}</p>}
     {state === 'indeterminate' && <p role="status">Saving is taking longer than expected. You can start your workout; we'll confirm when it finishes.</p>}
-    {state === 'success' && <><p role="status">{preference.operation.successMessage ?? 'Order saved for future workouts that include all these exercises.'}</p><button type="button" onClick={onDismissPreference}>Dismiss</button></>}
+    {state === 'success' && <><p role="status">{preference.operation.successMessage ?? 'Order saved.'}</p><button type="button" onClick={onDismissPreference}>Dismiss</button></>}
     {state === 'failure' && <><p role="alert">Couldn't save this exercise order. Your saved exercise orders and today's workout order are unchanged.</p><button type="button" onClick={() => onSavePreference?.(preference.operation.candidate)}>Try saving this exercise order again</button></>}
     {state === 'cleared' && <p role="status">Saved exercise orders cleared.</p>}
     {state === 'clear-failure' && <><p role="alert">Couldn't clear saved exercise orders. Try again.</p><button type="button" onClick={onClearPreferences}>Try clearing saved exercise orders again</button></>}
