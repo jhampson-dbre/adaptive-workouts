@@ -21,7 +21,7 @@ afterEach(() => {
 
 vi.mock('../utils/storage', () => ({ saveWorkout: vi.fn(), saveImmutableWorkout: vi.fn(), getHistoryPage: vi.fn(() => Promise.resolve({ items: [], nextCursor: null, hasMore: false })) }));
 
-function SessionHarness({ workout, phaseTargets, onFinish, user, api, preference, onSavePreference }) {
+function SessionHarness({ workout, phaseTargets, onFinish, user, api, preference, onSavePreference, onDismissPreference }) {
   const [activeWorkout, setActiveWorkout] = useState(() => initializeActiveWorkout(workout, { phaseTimingEnabled: true }));
   const [state, setState] = useState({ status: 'owned', activeWorkout, phaseTargets: phaseTargets ?? { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, error: null, blocked: false });
   const session = {
@@ -45,14 +45,14 @@ function SessionHarness({ workout, phaseTargets, onFinish, user, api, preference
     },
     async discard() { await api.discard(); setState(previous => ({ ...previous, activeWorkout: null })); },
   };
-  return <AuthContext.Provider value={user}><WorkoutView session={session} sessionState={{ ...state, activeWorkout }} onFinish={onFinish} preference={preference} onSavePreference={onSavePreference} /></AuthContext.Provider>;
+  return <AuthContext.Provider value={user}><WorkoutView session={session} sessionState={{ ...state, activeWorkout }} onFinish={onFinish} preference={preference} onSavePreference={onSavePreference} onDismissPreference={onDismissPreference} /></AuthContext.Provider>;
 }
 
-const renderWorkout = (workout, onFinish = () => {}, user = { uid: 'test-user-id' }, phaseTargets, api = {}, preference, onSavePreference) => {
+const renderWorkout = (workout, onFinish = () => {}, user = { uid: 'test-user-id' }, phaseTargets, api = {}, preference, onSavePreference, onDismissPreference) => {
   const sessionApi = {
     action: vi.fn(), save: vi.fn(), discard: vi.fn(), ...api,
   };
-  const view = render(<SessionHarness workout={workout} phaseTargets={phaseTargets} onFinish={onFinish} user={user} api={sessionApi} preference={preference} onSavePreference={onSavePreference} />);
+  const view = render(<SessionHarness workout={workout} phaseTargets={phaseTargets} onFinish={onFinish} user={user} api={sessionApi} preference={preference} onSavePreference={onSavePreference} onDismissPreference={onDismissPreference} />);
   return Object.assign(view, { api: sessionApi });
 };
 
@@ -221,9 +221,9 @@ test('keeps the initiating save and retry control focused across preference stat
   view.rerender(props({ baseline, resolution: acceptedResolution, operation: { state: 'pending', candidate } }));
   expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Saving order…' }));
   expect(screen.getByText('Saving this exercise order for future workouts.').compareDocumentPosition(screen.getByRole('button', { name: 'Start workout' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  view.rerender(props({ baseline: candidate, resolution: acceptedResolution, operation: { state: 'success', candidate, successMessage: 'Order saved for future workouts that include all these exercises.' } }));
-  await waitFor(() => expect(document.activeElement).toBe(screen.getByText('Order saved for future workouts that include all these exercises.', { selector: '[role="status"]' })));
-  expect(screen.getByText('Order saved for future workouts that include all these exercises.', { selector: '[role="status"]' }).compareDocumentPosition(screen.getByRole('button', { name: 'Start workout' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  view.rerender(props({ baseline: candidate, resolution: acceptedResolution, operation: { state: 'success', candidate, successMessage: 'Order saved.' } }));
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByText('Order saved.', { selector: '[role="status"]' })));
+  expect(screen.getByText('Order saved.', { selector: '[role="status"]' }).compareDocumentPosition(screen.getByRole('button', { name: 'Start workout' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   view.rerender(props({ baseline: candidate, operation: { state: 'success', candidate, successMessage: 'Order saved for workouts with Squat, Plank, and Sit-ups. This order takes priority over your saved preference for Squat before Plank. That preference still applies in workouts without Sit-ups. Nudge removed the saved order for Squat and Plank to keep your 50 most recently used orders.' } }));
   expect(screen.getByText('Order saved for workouts with Squat, Plank, and Sit-ups. This order takes priority over your saved preference for Squat before Plank. That preference still applies in workouts without Sit-ups. Nudge removed the saved order for Squat and Plank to keep your 50 most recently used orders.', { selector: '[role="status"]' })).toBeTruthy();
   view.rerender(props({ baseline, operation: { state: 'failure', candidate } }));
@@ -232,6 +232,21 @@ test('keeps the initiating save and retry control focused across preference stat
   retry.focus(); fireEvent.click(retry);
   expect(onSavePreference).toHaveBeenLastCalledWith(candidate, { squat: 'Squat', plank: 'Plank' });
   expect(document.activeElement).toBe(retry);
+});
+
+test('keeps focus when an in-progress save settles after Start and lets the success be dismissed', async () => {
+  const onDismissPreference = vi.fn();
+  const props = preference => <SessionHarness workout={timedWorkout} user={{ uid: 'test-user-id' }} api={{ action: vi.fn(), save: vi.fn(), discard: vi.fn() }} onFinish={() => {}} preference={preference} onDismissPreference={onDismissPreference} />;
+  const view = render(props({ operation: { state: 'indeterminate' } }));
+  const start = screen.getByRole('button', { name: 'Start workout' }); start.focus(); fireEvent.click(start);
+  await screen.findByText('Saving is taking longer than expected. We’ll confirm when it finishes.');
+  const focusAfterStart = document.activeElement;
+  view.rerender(props({ operation: { state: 'success' } }));
+  expect(screen.getAllByText('Order saved.', { selector: '[role="status"]' })).toHaveLength(1);
+  expect(screen.getAllByRole('button', { name: 'Dismiss' })).toHaveLength(1);
+  expect(document.activeElement).toBe(focusAfterStart);
+  fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+  expect(onDismissPreference).toHaveBeenCalledOnce();
 });
 
 test('renders an applied preferred order passively without moving focus', () => {

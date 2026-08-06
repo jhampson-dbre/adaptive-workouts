@@ -55,9 +55,12 @@ describe('Settings tracking configuration', () => {
   });
 
   it('shows ordinary, override, and eviction save outcomes in the order preference panel', async () => {
-    const ordinary = { operation: { state: 'success', successMessage: 'Order saved for future workouts that include all these exercises.' } };
+    const ordinary = { operation: { state: 'success', successMessage: 'Order saved.' } };
     renderSettings([], {}, undefined, ordinary);
     expect((await screen.findByRole('status')).textContent).toContain(ordinary.operation.successMessage);
+    cleanup();
+    renderSettings([], {}, undefined, { operation: { state: 'success' } });
+    expect((await screen.findByRole('status')).textContent).toBe('Order saved.');
     cleanup();
     const combined = 'Order saved for workouts with Push-ups, Pull-ups, and Sit-ups. This order takes priority over your saved preference for Push-ups before Pull-ups. That preference still applies in workouts without Sit-ups. Nudge removed the saved order for Push-ups and Pull-ups to keep your 50 most recently used orders.';
     renderSettings([], {}, undefined, { operation: { state: 'success', successMessage: combined } });
