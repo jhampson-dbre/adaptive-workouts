@@ -664,3 +664,33 @@ the safe method attempted and the best available alternative.
 - Observed result: Collapsed Barbell Curl retains `rest 1:13 remaining` while expanded Back Squat shows one `Rest: 3:00 remaining / 3:00 planned` detail and suppresses only Back Squat's matching compact copy. At 320px the detailed timer remains dominant at 259.88 x 132px with tabular numerals, `Set 2: Resting` remains coherent with `Start set early`, the action remains 116.4px high, and document client and scroll widths remain equal at 305/305.
 - Rendered evidence: `.impeccable/evidence/trek-299-collapsed-concurrent-mobile.jpg` and `.impeccable/evidence/trek-299-planned-rest-reflow-320.jpg`, plus live accessibility snapshots and computed timer/action/viewport measurements at both widths.
 - Material limitation: Superset owner/recommended-next identity splitting is covered by a focused production-component regression rather than a separately seeded browser workout. The rendered concurrent-rest scenario proves distinct timer identities remain discoverable. Chromium/emulator evidence does not replace physical-device or assistive-technology testing.
+
+---
+
+## 2026-08-06 - TREK-300 workout-order save hierarchy
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-300 changes where a pre-start persistence decision and its asynchronous feedback appear relative to the ordered exercises and dominant Start action.
+- Approved scenario or artifact: Preserve the contextual-ordering behavior and lifecycle from `docs/specs/2026-08-03-contextual-exercise-ordering.md` while superseding its verbose pre-start explanation and below-Start preference placement.
+
+## Changed scenario
+
+- Scenario: Reorder a canonical generated workout and decide whether to keep the order only today or save it for future workouts.
+- Build / commit: `f1722a3`; full WorkoutView suite 89/89, lint, independent code review, and diff-check green.
+- Viewport and starting state: Codex in-app Chromium at 390 x 844 and 320 x 844 with 375px and 305px document viewports; canonical synthetic emulator workout with eight reorderable exercises.
+- Actions: Move Lateral Raise from position 1 to position 2; scroll through the final ordered block; inspect the persistence action, today-only explanation, Start action, control geometry, and document containment at both widths.
+- Observed result: `Save order for future workouts` appears immediately after the eighth order block, followed by only `Order changes apply only to today unless you save them.` and then the sole signal-yellow `Start workout` boundary. The neutral save control is 44px high; Start remains full-width and 82.2px high. At 390px and 320px, document client/scroll widths remain equal at 375/375 and 305/305, and movement controls reflow without clipping.
+- Rendered evidence: `.impeccable/evidence/trek-300-dirty-mobile.jpg` and `.impeccable/evidence/trek-300-dirty-reflow-320.jpg`, plus live accessibility snapshots and computed action/viewport measurements.
+- Material limitation: The canonical workout contains ordinary order blocks; focused component tests preserve configured-superset movement and its separate Settings guidance. Chromium/emulator evidence does not replace physical-device or assistive-technology testing.
+
+## Changed scenario
+
+- Scenario: Save the reordered preference, observe pending and success, then retry after a synthetic local Firestore outage produces a definitive failure.
+- Build / commit: Same `f1722a3` build.
+- Viewport and starting state: Codex in-app Chromium at 390 x 844, plus failure reflow at 320 x 844; the same synthetic generated workout, with only the local Firestore emulator stopped for the failure attempt.
+- Actions: Activate Save order for future workouts; inspect immediate pending/disabled state and successful settlement; make another order change; stop the verified local Firestore emulator process; activate Save again; inspect pending and definitive failure/retry; resize the failure state to 320px.
+- Observed result: Pending keeps `Saving order…`, its adjacent status, and disabled Start together before the dominant boundary. Success retires the dirty action and places its focused polite outcome directly before enabled Start. After emulator rejection, `Try saving this exercise order again`, the today-only sentence, and the assertive failure remain together before restored Start; today's order is unchanged. All visible preference and Start controls are at least 44px high, and document client/scroll widths remain equal at 375/375 and 305/305.
+- Rendered evidence: `.impeccable/evidence/trek-300-pending-mobile.jpg`, `.impeccable/evidence/trek-300-success-mobile.jpg`, `.impeccable/evidence/trek-300-failure-mobile.jpg`, and `.impeccable/evidence/trek-300-failure-reflow-320.jpg`, plus live accessibility snapshots and computed focus/disabled/action/viewport measurements.
+- Material limitation: The pending interval was captured at 390px and shares the same responsive composition proven by the 320px dirty and failure states. Failure was induced by stopping only the synthetic local Firestore emulator and does not represent production outage timing or every Firebase retry schedule.
