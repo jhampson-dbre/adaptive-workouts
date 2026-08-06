@@ -728,17 +728,17 @@ the safe method attempted and the best available alternative.
 ## Changed scenario
 
 - Scenario: Save an order before Start, begin the workout after the success is announced, then compare that acknowledged path with a save that settles only after Start.
-- Build / commit: `1b364e3`; focused App, WorkoutView, and Settings suites 152/152, lint, independent code review, task-conformance review, Ponytail proposal pass, and diff-check green.
+- Build / commit: `00ce55d` (including the TREK-301 presentation change in `1b364e3`); focused App, WorkoutView, and Settings suites 154/154, lint, independent code review, task-conformance review, Ponytail proposal pass, and diff-check green.
 - Viewport and starting state: Codex in-app Chromium at 390 x 844; synthetic production `WorkoutView` fixtures for pre-Start success, active workout after acknowledged success, and active workout transitioning from indeterminate to late success.
 - Actions: Inspect ordinary success before Start; cross the Start boundary after that acknowledged success; separately keep focus on the expanded Plank exercise while an indeterminate save settles after Start; inspect the remaining late-result panel and Dismiss action.
 - Observed result: Before Start, the polite outcome is the concise `Order saved.` directly before the dominant Start action. After acknowledged success, active Warmup contains no saved-order panel or Dismiss. A genuinely late settlement renders one nonempty `Order saved.` status and one Dismiss while focus remains on the Plank exercise toggle. At 390px, document client/scroll widths remain equal at 375/375.
 - Rendered evidence: `.impeccable/evidence/trek-301-prestart-success-mobile.jpg`, `.impeccable/evidence/trek-301-acknowledged-start-mobile.jpg`, and `.impeccable/evidence/trek-301-late-success-mobile.jpg`, plus live status/action inventory, active-element, and viewport measurements.
-- Material limitation: A temporary synthetic fixture rendered the production component and reducer state without persistence, routing, or personal data and was removed after capture. The App-owned lifecycle transition and state preservation are covered by focused regression tests. Chromium evidence does not replace physical-device or assistive-technology testing.
+- Material limitation: A temporary synthetic fixture rendered the production component and reducer state without persistence, routing, or personal data and was removed after capture. Focused App and production-WorkoutView regressions cover the overlap where a save settles while durable Start is pending. Chromium evidence does not replace physical-device or assistive-technology testing.
 
 ## Changed scenario
 
 - Scenario: Reflow the genuinely late saved-order result on the narrow supported phone width.
-- Build / commit: Same `1b364e3` build.
+- Build / commit: Same `00ce55d` build; the race remediation does not change rendered output.
 - Viewport and starting state: Codex in-app Chromium at 320 x 844 with a 305px document viewport; active Warmup transitioning from indeterminate preference save to ordinary success.
 - Actions: Allow the late save to settle while workout focus remains on the expanded Plank exercise; inspect the result panel, Dismiss geometry, containment, and following workout controls.
 - Observed result: The 304.67px-wide result panel contains one `Order saved.` status and one full-width Dismiss action without clipping. Focus remains on the Plank exercise toggle, the following Start set action remains dominant and usable, and document client/scroll widths remain equal at 305/305.
