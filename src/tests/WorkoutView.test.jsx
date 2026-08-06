@@ -526,17 +526,41 @@ test('orients a started legacy workout as Main workout', () => {
   expect(screen.getByText('Workout').closest('li').getAttribute('aria-current')).toBe('step');
 });
 
-test('makes Finish primary in Cooldown and discloses remaining work', () => {
-  let cooldown = initializeActiveWorkout(timedWorkout, { phaseTimingEnabled: true });
-  for (const action of [{ type: 'startWorkout', timestamp: 1 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 2 }, { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 3 }]) cooldown = activeWorkoutReducer(cooldown, action);
-  cooldown = { ...cooldown, phase: 'cooldown' };
-  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'owned', activeWorkout: cooldown, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 60 }, blocked: false }} /></AuthContext.Provider>);
+test('keeps Finish dominant in an early Cooldown and returns controls only after Continue workout', async () => {
+  const view = renderWorkout(timedWorkout);
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to cooldown' }));
 
   const finish = screen.getByRole('button', { name: 'Finish workout' });
-  const remaining = screen.getByText('Return to remaining work').closest('details');
-  expect(finish.compareDocumentPosition(remaining) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(remaining.open).toBe(false);
-  expect(screen.getByRole('button', { name: 'Resume workout' })).toBeTruthy();
+  const continueWorkout = screen.getByRole('button', { name: 'Continue workout' });
+  expect(finish.compareDocumentPosition(continueWorkout) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(finish.parentElement.querySelectorAll('button')).toHaveLength(2);
+  expect(screen.queryByRole('heading', { name: 'Exercises' })).toBeNull();
+  expect(screen.queryByRole('button', { name: /Plank exercise 1 set 2 start/i })).toBeNull();
+  expect(screen.queryByText('Return to remaining work')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Resume workout' })).toBeNull();
+
+  fireEvent.click(continueWorkout);
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'Main workout' })).toBe(document.activeElement));
+  expect(screen.getByRole('heading', { name: 'Exercises' })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i })).toBeDefined();
+  expect(view.api.action).toHaveBeenCalledWith(expect.objectContaining({ type: 'resumeWorkout' }));
+});
+
+test('offers Edit completed sets in a completed Cooldown and focuses Main workout after returning', async () => {
+  const view = renderWorkout([{ ...timedWorkout[1] }]);
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
+  const editCompletedSets = await screen.findByRole('button', { name: 'Edit completed sets' });
+  expect(screen.queryByRole('heading', { name: 'Exercises' })).toBeNull();
+
+  fireEvent.click(editCompletedSets);
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'Main workout' })).toBe(document.activeElement));
+  expect(view.api.action).toHaveBeenCalledWith(expect.objectContaining({ type: 'resumeWorkout' }));
 });
 
 test('labels a completed simple exercise factually in Review', () => {
@@ -882,6 +906,8 @@ test('undoing a final set re-expands its exercise', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit completed sets' }));
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'Main workout' })).toBe(document.activeElement));
   await waitFor(() => expect(screen.getByRole('button', { name: /Squat.*expand/i })).toBeDefined());
   fireEvent.click(screen.getByRole('button', { name: /Squat.*expand/i }));
   fireEvent.click(screen.getByRole('button', { name: /Show details for Squat set 1/i }));
@@ -1236,7 +1262,7 @@ test('a mounted active workout keeps its initial rendered epoch for a backward f
   vi.setSystemTime(new Date(18_000));
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action }} sessionState={{ status: 'owned', activeWorkout: cooldown, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 60 }, blocked: false }} /></AuthContext.Provider>);
   vi.setSystemTime(new Date(12_000));
-  fireEvent.click(screen.getByRole('button', { name: 'Resume workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Edit completed sets' }));
   expect(action).toHaveBeenCalledWith({ type: 'resumeWorkout', timestamp: 18_000 });
 });
 

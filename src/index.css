@@ -403,7 +403,6 @@ input:focus-visible {
 }
 
 .leg-day-choice button,
-.remaining-work summary,
 .summary-remaining summary {
   min-height: 44px;
   border: 1px solid var(--border);
@@ -826,16 +825,6 @@ input:focus-visible {
 
 .phase-cooldown .finish-btn {
   width: 100%;
-}
-
-.remaining-work {
-  background: var(--bg);
-}
-
-.remaining-work summary {
-  display: block;
-  padding: 16px clamp(22px, 7vw, 52px);
-  border-width: 0 0 1px;
 }
 
 .workout-summary {
