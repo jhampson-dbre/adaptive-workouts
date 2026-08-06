@@ -222,7 +222,7 @@ function RestReadout({ record, now, showLive = true }) {
   const remaining = record.plannedRestSeconds - elapsed;
   return remaining > 0
     ? <span>Rest: {formatTime(remaining)} remaining / {formatTime(record.plannedRestSeconds)} planned</span>
-    : <span className="timer-overtime">Rest overtime: +{formatTime(Math.abs(remaining))}</span>;
+    : remaining === 0 ? <span>Rest complete</span> : <span className="timer-overtime">Rest overtime: +{formatTime(Math.abs(remaining))}</span>;
 }
 
 function PerformanceInputs({ exercise, exerciseIndex, setIndex, disabled, dispatch }) {
@@ -245,6 +245,7 @@ function SetRow({ exercise, exerciseIndex, setIndex, started, activeTimer, activ
   const prefix = `${exercise.name} exercise ${exerciseIndex + 1} set ${setIndex + 1}`;
   const errorId = `exercise-${exerciseIndex}-feedback`;
   const isActive = activeTimer?.exerciseIndex === exerciseIndex && activeTimer?.setIndex === setIndex;
+  const isResting = restRecord?._activeRest && calculateElapsedSeconds(restRecord._activeRest.startedAt, now) < restRecord.plannedRestSeconds;
   const [showDetails, setShowDetails] = useState(false);
   const inputDisabled = !started || status === 'locked';
   useEffect(() => {
@@ -259,13 +260,13 @@ function SetRow({ exercise, exerciseIndex, setIndex, started, activeTimer, activ
     onStart(exerciseIndex, setIndex);
   };
   return <section className={`set-row ${status}${isActive ? ' active-work' : ''}`} aria-label={prefix}>
-    <div className="set-row-heading"><strong>Set {setIndex + 1}: {status}</strong>{exercise.trackingMode === 'weighted' && <span>Target: {record.targetWeight} lb × {record.targetReps}</span>}{exercise.trackingMode === 'bodyweight' && <span>Target: {record.targetReps} reps</span>}</div>
+    <div className="set-row-heading"><strong>Set {setIndex + 1}: {isResting ? 'Resting' : status === 'ready' ? 'Ready' : status}</strong>{exercise.trackingMode === 'weighted' && <span>Target: {record.targetWeight} lb × {record.targetReps}</span>}{exercise.trackingMode === 'bodyweight' && <span>Target: {record.targetReps} reps</span>}</div>
     {(!record.completed || showDetails) && <><div className="set-inputs"><PerformanceInputs {...{ exercise, exerciseIndex, setIndex, disabled: inputDisabled, dispatch: action => { onClearError(); dispatch(action); } }} /></div>
       {exercise.trackingMode === 'weighted' && <p className="recommendation-reason" aria-label={`${prefix} recommendation reason`}>{recommendationText(exercise, record)}</p>}</>}
     {error && <p id={errorId} className="error-message" role="alert">{error}</p>}
     <div className="set-timing">
       {isActive ? <><span className="work-timer">Work: {formatTime(calculateElapsedSeconds(activeTimer.startedAt, now))}</span><button type="button" aria-label={`${prefix} confirm`} aria-describedby={error ? errorId : undefined} onClick={() => onConfirm(exerciseIndex, setIndex)}>Confirm attempt</button><button type="button" aria-label={`${prefix} cancel`} onClick={() => onCancel(exerciseIndex, setIndex)}>Cancel timer</button></>
-        : status === 'ready' ? <><button type="button" ref={startRef} aria-label={`${prefix} start`} disabled={!started} aria-describedby={error ? errorId : (!started ? 'workout-start-help' : undefined)} onClick={start}>Start set</button>{restRecord && <span className="superset-rest-status"><RestReadout record={restRecord} now={now} /></span>}</>
+        : status === 'ready' ? <><button type="button" ref={startRef} aria-label={`${prefix} start`} disabled={!started} aria-describedby={error ? errorId : (!started ? 'workout-start-help' : undefined)} onClick={start}>{isResting ? 'Start set early' : 'Start set'}</button>{restRecord && <span className="superset-rest-status rest-timer"><RestReadout record={restRecord} now={now} /></span>}</>
           : record.completed ? <><button type="button" aria-expanded={showDetails} onClick={() => setShowDetails(current => !current)}>{showDetails ? `Hide details for ${exercise.name} set ${setIndex + 1}` : `Show details for ${exercise.name} set ${setIndex + 1}`}</button>{showDetails && <div className="completed-set-details"><span>Work: {formatTime(record.workDurationSeconds ?? 0)}</span><RestReadout record={record} now={now} showLive={false} /><button type="button" className="secondary-action" disabled={record.actualRestSeconds !== null || exercise.setRecords.slice(setIndex + 1).some(item => item.completed)} onClick={() => dispatch({ type: 'undoSet', exerciseIndex, setIndex })}>Undo set {setIndex + 1}</button></div>}</>
             : <span>Complete the previous set first.</span>}
     </div>
@@ -277,7 +278,7 @@ function exerciseTimingStatus(exercise, exerciseIndex, activeTimer, now) {
   const live = exercise.setRecords.find(record => record._activeRest);
   if (live) {
     const remaining = live.plannedRestSeconds - calculateElapsedSeconds(live._activeRest.startedAt, now);
-    return remaining > 0 ? `rest ${formatTime(remaining)} remaining` : `rest overtime ${formatTime(Math.abs(remaining))}`;
+    return remaining > 0 ? `rest ${formatTime(remaining)} remaining` : remaining === 0 ? 'rest complete' : `rest overtime ${formatTime(Math.abs(remaining))}`;
   }
   const remaining = exercise.setRecords.filter(record => !record.completed).length;
   return `${remaining} ${remaining === 1 ? 'set' : 'sets'} remaining`;
@@ -622,6 +623,20 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
     return exercise.setRecords.findIndex((_, setIndex) => getSetStatus(exercise, setIndex) === 'ready');
   };
 
+  const restRecordFor = (exercise, exerciseIndex, setIndex) => {
+    const superset = supersetFor(activeWorkout, exercise);
+    const next = superset && nextSupersetSet(activeWorkout, superset);
+    if (next?.exerciseIndex === exerciseIndex && next.setIndex === setIndex) return groupRest(activeWorkout, superset);
+    return setIndex > 0 && exercise.setRecords[setIndex - 1]._activeRest ? exercise.setRecords[setIndex - 1] : null;
+  };
+
+  const detailedRestIds = new Set(activeWorkout.exercises.flatMap((exercise, exerciseIndex) => {
+    if (!expanded[exerciseIndex]) return [];
+    const setIndex = focusedSetIndex(exercise, exerciseIndex);
+    const rest = setIndex >= 0 && restRecordFor(exercise, exerciseIndex, setIndex);
+    return rest?._activeRest ? [rest._activeRest.id] : [];
+  }));
+
   const renderSetRow = (exercise, exerciseIndex, setIndex) => <SetRow
     key={exercise.setRecords[setIndex].index}
     exercise={exercise}
@@ -647,12 +662,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       setFinishError('');
     }}
     startRef={element => { startRefs.current[`${exerciseIndex}-${setIndex}`] = element; }}
-    restRecord={(() => {
-      const superset = supersetFor(activeWorkout, exercise);
-      const next = superset && nextSupersetSet(activeWorkout, superset);
-      if (next?.exerciseIndex === exerciseIndex && next.setIndex === setIndex) return groupRest(activeWorkout, superset);
-      return setIndex > 0 && exercise.setRecords[setIndex - 1]._activeRest ? exercise.setRecords[setIndex - 1] : null;
-    })()}
+    restRecord={restRecordFor(exercise, exerciseIndex, setIndex)}
   />;
 
   const renderOptionalSetDetails = (exercise, exerciseIndex, focusedSet, key) => {
@@ -667,8 +677,11 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
     <h2 className="exercise-list-heading">Exercises</h2>
     <ul className="workout-checklist">{activeWorkout.exercises.map((exercise, exerciseIndex) => {
       const confirmed = exercise.setRecords.filter(record => record.completed).length;
-      const timing = exerciseTimingStatus(exercise, exerciseIndex, activeWorkout.activeWorkTimer, now);
       const isExpanded = Boolean(expanded[exerciseIndex]);
+      const liveRest = exercise.setRecords.find(record => record._activeRest);
+      const timing = detailedRestIds.has(liveRest?._activeRest?.id) || (isExpanded && activeWorkout.activeWorkTimer?.exerciseIndex === exerciseIndex)
+        ? `${exercise.setRecords.filter(record => !record.completed).length} ${exercise.setRecords.filter(record => !record.completed).length === 1 ? 'set' : 'sets'} remaining`
+        : exerciseTimingStatus(exercise, exerciseIndex, activeWorkout.activeWorkTimer, now);
       const focusedSet = focusedSetIndex(exercise, exerciseIndex);
       const superset = supersetFor(activeWorkout, exercise);
       const next = superset && nextSupersetSet(activeWorkout, superset);

@@ -411,10 +411,58 @@ test('keeps a same-exercise rest beside the next Start control while completed s
   const nextStart = screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i });
   expect(nextStart.parentElement.textContent).toMatch(/Rest: 0:02 remaining/i);
   expect(nextStart.nextElementSibling.textContent).toMatch(/Rest: 0:02 remaining/i);
+  expect(document.querySelectorAll('.rest-timer')).toHaveLength(1);
+  expect(screen.getByRole('button', { name: /Plank.*collapse/i }).getAttribute('aria-label')).not.toMatch(/rest 0:02 remaining/i);
+  expect(screen.getByText('Set 2: Resting')).toBeDefined();
+  expect(nextStart.textContent).toBe('Start set early');
   expect(screen.getByRole('button', { name: /Show details for Plank set 1/i })).toBeDefined();
   expect(screen.queryByRole('button', { name: /Undo set 1/i })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: /Show details for Plank set 1/i }));
   expect(screen.getByRole('button', { name: /Undo set 1/i })).toBeDefined();
+  fireEvent.click(screen.getByRole('button', { name: /Plank.*collapse/i }));
+  expect(screen.getByRole('button', { name: /Plank.*expand/i }).getAttribute('aria-label')).toMatch(/rest 0:02 remaining/i);
+});
+
+test('returns a resting set to Ready with its rest-complete status at zero', () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
+  renderWorkout([timedWorkout[0]]);
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+
+  act(() => vi.advanceTimersByTime(2000));
+  expect(screen.getByText('Set 2: Ready')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i }).textContent).toBe('Start set');
+  expect(screen.getByText('Rest complete')).toBeDefined();
+  fireEvent.click(screen.getByRole('button', { name: /Plank.*collapse/i }));
+  expect(screen.getByRole('button', { name: /Plank.*expand/i }).getAttribute('aria-label')).toMatch(/rest complete/i);
+  fireEvent.click(screen.getByRole('button', { name: /Plank.*expand/i }));
+  act(() => vi.advanceTimersByTime(1000));
+  expect(screen.getByText('Rest overtime: +0:01')).toBeDefined();
+});
+
+test('renders a group rest once beside its recommended next set', async () => {
+  renderWorkout(supersetWorkout('BETWEEN_EXERCISES'));
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Long Row Exercise Name exercise 1 set 1 confirm/i }));
+
+  await screen.findByRole('button', { name: /Long Press Exercise Name exercise 2 set 1 start/i });
+  expect(document.querySelectorAll('.rest-timer')).toHaveLength(1);
+  expect(screen.getByRole('button', { name: /Long Row Exercise Name.*expand/i }).getAttribute('aria-label')).not.toMatch(/rest 0:02 remaining/i);
+});
+
+test('keeps distinct concurrent rests visible once each', () => {
+  const carry = { ...timedWorkout[0], id: 'carry', occurrenceId: 'carry:1', name: 'Carry', setRecords: timedWorkout[0].setRecords.map(record => ({ ...record })) };
+  renderWorkout([timedWorkout[0], carry]);
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Carry.*expand/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Carry exercise 2 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Carry exercise 2 set 1 confirm/i }));
+
+  expect(document.querySelectorAll('.rest-timer')).toHaveLength(2);
 });
 
 test('presents one guided action before the optional exercise list', () => {
@@ -894,7 +942,7 @@ test('returning after hidden rest expiry shows overtime without a delayed announ
     vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
     visibility = 'visible';
     act(() => document.dispatchEvent(new Event('visibilitychange')));
-    expect(screen.getByRole('button', { name: /Plank.*rest overtime/i })).toBeDefined();
+    expect(screen.getByText(/Rest overtime/i)).toBeDefined();
     expect(screen.getByRole('status').textContent).toBe(restStart);
   } finally {
     if (original) Object.defineProperty(document, 'visibilityState', original);

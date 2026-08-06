@@ -706,6 +706,11 @@ input:focus-visible {
   color: var(--text) !important;
 }
 
+.rest-timer {
+  font: 700 var(--type-work-timer)/1 var(--sans);
+  font-variant-numeric: tabular-nums;
+}
+
 .superset-context {
   display: block;
   padding: 0 16px 12px;
