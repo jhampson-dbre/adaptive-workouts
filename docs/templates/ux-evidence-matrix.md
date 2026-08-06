@@ -637,6 +637,26 @@ the safe method attempted and the best available alternative.
 
 ---
 
+## 2026-08-06 - TREK-298 cooldown return actions
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-298 changes the terminal cooldown decision hierarchy and the recovery route back to unfinished or completed set editing.
+- Approved scenario or artifact: Keep Finish workout dominant while offering exactly one context-specific secondary action that reuses the existing resume-workout transition.
+
+## Changed scenario
+
+- Scenario: Enter Cooldown once with unfinished sets and once after every set is complete.
+- Build / commit: `068d35e`; full WorkoutView suite 85/85, lint, independent code review, task-conformance review, and diff-check green.
+- Viewport and starting state: Codex in-app Chromium at 390 x 844; synthetic production `WorkoutView` fixtures in timed Cooldown with one confirmed set plus unfinished work, and with all prescribed work confirmed.
+- Actions: Inspect the Cooldown heading, dominant Finish workout boundary, available secondary action, hidden exercise controls, and document containment in each state.
+- Observed result: Incomplete Cooldown shows Finish workout followed by exactly one `Continue workout` action; completed Cooldown shows Finish workout followed by exactly one `Edit completed sets` action. Neither state exposes exercise controls or extra explanatory copy, and document client/scroll widths remain equal at 390/390.
+- Rendered evidence: `.impeccable/evidence/trek-298-cooldown-incomplete-mobile.jpg` and `.impeccable/evidence/trek-298-cooldown-complete-mobile.jpg`, plus live button inventory and viewport measurements.
+- Material limitation: The synthetic fixture renders the production component and reducer state without persistence, routing, or personal data. Focus restoration after activating either secondary action is covered by focused component regressions. Chromium evidence does not replace physical-device or assistive-technology testing.
+
+---
+
 ## 2026-08-06 - TREK-299 active set timer clarity
 
 ## Planning
@@ -694,3 +714,33 @@ the safe method attempted and the best available alternative.
 - Observed result: Pending keeps `Saving order…`, its adjacent status, and disabled Start together before the dominant boundary. Success retires the dirty action and places its focused polite outcome directly before enabled Start. After emulator rejection, `Try saving this exercise order again`, the today-only sentence, and the assertive failure remain together before restored Start; today's order is unchanged. All visible preference and Start controls are at least 44px high, and document client/scroll widths remain equal at 375/375 and 305/305.
 - Rendered evidence: `.impeccable/evidence/trek-300-pending-mobile.jpg`, `.impeccable/evidence/trek-300-success-mobile.jpg`, `.impeccable/evidence/trek-300-failure-mobile.jpg`, and `.impeccable/evidence/trek-300-failure-reflow-320.jpg`, plus live accessibility snapshots and computed focus/disabled/action/viewport measurements.
 - Material limitation: The pending interval was captured at 390px and shares the same responsive composition proven by the 320px dirty and failure states. Failure was induced by stopping only the synthetic local Firestore emulator and does not represent production outage timing or every Firebase retry schedule.
+
+---
+
+## 2026-08-06 - TREK-301 acknowledged order-save retirement
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-301 changes when asynchronous preference success remains visible across the Start boundary and shortens the ordinary saved outcome across its existing renderers.
+- Approved scenario or artifact: Retire only a terminal success already acknowledged before Start; preserve pending, indeterminate, failure, late settlement, retry, focus, baseline/candidate, and specific override or eviction disclosure.
+
+## Changed scenario
+
+- Scenario: Save an order before Start, begin the workout after the success is announced, then compare that acknowledged path with a save that settles only after Start.
+- Build / commit: `1b364e3`; focused App, WorkoutView, and Settings suites 152/152, lint, independent code review, task-conformance review, Ponytail proposal pass, and diff-check green.
+- Viewport and starting state: Codex in-app Chromium at 390 x 844; synthetic production `WorkoutView` fixtures for pre-Start success, active workout after acknowledged success, and active workout transitioning from indeterminate to late success.
+- Actions: Inspect ordinary success before Start; cross the Start boundary after that acknowledged success; separately keep focus on the expanded Plank exercise while an indeterminate save settles after Start; inspect the remaining late-result panel and Dismiss action.
+- Observed result: Before Start, the polite outcome is the concise `Order saved.` directly before the dominant Start action. After acknowledged success, active Warmup contains no saved-order panel or Dismiss. A genuinely late settlement renders one nonempty `Order saved.` status and one Dismiss while focus remains on the Plank exercise toggle. At 390px, document client/scroll widths remain equal at 375/375.
+- Rendered evidence: `.impeccable/evidence/trek-301-prestart-success-mobile.jpg`, `.impeccable/evidence/trek-301-acknowledged-start-mobile.jpg`, and `.impeccable/evidence/trek-301-late-success-mobile.jpg`, plus live status/action inventory, active-element, and viewport measurements.
+- Material limitation: A temporary synthetic fixture rendered the production component and reducer state without persistence, routing, or personal data and was removed after capture. The App-owned lifecycle transition and state preservation are covered by focused regression tests. Chromium evidence does not replace physical-device or assistive-technology testing.
+
+## Changed scenario
+
+- Scenario: Reflow the genuinely late saved-order result on the narrow supported phone width.
+- Build / commit: Same `1b364e3` build.
+- Viewport and starting state: Codex in-app Chromium at 320 x 844 with a 305px document viewport; active Warmup transitioning from indeterminate preference save to ordinary success.
+- Actions: Allow the late save to settle while workout focus remains on the expanded Plank exercise; inspect the result panel, Dismiss geometry, containment, and following workout controls.
+- Observed result: The 304.67px-wide result panel contains one `Order saved.` status and one full-width Dismiss action without clipping. Focus remains on the Plank exercise toggle, the following Start set action remains dominant and usable, and document client/scroll widths remain equal at 305/305.
+- Rendered evidence: `.impeccable/evidence/trek-301-late-success-reflow-320.jpg`, plus live panel geometry, status/action inventory, active-element, and viewport measurements.
+- Material limitation: The synthetic fixture proves the production presentation and focus-preserving rerender; it does not simulate Firebase latency or every browser announcement cadence.
