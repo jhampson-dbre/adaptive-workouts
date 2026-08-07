@@ -754,3 +754,40 @@ the safe method attempted and the best available alternative.
 - Observed result: Before save, the semantic status correctly said the move was for this workout only. After save, the viewport showed focused `Order saved.` before Start workout; semantic inventory contained one empty status and one nonempty `Order saved.` status, with no current `this workout only`, `current workout only`, or `only to today` content. The affected ux-usability-reviewer recheck returned `ready` with no direct defect.
 - Rendered evidence: Live final-build viewport inspection, semantic status inventory, and programmatic focus evidence from isolated lease `f03afe5c-e526-47ec-953d-0e38e7422981`.
 - Material limitation: Semantic structure and focus were verified without a real screen-reader announcement or a next-workout persistence check. Existing transaction tests and ordering evidence cover persistence behavior; this remediation changes only the temporary local movement announcement.
+
+---
+
+## 2026-08-07 - TREK-305 post-save History freshness
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-305 changes the asynchronous lifecycle of an already-visible empty History state after a successful workout save, where contradictory persistence feedback directly affects trust and recovery.
+- Approved scenario or artifact: Preserve the current Nudge saved-completion contract from Trekker comments CMT-508/CMT-509 and the existing lazy Workout History disclosure while retiring stale empty, error, and pagination state after confirmed persistence. No navigation, information-architecture, completion-receipt, schema, or copy redesign.
+
+## Changed scenario
+
+- Scenario: Keep an empty Workout History expanded before saving a workout, then verify the same disclosure refreshes to the newly persisted workout on the saved-completion screen.
+- Build / commit: TREK-305 working tree on `codex/trek-305-history-refresh`; focused WorkoutView and WorkoutHistory suites 117/117, lint, diff-check, independent code review, task-conformance review, and Ponytail proposal pass green.
+- Viewport and starting state: Codex in-app Chromium at 390 x 844 with a 375px document viewport; fresh isolated UX-10-01 approved synthetic identity with empty History and a generated canonical workout.
+- Actions: Expand Workout history and observe `No workouts logged yet.`; start the workout; confirm Barbell Curl set 1; finish early through Cooldown; save; wait for the existing disclosure to refresh.
+- Observed result: Before save, Workout history remained expanded and truthfully showed the empty state. After save, `Workout saved` received focus, the sole completion status remained `This workout is complete.`, the disclosure remained expanded, one saved workout article replaced the empty state without reload or another save, and no warning or error was logged. Document client and scroll widths remained equal at 375/375 before and after save.
+- Rendered evidence: `.impeccable/evidence/trek-305-mobile-pre-save.png` and `.impeccable/evidence/trek-305-mobile-post-save.png`, plus live accessibility snapshots, active-element/status inventory, disclosure state, and viewport measurements.
+- Material limitation: The in-app browser's semantic off-screen disclosure activation focused but did not activate the control in this pass, so the coordinator used a visible coordinate activation after confirming the target geometry. The resulting state, keyboard semantics, and refresh lifecycle were verified through the live DOM and focused component regressions; Chromium/emulator evidence does not replace physical-device or assistive-technology testing.
+
+## Changed scenario
+
+- Scenario: Repeat the pre-expanded empty-to-saved History transition at the desktop evidence viewport.
+- Build / commit: Same TREK-305 working tree and verification evidence.
+- Viewport and starting state: Codex in-app Chromium at 1440 x 900 with a 1265px document viewport; independent fresh isolated UX-10-01 approved synthetic identity with empty History.
+- Actions: Generate a workout; expand empty Workout history; start and confirm Barbell Curl set 1; finish through Cooldown; save; inspect completion focus, status, disclosure state, refreshed article, containment, and console output.
+- Observed result: The pre-save disclosure was expanded with `No workouts logged yet.`. Successful save kept it expanded and replaced the stale empty state with one newly saved workout article; `Workout saved` held focus, `This workout is complete.` remained the only nonempty completion status, client and scroll widths remained equal at 1265/1265, and Chromium logged no warning or error.
+- Rendered evidence: `.impeccable/evidence/trek-305-desktop-pre-save.png` and `.impeccable/evidence/trek-305-desktop-post-save.png`, plus live accessibility snapshots, active-element/status inventory, disclosure state, and viewport measurements.
+- Material limitation: The isolated emulator proves application read-after-save behavior and rendered reconciliation without production data, physical-device rendering, or a real screen reader. Focused regressions separately cover collapsed lazy refresh, repeated-key no-op behavior, and refreshed pagination cursor ownership.
+
+## Independent usability review
+
+- Goal: A distracted trainee finishing a short workout can confirm that the result was saved and understand the next safe action.
+- Journey: On a fresh isolated 390 x 844 UX-10-01 lease, generate and start the canonical workout; confirm Barbell Curl set 1; finish early through Cooldown and Review; save; expand Workout History; inspect the persisted entry; select Back to plan.
+- Result: `READY` with no direct usability defects. The first viewport made `Workout saved` and `This workout is complete.` unmistakable, the expanded History showed the new August 7, 2026 entry with its confirmed set, and Back to plan reached a clean Plan screen. Focus, completion status, accessible control names, and disclosure state were present without stale or contradictory post-save content.
+- Material limitation: The independent review used live in-app Chromium interaction, screenshots, focus/status inspection, and semantic DOM evidence; it did not include a physical phone, gym conditions, or a full screen-reader session.

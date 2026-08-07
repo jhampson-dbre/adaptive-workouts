@@ -1516,6 +1516,32 @@ test('history loading is deferred until disclosure and failures remain nonblocki
   expect(screen.getByRole('button', { name: 'Start workout' })).toBeDefined();
 });
 
+test('refreshes already-open empty history after a successful save without another save', async () => {
+  let view;
+  storage.getHistoryPage
+    .mockResolvedValueOnce({ items: [], nextCursor: null, hasMore: false })
+    .mockImplementationOnce(() => Promise.resolve({
+      items: [{ ...view.api.save.mock.calls[0][0], id: 'newly-saved' }], nextCursor: null, hasMore: false,
+    }));
+  view = renderWorkout([{ ...timedWorkout[1] }]);
+
+  const history = screen.getByRole('button', { name: 'Workout history' });
+  fireEvent.click(history);
+  expect(await screen.findByText('No workouts logged yet.')).toBeDefined();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
+
+  await waitFor(() => expect(storage.getHistoryPage).toHaveBeenCalledTimes(2));
+  expect(history.getAttribute('aria-expanded')).toBe('true');
+  expect(screen.getByRole('article')).toBeDefined();
+  expect(screen.queryByText('No workouts logged yet.')).toBeNull();
+  expect(view.api.save).toHaveBeenCalledOnce();
+});
+
 test('zero-work cancellation and partial early finish use explicit session outcomes', async () => {
   const onFinish = vi.fn(); const view = renderWorkout(timedWorkout, onFinish);
   fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));

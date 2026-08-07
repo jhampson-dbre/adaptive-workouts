@@ -284,7 +284,7 @@ function HistoryEntry({ entry, ...headingProps }) {
 
 const pageMessage = (count, older = false) => `${count} ${older ? 'older ' : ''}workout${count === 1 ? '' : 's'} loaded.`;
 
-export default function WorkoutHistory({ history, historyKey, loading = false, error = null, loadPage }) {
+export default function WorkoutHistory({ history, historyKey, loading = false, error = null, loadPage, refreshKey }) {
   const staticHistory = Array.isArray(history);
   const [entries, setEntries] = useState(() => staticHistory ? history : []);
   const [isOpen, setIsOpen] = useState(false);
@@ -301,6 +301,8 @@ export default function WorkoutHistory({ history, historyKey, loading = false, e
   const headingRef = useRef(null);
   const endRef = useRef(null);
   const retryRef = useRef(null);
+  const refreshKeyRef = useRef(refreshKey);
+  const fetchPageRef = useRef(null);
 
   useEffect(() => {
     if (staticHistory) return;
@@ -374,6 +376,24 @@ export default function WorkoutHistory({ history, historyKey, loading = false, e
       }
     }
   };
+  fetchPageRef.current = fetchPage;
+
+  useEffect(() => {
+    const changed = refreshKeyRef.current !== refreshKey;
+    refreshKeyRef.current = refreshKey;
+    if (!changed || staticHistory) return;
+    requestId.current += 1;
+    inFlightRef.current = false;
+    setEntries([]);
+    setPhase('idle');
+    setCursor(null);
+    setHasMore(false);
+    setFeedback(null);
+    setFocusIndex(null);
+    setIsRequestPending(false);
+    setRetryingOlder(false);
+    if (isOpen) fetchPageRef.current();
+  }, [isOpen, refreshKey, staticHistory]);
 
   const toggleOpen = () => {
     const next = !isOpen;
