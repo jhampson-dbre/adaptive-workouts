@@ -8,7 +8,21 @@ class Channel {
   close() { Channel.channels = Channel.channels.filter(channel => channel !== this); }
 }
 
-afterEach(() => { Channel.channels = []; vi.unstubAllGlobals(); });
+afterEach(() => { Channel.channels = []; vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+
+test('clears the baseline recovery draft when a private-access lease changes', () => {
+  const storage = new Map([
+    ['adaptive-workouts:active-workout:v1:demo-project:emulator-baseline-user', '{"interrupted":true}'],
+    ['adaptive-workouts:private-access-lease', 'previous-lease'],
+  ]);
+  vi.stubGlobal('localStorage', { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) });
+  vi.stubEnv('MODE', 'baseline'); vi.stubEnv('VITE_ACCESS_SCENARIO_CONTROL_SESSION', 'new-lease');
+
+  createBrowserActiveWorkoutAdapter();
+
+  expect(storage.get('adaptive-workouts:active-workout:v1:demo-project:emulator-baseline-user')).toBeUndefined();
+  expect(storage.get('adaptive-workouts:private-access-lease')).toBe('new-lease');
+});
 
 test('owner listener ignores its own handoff request and acknowledges a matching peer request', async () => {
   vi.stubGlobal('BroadcastChannel', Channel); vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValueOnce('owner').mockReturnValueOnce('requester') });
