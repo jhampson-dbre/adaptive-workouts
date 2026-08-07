@@ -125,6 +125,49 @@ test('loads only when first opened, appends older pages, and focuses the appende
   expect(loadPage).toHaveBeenLastCalledWith({ cursor: 'cursor-1', pageSize: 20 });
 });
 
+test('keeps a collapsed refresh lazy and resets an open history to its refreshed first page', async () => {
+  const loadPage = vi.fn()
+    .mockResolvedValueOnce({ items: [workout({ id: 'before-refresh' })], nextCursor: 'before-cursor', hasMore: true })
+    .mockResolvedValueOnce({ items: [workout({ id: 'after-refresh' })], nextCursor: 'after-cursor', hasMore: true })
+    .mockResolvedValueOnce({ items: [workout({ id: 'after-refresh-older' })], nextCursor: null, hasMore: false });
+  const { rerender } = render(<WorkoutHistory refreshKey={0} loadPage={loadPage} />);
+
+  rerender(<WorkoutHistory refreshKey={1} loadPage={loadPage} />);
+  expect(loadPage).not.toHaveBeenCalled();
+  openHistory();
+  await waitFor(() => expect(loadPage).toHaveBeenCalledTimes(1));
+  expect(loadPage).toHaveBeenLastCalledWith({ cursor: null, pageSize: 20 });
+
+  rerender(<WorkoutHistory refreshKey={2} loadPage={loadPage} />);
+  await waitFor(() => expect(loadPage).toHaveBeenCalledTimes(2));
+  expect(loadPage).toHaveBeenLastCalledWith({ cursor: null, pageSize: 20 });
+  rerender(<WorkoutHistory refreshKey={2} loadPage={loadPage} />);
+  expect(loadPage).toHaveBeenCalledTimes(2);
+  expect(screen.getAllByRole('article')).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Load older' }));
+  await waitFor(() => expect(loadPage).toHaveBeenCalledTimes(3));
+  expect(loadPage).toHaveBeenLastCalledWith({ cursor: 'after-cursor', pageSize: 20 });
+});
+
+test('invalidates closed empty history for its next lazy disclosure refresh', async () => {
+  const loadPage = vi.fn()
+    .mockResolvedValueOnce({ items: [], nextCursor: null, hasMore: false })
+    .mockResolvedValueOnce({ items: [workout({ id: 'saved-after-collapse' })], nextCursor: null, hasMore: false });
+  const { rerender } = render(<WorkoutHistory refreshKey={0} loadPage={loadPage} />);
+
+  openHistory();
+  expect(await screen.findByText('No workouts logged yet.')).toBeDefined();
+  openHistory();
+  rerender(<WorkoutHistory refreshKey={1} loadPage={loadPage} />);
+  expect(loadPage).toHaveBeenCalledTimes(1);
+
+  openHistory();
+  await waitFor(() => expect(loadPage).toHaveBeenCalledTimes(2));
+  expect(loadPage).toHaveBeenLastCalledWith({ cursor: null, pageSize: 20 });
+  expect(screen.getByRole('article')).toBeDefined();
+  expect(screen.queryByText('No workouts logged yet.')).toBeNull();
+});
+
 test('shows only the end message when the initial non-empty page is final', async () => {
   const loadPage = vi.fn().mockResolvedValue({
     items: [workout({ id: 'only-workout' })], nextCursor: null, hasMore: false,
