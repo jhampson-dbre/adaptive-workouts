@@ -194,6 +194,26 @@ describe('Settings tracking configuration', () => {
     expect(document.activeElement).toBe(summary);
   });
 
+  it('replaces Catalog feedback when default rest saves after a Catalog mutation', async () => {
+    let resolveDefaults;
+    storage.saveSettings.mockReturnValueOnce(new Promise(resolve => { resolveDefaults = resolve; }));
+    renderSettings([], { defaultRestSeconds: 90 });
+    await screen.findByRole('heading', { name: 'General defaults' });
+
+    const catalog = openSettingsJob('Catalog');
+    fireEvent.change(screen.getByLabelText('Exercise name'), { target: { value: 'Squat' } });
+    fireEvent.submit(catalog.querySelector('form'));
+    expect((await screen.findByRole('status')).textContent).toBe('Catalog: Catalog saved.');
+
+    const rest = screen.getByLabelText('Default rest seconds');
+    fireEvent.change(rest, { target: { value: '75' } });
+    fireEvent.blur(rest);
+    expect(screen.getByRole('status').textContent).toBe('Defaults: Saving settings.');
+
+    await act(async () => resolveDefaults());
+    expect((await screen.findByRole('status')).textContent).toBe('Defaults: Settings saved.');
+  });
+
   it('replaces a Superset success with current Defaults pending and attention', async () => {
     let reject;
     storage.saveSettings
