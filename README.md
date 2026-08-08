@@ -1,7 +1,7 @@
 # Adaptive Workouts
 
 Adaptive Workouts is the repository for **Nudge**, a private React app that plans and
-records adaptive hypertrophy workouts. It builds each session from the trainee's
+records adaptive workouts. It builds each session from the trainee's
 available time, recovery constraints, exercise catalog, settings, and recent workout
 history.
 
