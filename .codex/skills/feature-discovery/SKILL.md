@@ -27,8 +27,8 @@ Work with the user to turn a feature idea into a decision-ready brief. This is a
 Classify UI work as `required`, `optional`, or `skip-recorded` during discovery and
 record a short rationale. Required work names the materially changed scenarios and a
 proportional artifact covering the intended flow, states, recovery, and accessibility.
-Execution records rendered proof in `docs/templates/ux-evidence-matrix.md`. Discovery
-does not itself dispatch the reviewer or replace architecture authority.
+Execution follows `$ux-quality-gate` for task-scoped rendered proof. Discovery does not
+itself dispatch the reviewer or replace architecture authority.
 
 ## Completion Gate
 
