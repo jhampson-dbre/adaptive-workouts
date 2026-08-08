@@ -143,16 +143,13 @@ function BodyweightHistory({ exercise, includeTiming = false }) {
   );
 }
 
-function ExerciseHeading({ exercise }) {
-  return <p className="history-exercise-summary">{exercise.prescribedSetCount} {exercise.prescribedSetCount === 1 ? 'set' : 'sets'} · {exercise.trackingMode}</p>;
-}
-
 function confirmedSets(exercise) {
   if (Array.isArray(exercise.setRecords)) return exercise.setRecords.filter(record => record.completed).length;
   return exercise.completed ? 1 : 0;
 }
 
-function workoutWorkSummary(exercises) {
+function WorkoutWorkSummary({ exercises }) {
+  if (exercises.length === 0) return null;
   const recordedExercises = exercises.filter(exercise => Array.isArray(exercise.setRecords));
   const simpleExercises = exercises.filter(exercise => exercise.trackingMode === 'simple' && !Array.isArray(exercise.setRecords));
   const plannedSets = recordedExercises.reduce((total, exercise) => total + exercise.setRecords.length, 0);
@@ -162,12 +159,8 @@ function workoutWorkSummary(exercises) {
   if (recordedExercises.length) facts.push(`${confirmedSetCount} of ${plannedSets} ${plannedSets === 1 ? 'set' : 'sets'} confirmed`);
   if (simpleExercises.length) facts.push(`${confirmedSimpleCount} of ${simpleExercises.length} simple ${simpleExercises.length === 1 ? 'exercise' : 'exercises'} confirmed`);
   const complete = confirmedSetCount === plannedSets && confirmedSimpleCount === simpleExercises.length;
-  return `Confirmed work: ${facts.join('; ')}. ${complete ? 'All planned work confirmed.' : 'Partial work.'}`;
-}
-
-function WorkoutWorkSummary({ exercises }) {
-  if (exercises.length === 0) return null;
-  return <p className="history-work-summary">{workoutWorkSummary(exercises)}</p>;
+  const summary = `Confirmed work: ${facts.join('; ')}. ${complete ? 'All planned work confirmed.' : 'Partial work.'}`;
+  return <p className="history-work-summary">{summary}</p>;
 }
 
 function ExerciseDetails({ exercise, children }) {
@@ -175,7 +168,7 @@ function ExerciseDetails({ exercise, children }) {
   const confirmed = confirmedSets(exercise);
   return <li className="history-exercise"><details>
     <summary>{exercise.name}: {Array.isArray(exercise.setRecords) ? `${confirmed} of ${planned} ${planned === 1 ? 'set' : 'sets'} confirmed` : exercise.completed ? 'confirmed' : 'not confirmed'}</summary>
-    <div className="history-exercise-details"><ExerciseHeading exercise={exercise} />{children}</div>
+    <div className="history-exercise-details"><p className="history-exercise-summary">{exercise.prescribedSetCount} {exercise.prescribedSetCount === 1 ? 'set' : 'sets'} · {exercise.trackingMode}</p>{children}</div>
   </details></li>;
 }
 

@@ -33,6 +33,13 @@ function openSettingsJob(label) {
   return selected;
 }
 
+function createSuperset(firstMember = 'bench', secondMember = 'row') {
+  fireEvent.click(screen.getByRole('button', { name: 'Add superset' }));
+  fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: firstMember } });
+  fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: secondMember } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save superset' }));
+}
+
 describe('Settings tracking configuration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -77,10 +84,7 @@ describe('Settings tracking configuration', () => {
     const [, supersets, catalog] = document.querySelectorAll('details.settings-job');
 
     supersets.open = true;
-    fireEvent.click(screen.getByRole('button', { name: 'Add superset' }));
-    fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench' } });
-    fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save superset' }));
+    createSuperset();
     catalog.open = true;
     supersets.open = false;
     const catalogSummary = catalog.querySelector('summary');
@@ -100,10 +104,7 @@ describe('Settings tracking configuration', () => {
     const [, supersets, catalog] = document.querySelectorAll('details.settings-job');
 
     supersets.open = true;
-    fireEvent.click(screen.getByRole('button', { name: 'Add superset' }));
-    fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench' } });
-    fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save superset' }));
+    createSuperset();
     catalog.open = true;
     supersets.open = false;
     const catalogSummary = catalog.querySelector('summary');
@@ -123,10 +124,7 @@ describe('Settings tracking configuration', () => {
     await screen.findByRole('heading', { name: 'General defaults' });
 
     openSettingsJob('Supersets');
-    fireEvent.click(screen.getByRole('button', { name: 'Add superset' }));
-    fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench' } });
-    fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save superset' }));
+    createSuperset();
     expect((await screen.findByRole('status')).textContent).toBe('Supersets: Superset saved.');
 
     const catalog = openSettingsJob('Catalog');
@@ -223,10 +221,7 @@ describe('Settings tracking configuration', () => {
     await screen.findByRole('heading', { name: 'General defaults' });
 
     openSettingsJob('Supersets');
-    fireEvent.click(screen.getByRole('button', { name: 'Add superset' }));
-    fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench' } });
-    fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save superset' }));
+    createSuperset();
     expect((await screen.findByRole('status')).textContent).toBe('Supersets: Superset saved.');
 
     openSettingsJob('Defaults');
@@ -277,10 +272,7 @@ describe('Settings tracking configuration', () => {
       { ...exercise, id: 'row', name: 'Row', sets: 3 },
     ], { supersets: [] });
     await screen.findByRole('heading', { name: 'Supersets' });
-    fireEvent.click(screen.getByRole('button', { name: 'Add superset' }));
-    fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench' } });
-    fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save superset' }));
+    createSuperset();
     await waitFor(() => expect(storage.saveSettings).toHaveBeenCalledWith('user-1', {
       supersets: [{ exerciseIds: ['bench', 'row'], restPlacement: 'AFTER_ROUND' }],
     }));
