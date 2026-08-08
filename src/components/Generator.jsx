@@ -1,10 +1,17 @@
 import { useState, useContext, useEffect, useRef } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { generateWorkout, getDaysSinceLastLegDay, getDayOfWeek } from '../utils/engine';
+import { normalizeWorkoutSettings } from '../utils/workoutSchema';
 import JourneyProgress from './JourneyProgress';
 
 const MUSCLE_GROUPS = ['Biceps', 'Shoulders', 'Back', 'Chest', 'Triceps', 'Core', 'Legs'];
 const HISTORY_UNAVAILABLE_MESSAGE = 'Workout history is unavailable. Try loading it again before planning a workout.';
+const NO_FIT_MESSAGE = 'No time remains for exercises after your warmup and cooldown. Increase Time available or adjust Defaults in Settings.';
+
+const phaseTargetsFor = (timeBudget, settings) => {
+  const { warmupSeconds, cooldownSeconds } = normalizeWorkoutSettings(settings);
+  return { warmupSeconds, performanceSeconds: Math.max(0, timeBudget * 60 - warmupSeconds - cooldownSeconds), cooldownSeconds };
+};
 
 class HistoryLoadError extends Error {
   constructor(cause) {
@@ -62,13 +69,14 @@ export default function Generator({
       const history = historyResult.value;
       const catalog = catalogResult.value;
       setCanRetryHistory(false);
+      const phaseTargets = phaseTargetsFor(timeBudget, settings);
+      if (!phaseTargets.performanceSeconds) {
+        setError(NO_FIT_MESSAGE);
+        return;
+      }
       const handoffGeneratedWorkout = generated => {
         if (onGenerate) onGenerate(generated, {
-          phaseTargets: {
-            warmupSeconds: settings.warmupSeconds ?? generated.phaseTargets?.warmupSeconds ?? 0,
-            performanceSeconds: timeBudget * 60,
-            cooldownSeconds: settings.cooldownSeconds ?? generated.phaseTargets?.cooldownSeconds ?? 0,
-          },
+          phaseTargets,
           preferredOrderResolution: generated.preferredOrderResolution,
         });
       };
@@ -93,7 +101,7 @@ export default function Generator({
         }
       }
 
-      const generated = generateWorkout(timeBudget, unrecoveredGroups, false, catalog, history, settings);
+      const generated = generateWorkout(phaseTargets.performanceSeconds / 60, unrecoveredGroups, false, catalog, history, settings);
       handoffGeneratedWorkout(generated);
     } catch (err) {
       console.error("Error generating workout:", err);
@@ -115,13 +123,15 @@ export default function Generator({
   const completeLegDayChoice = forceLegDay => {
     if (!legDayChoice) return;
     try {
-      const generated = generateWorkout(timeBudget, unrecoveredGroups, forceLegDay, legDayChoice.catalog, legDayChoice.history, legDayChoice.settings);
+      const phaseTargets = phaseTargetsFor(timeBudget, legDayChoice.settings);
+      if (!phaseTargets.performanceSeconds) {
+        setError(NO_FIT_MESSAGE);
+        setLegDayChoice(null);
+        return;
+      }
+      const generated = generateWorkout(phaseTargets.performanceSeconds / 60, unrecoveredGroups, forceLegDay, legDayChoice.catalog, legDayChoice.history, legDayChoice.settings);
       onGenerate?.(generated, {
-        phaseTargets: {
-          warmupSeconds: legDayChoice.settings.warmupSeconds ?? generated.phaseTargets?.warmupSeconds ?? 0,
-          performanceSeconds: timeBudget * 60,
-          cooldownSeconds: legDayChoice.settings.cooldownSeconds ?? generated.phaseTargets?.cooldownSeconds ?? 0,
-        },
+        phaseTargets,
         preferredOrderResolution: generated.preferredOrderResolution,
       });
       setLegDayChoice(null);

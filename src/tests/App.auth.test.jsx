@@ -259,7 +259,7 @@ describe('private access gate', () => {
     let resolve; const gate = await mountGate({ evaluate: vi.fn().mockImplementationOnce(() => new Promise(done => { resolve = done; })).mockResolvedValueOnce({ claims: { approved: true } }) });
     gate.emitSync(approved); const checking = screen.getByRole('heading', { name: 'Checking access' }); expect(document.activeElement).toBe(checking);
     await gate.emit(approved); resolve({ claims: { approved: false } }); await act(async () => {});
-    const title = await screen.findByRole('heading', { name: 'How much time do you have?' }); await waitFor(() => expect(document.activeElement).toBe(title));
+    const title = await screen.findByRole('heading', { name: "Plan today's workout" }); await waitFor(() => expect(document.activeElement).toBe(title));
     await gate.emit(null); expect(document.activeElement).toBe(await screen.findByRole('heading', { name: 'Nudge' }));
   });
 

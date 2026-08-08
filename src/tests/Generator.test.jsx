@@ -69,10 +69,48 @@ describe('Generator Component', () => {
         fireEvent.click(btn);
         
         await waitFor(() => {
-            expect(engine.generateWorkout).toHaveBeenCalledWith(30, [], false, expect.any(Array), expect.any(Array), expect.any(Object));
+            expect(engine.generateWorkout).toHaveBeenCalledWith(15, [], false, expect.any(Array), expect.any(Array), expect.any(Object));
             expect(onGenerate).toHaveBeenCalled();
             expect(window.confirm).not.toHaveBeenCalled();
         });
+    });
+
+    it('uses Time available as the total phase budget', async () => {
+        storage.getCatalog.mockResolvedValue([]);
+        storage.getSettings.mockResolvedValue({ legDayOfWeek: 'None', warmupSeconds: 420, cooldownSeconds: 180 });
+        const onGenerate = vi.fn();
+        renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
+
+        fireEvent.click(screen.getByText('Plan my workout'));
+        await waitFor(() => {
+            expect(engine.generateWorkout).toHaveBeenCalledWith(35, [], false, expect.any(Array), expect.any(Array), expect.any(Object));
+            expect(onGenerate).toHaveBeenCalledWith([], { phaseTargets: { warmupSeconds: 420, performanceSeconds: 2100, cooldownSeconds: 180 } });
+        });
+    });
+
+    it('recalculates the main budget when configured phases change', async () => {
+        storage.getCatalog.mockResolvedValue([]);
+        storage.getSettings.mockResolvedValueOnce({ legDayOfWeek: 'None', warmupSeconds: 420, cooldownSeconds: 180 }).mockResolvedValueOnce({ legDayOfWeek: 'None', warmupSeconds: 600, cooldownSeconds: 300 });
+        const first = renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />);
+
+        fireEvent.click(screen.getByText('Plan my workout'));
+        await waitFor(() => expect(engine.generateWorkout).toHaveBeenLastCalledWith(35, [], false, expect.any(Array), expect.any(Array), expect.any(Object)));
+        first.unmount();
+        renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />);
+        fireEvent.click(screen.getByText('Plan my workout'));
+        await waitFor(() => expect(engine.generateWorkout).toHaveBeenLastCalledWith(30, [], false, expect.any(Array), expect.any(Array), expect.any(Object)));
+    });
+
+    it('reports a no-fit plan when configured phases consume the total budget', async () => {
+        storage.getCatalog.mockResolvedValue([]);
+        storage.getSettings.mockResolvedValue({ legDayOfWeek: 'None', warmupSeconds: 1800, cooldownSeconds: 900 });
+        const onGenerate = vi.fn();
+        renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
+
+        fireEvent.click(screen.getByText('Plan my workout'));
+        expect((await screen.findByRole('alert')).textContent).toMatch(/no time remains for exercises/i);
+        expect(engine.generateWorkout).not.toHaveBeenCalled();
+        expect(onGenerate).not.toHaveBeenCalled();
     });
 
     it('forwards the engine phase target snapshot without changing the array-based handoff', async () => {
@@ -84,7 +122,7 @@ describe('Generator Component', () => {
         renderWithAuth(<Generator timeBudget={30} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
 
         fireEvent.click(screen.getByText('Plan my workout'));
-        await waitFor(() => expect(onGenerate).toHaveBeenCalledWith(generated, { phaseTargets: { warmupSeconds: 600, performanceSeconds: 1800, cooldownSeconds: 300 } }));
+        await waitFor(() => expect(onGenerate).toHaveBeenCalledWith(generated, { phaseTargets: { warmupSeconds: 600, performanceSeconds: 900, cooldownSeconds: 300 }, preferredOrderResolution: undefined }));
     });
 
     it('offers a neutral inline leg-day choice when legs are due', async () => {
@@ -108,8 +146,8 @@ describe('Generator Component', () => {
         expect(window.confirm).not.toHaveBeenCalled();
         fireEvent.click(screen.getByRole('button', { name: 'Include legs today' }));
         await waitFor(() => {
-            expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], true, expect.any(Array), expect.any(Array), expect.any(Object)); // doLegDay=true
-            expect(onGenerate).toHaveBeenCalledWith([], { phaseTargets: { warmupSeconds: 0, performanceSeconds: 2700, cooldownSeconds: 0 } });
+            expect(engine.generateWorkout).toHaveBeenCalledWith(30, [], true, expect.any(Array), expect.any(Array), expect.any(Object)); // doLegDay=true
+            expect(onGenerate).toHaveBeenCalledWith([], { phaseTargets: { warmupSeconds: 600, performanceSeconds: 1800, cooldownSeconds: 300 }, preferredOrderResolution: undefined });
         });
     });
 
@@ -137,7 +175,7 @@ describe('Generator Component', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Leave legs out today' }));
         await waitFor(() => {
             expect(window.confirm).not.toHaveBeenCalled();
-            expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], false, expect.any(Array), expect.any(Array), expect.any(Object));
+            expect(engine.generateWorkout).toHaveBeenCalledWith(30, [], false, expect.any(Array), expect.any(Array), expect.any(Object));
         });
     });
 
