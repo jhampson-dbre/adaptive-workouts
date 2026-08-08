@@ -11,7 +11,7 @@ Own Trekker state, user communication, integration, final verification, and disp
 - Follow `AGENTS.md`'s task-lifetime implementor ownership rule and focused TDD. For bugs, reproduce, identify the root cause, and inspect plausible same-cause usages; invoke `$bugfix-issue-class-audit` only when material scope ambiguity remains.
 - Follow the repository simplification eligibility and authorization rule. Substantive behavior or risk changes receive code and conformance review; mechanical or straightforward low-risk changes may be coordinator-verified with a recorded rationale.
 - Classify UI work as `required`, `optional`, or `skip-recorded`. Required UI keeps its approved artifact and uses a fresh ux-design-reviewer before architecture review when independent design judgment is needed.
-- For required material scenarios, record rendered evidence in `docs/templates/ux-evidence-matrix.md` using synthetic or de-identified data. A direct changed-surface defect or missing required rendered evidence blocks; unavailable tooling gets a concise limitation and the best safe alternative.
+- For required material scenarios, follow `AGENTS.md` and `$ux-quality-gate` for direct task-scoped evidence handoff and durable summary. A direct changed-surface defect or missing required rendered evidence blocks.
 
 ## Conditional task lifecycle
 

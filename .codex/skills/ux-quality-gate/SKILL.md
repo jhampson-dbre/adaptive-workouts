@@ -12,10 +12,12 @@ Use a fresh ux-design-reviewer before architecture review when that artifact nee
 independent design judgment.
 
 After implementation, exercise each materially changed scenario in a rendered surface
-with synthetic or de-identified data. Record the build, viewport and starting state,
-actions, observed result, rendered evidence, and any material limitation in
-`docs/templates/ux-evidence-matrix.md`. Never require sensitive, personal, or
-production evidence.
+with synthetic or de-identified data. Give applicable changed-surface reviewers a
+task-scoped evidence packet containing the build, viewport and starting state, actions,
+observed result, artifact links when useful, and any material limitation. Summarize the
+result, viewport, useful artifacts, and material limitations in the Trekker Summary or
+PR. Use a task-specific evidence report only when scenario complexity or capability
+gaps justify it; never require sensitive, personal, or production evidence.
 
 For required core-journey UI whose outcome depends on context across screens, phases,
 time, or physical usage, review one goal-first continuation journey per stabilized
@@ -24,7 +26,7 @@ until this review is ready; earlier tasks may complete.
 
 Dispatch a fresh ux-usability-reviewer with only the user goal, usage context, final
 build and starting state, and safe scenario controls. Do not initially provide task
-descriptions, acceptance criteria, approved artifacts, diffs, the evidence matrix,
+descriptions, acceptance criteria, approved artifacts, diffs, collected evidence,
 captioned screenshots, expected labels or layout, observed-result narratives, or
 implementation rationale. The reviewer traverses the final build live from before the
 changed action through the next meaningful boundary, using the whole viewport and,
@@ -78,6 +80,6 @@ evidence does not trigger another review.
 
 ## CI Boundary
 
-The static validator checks required files, model policy, the evidence record fields,
-and CI wiring. It does not enforce duplicated workflow prose or invoke agents,
-browsers, LLMs, or network tools.
+The static validator checks required files, model policy, registration, and CI wiring.
+It does not enforce duplicated workflow prose or invoke agents, browsers, LLMs, or
+network tools.

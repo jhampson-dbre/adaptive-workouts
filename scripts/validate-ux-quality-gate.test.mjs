@@ -33,12 +33,6 @@ function withFixture(run) {
 
 test('accepts the repository contract', () => validate())
 
-test('rejects a missing evidence field', () => withFixture((root) => {
-  mutate(root, 'docs/templates/ux-evidence-matrix.md', (value) =>
-    value.replaceAll('- Rendered evidence:', '- Screenshot:'))
-  assert.throws(() => validate(root), /Rendered evidence/)
-}))
-
 test('rejects usability model drift', () => withFixture((root) => {
   mutate(root, '.codex/agents/ux-usability-reviewer.toml', (value) =>
     value.replace('gpt-5.6-sol', 'gpt-5.6-terra'))
