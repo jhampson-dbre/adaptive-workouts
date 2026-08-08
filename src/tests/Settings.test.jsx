@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Settings from '../components/Settings';
 import { AuthContext } from '../context/AuthContext';
@@ -26,6 +26,13 @@ function renderSettings(catalog = [], settings = {}, onDirtyChange, preference, 
   );
 }
 
+function openSettingsJob(label) {
+  const jobs = [...document.querySelectorAll('details.settings-job')];
+  const selected = jobs.find(job => job.querySelector('summary')?.textContent.startsWith(label));
+  jobs.forEach(job => { job.open = job === selected; });
+  return selected;
+}
+
 describe('Settings tracking configuration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -34,6 +41,183 @@ describe('Settings tracking configuration', () => {
   });
 
   afterEach(cleanup);
+
+  it('organizes Settings into native Defaults, Supersets, and Catalog jobs without unmounting their bodies', async () => {
+    renderSettings([{ ...exercise, trackingMode: 'simple' }]);
+
+    await screen.findByRole('heading', { name: 'General defaults' });
+    const [defaults, supersets, catalog] = document.querySelectorAll('details.settings-job');
+
+    expect(defaults.getAttribute('name')).toBe('settings-job');
+    expect(defaults.hasAttribute('open')).toBe(true);
+    expect(supersets.getAttribute('name')).toBe('settings-job');
+    expect(catalog.getAttribute('name')).toBe('settings-job');
+    expect(catalog.querySelector('form')).toBeTruthy();
+    expect(catalog.querySelector('.catalog-list h3').textContent).toBe('Current Catalog');
+  });
+
+  it('leaves the browser-owned job selection unchanged after a Settings rerender', async () => {
+    renderSettings();
+    await screen.findByRole('heading', { name: 'General defaults' });
+    const [defaults, , catalog] = document.querySelectorAll('details.settings-job');
+
+    defaults.open = false;
+    catalog.open = true;
+    fireEvent.change(screen.getByLabelText('Default rest seconds'), { target: { value: '90' } });
+
+    expect(defaults.open).toBe(false);
+    expect(catalog.open).toBe(true);
+  });
+
+  it('keeps focus in another job and reports a completed Superset save outside closed bodies', async () => {
+    let settle;
+    storage.saveSettings.mockReturnValueOnce(new Promise(resolve => { settle = resolve; }));
+    renderSettings([{ ...exercise, id: 'bench', name: 'Bench Press' }, { ...exercise, id: 'row', name: 'Row' }], { supersets: [] });
+    await screen.findByRole('heading', { name: 'General defaults' });
+    const [, supersets, catalog] = document.querySelectorAll('details.settings-job');
+
+    supersets.open = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Add superset' }));
+    fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench' } });
+    fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save superset' }));
+    catalog.open = true;
+    supersets.open = false;
+    const catalogSummary = catalog.querySelector('summary');
+    catalogSummary.focus();
+    expect(supersets.open).toBe(false);
+
+    await act(async () => settle());
+    expect((await screen.findByRole('status')).textContent).toBe('Supersets: Superset saved.');
+    expect(document.activeElement).toBe(catalogSummary);
+  });
+
+  it('keeps a failed Superset save recoverable without stealing focus from another job', async () => {
+    let reject;
+    storage.saveSettings.mockReturnValueOnce(new Promise((_, rejectSave) => { reject = rejectSave; }));
+    renderSettings([{ ...exercise, id: 'bench', name: 'Bench Press' }, { ...exercise, id: 'row', name: 'Row' }], { supersets: [] });
+    await screen.findByRole('heading', { name: 'General defaults' });
+    const [, supersets, catalog] = document.querySelectorAll('details.settings-job');
+
+    supersets.open = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Add superset' }));
+    fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench' } });
+    fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save superset' }));
+    catalog.open = true;
+    supersets.open = false;
+    const catalogSummary = catalog.querySelector('summary');
+    catalogSummary.focus();
+    expect(supersets.open).toBe(false);
+
+    await act(async () => reject(new Error('offline')));
+    expect((await screen.findByRole('status')).textContent).toBe('Supersets: Could not save superset. Your changes are still here.');
+    expect(supersets.querySelector('summary').textContent).toContain('Needs attention');
+    expect(document.activeElement).toBe(catalogSummary);
+    supersets.open = true;
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+  });
+
+  it('replaces a completed Superset outcome with later Catalog validation feedback', async () => {
+    renderSettings([{ ...exercise, id: 'bench', name: 'Bench Press' }, { ...exercise, id: 'row', name: 'Row' }], { supersets: [] });
+    await screen.findByRole('heading', { name: 'General defaults' });
+
+    openSettingsJob('Supersets');
+    fireEvent.click(screen.getByRole('button', { name: 'Add superset' }));
+    fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench' } });
+    fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save superset' }));
+    expect((await screen.findByRole('status')).textContent).toBe('Supersets: Superset saved.');
+
+    const catalog = openSettingsJob('Catalog');
+    fireEvent.submit(catalog.querySelector('form'));
+
+    expect((await screen.findByRole('status')).textContent).toBe('Catalog needs attention.');
+    expect(catalog.querySelector('summary').textContent).toContain('Needs attention');
+  });
+
+  it('keeps a failed Catalog add actionable after another Settings job opens', async () => {
+    renderSettings();
+    await screen.findByRole('heading', { name: 'General defaults' });
+    const [, supersets, catalog] = document.querySelectorAll('details.settings-job');
+
+    catalog.open = true;
+    fireEvent.submit(catalog.querySelector('form'));
+    expect(await screen.findByText('Exercise name is required.')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('Catalog needs attention.');
+    expect(catalog.querySelector('summary').textContent).toContain('Needs attention');
+
+    supersets.open = true;
+    catalog.open = true;
+    expect(catalog.querySelector('input[placeholder="Exercise Name"]')?.value).toBe('');
+    expect(catalog.querySelector('#add-tracking-error')?.textContent).toBe('Exercise name is required.');
+  });
+
+  it('reports a completed Defaults save after another job opens without moving focus', async () => {
+    let settle;
+    storage.saveSettings.mockReturnValueOnce(new Promise(resolve => { settle = resolve; }));
+    renderSettings();
+    await screen.findByRole('heading', { name: 'General defaults' });
+    const [, supersets] = document.querySelectorAll('details.settings-job');
+
+    fireEvent.change(screen.getByLabelText('Default rest seconds'), { target: { value: '90' } });
+    fireEvent.blur(screen.getByLabelText('Default rest seconds'));
+    expect((await screen.findByRole('status')).textContent).toBe('Defaults: Saving settings.');
+
+    openSettingsJob('Supersets');
+    const summary = supersets.querySelector('summary');
+    summary.focus();
+    await act(async () => settle());
+
+    expect((await screen.findByRole('status')).textContent).toBe('Defaults: Settings saved.');
+    expect(document.activeElement).toBe(summary);
+  });
+
+  it('reports a completed Catalog save after another job opens without moving focus', async () => {
+    let settle;
+    storage.saveCatalogItem.mockReturnValueOnce(new Promise(resolve => { settle = resolve; }));
+    renderSettings();
+    await screen.findByRole('heading', { name: 'General defaults' });
+    const [, supersets, catalog] = document.querySelectorAll('details.settings-job');
+
+    openSettingsJob('Catalog');
+    fireEvent.change(screen.getByLabelText('Exercise name'), { target: { value: 'Squat' } });
+    fireEvent.submit(catalog.querySelector('form'));
+    expect((await screen.findByRole('status')).textContent).toBe('Catalog: Saving catalog.');
+
+    openSettingsJob('Supersets');
+    const summary = supersets.querySelector('summary');
+    summary.focus();
+    await act(async () => settle());
+
+    expect((await screen.findByRole('status')).textContent).toBe('Catalog: Catalog saved.');
+    expect(document.activeElement).toBe(summary);
+  });
+
+  it('replaces a Superset success with current Defaults pending and attention', async () => {
+    let reject;
+    storage.saveSettings
+      .mockResolvedValueOnce()
+      .mockReturnValueOnce(new Promise((_, rejectSave) => { reject = rejectSave; }));
+    renderSettings([{ ...exercise, id: 'bench', name: 'Bench Press' }, { ...exercise, id: 'row', name: 'Row' }], { supersets: [] });
+    await screen.findByRole('heading', { name: 'General defaults' });
+
+    openSettingsJob('Supersets');
+    fireEvent.click(screen.getByRole('button', { name: 'Add superset' }));
+    fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench' } });
+    fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save superset' }));
+    expect((await screen.findByRole('status')).textContent).toBe('Supersets: Superset saved.');
+
+    openSettingsJob('Defaults');
+    fireEvent.change(screen.getByLabelText('Default rest seconds'), { target: { value: '90' } });
+    fireEvent.blur(screen.getByLabelText('Default rest seconds'));
+    expect(screen.getByRole('status').textContent).toBe('Defaults: Saving settings.');
+    await act(async () => reject(new Error('offline')));
+
+    expect((await screen.findByRole('status')).textContent).toBe('Defaults: Could not save settings. Try again.');
+    expect(document.querySelector('details.settings-job summary').textContent).toContain('Needs attention');
+  });
 
   it('always provides saved-order clearing and explains why it is disabled during a save', async () => {
     const clear = vi.fn();
@@ -85,6 +269,7 @@ describe('Settings tracking configuration', () => {
   it('returns ordinary create Cancel focus to the remounted Add superset button', async () => {
     renderSettings([exercise], { supersets: [] });
     const originalAdd = await screen.findByRole('button', { name: 'Add superset' });
+    openSettingsJob('Supersets');
     fireEvent.click(originalAdd);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     const remountedAdd = await screen.findByRole('button', { name: 'Add superset' });
@@ -96,6 +281,7 @@ describe('Settings tracking configuration', () => {
     storage.saveSettings.mockRejectedValueOnce(new Error('offline'));
     renderSettings([exercise, { ...exercise, id: 'row', name: 'Row' }], { supersets: [] });
     const originalAdd = await screen.findByRole('button', { name: 'Add superset' });
+    openSettingsJob('Supersets');
     fireEvent.click(originalAdd);
     fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench-press' } });
     fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
@@ -111,6 +297,7 @@ describe('Settings tracking configuration', () => {
     storage.saveSettings.mockRejectedValueOnce(new Error('offline'));
     renderSettings([exercise, { ...exercise, id: 'row', name: 'Row' }], { supersets: [{ exerciseIds: ['bench-press', 'row'], restPlacement: 'AFTER_ROUND' }] });
     const remove = await screen.findByRole('button', { name: 'Remove superset' });
+    openSettingsJob('Supersets');
     fireEvent.click(remove);
     fireEvent.click(screen.getAllByRole('button', { name: 'Remove superset' })[1]);
     const retry = await screen.findByRole('button', { name: 'Retry' });
@@ -122,7 +309,9 @@ describe('Settings tracking configuration', () => {
 
   it('moves focus into direct superset removal confirmation', async () => {
     renderSettings([exercise, { ...exercise, id: 'row', name: 'Row' }], { supersets: [{ exerciseIds: ['bench-press', 'row'], restPlacement: 'AFTER_ROUND' }] });
-    fireEvent.click(await screen.findByRole('button', { name: 'Remove superset' }));
+    const remove = await screen.findByRole('button', { name: 'Remove superset' });
+    openSettingsJob('Supersets');
+    fireEvent.click(remove);
     const keep = await screen.findByRole('button', { name: 'Keep superset' });
     await waitFor(() => expect(document.activeElement).toBe(keep));
   });
@@ -130,7 +319,9 @@ describe('Settings tracking configuration', () => {
   it('keeps paused reactivation recoverable and returns focus to the group on success', async () => {
     storage.saveCatalogItem.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce();
     renderSettings([{ ...exercise, isActive: false }, { ...exercise, id: 'row', name: 'Row' }], { supersets: [{ exerciseIds: ['bench-press', 'row'], restPlacement: 'AFTER_ROUND' }] });
-    fireEvent.click(await screen.findByRole('button', { name: 'Reactivate Bench Press' }));
+    const reactivate = await screen.findByRole('button', { name: 'Reactivate Bench Press' });
+    openSettingsJob('Supersets');
+    fireEvent.click(reactivate);
     const retry = await screen.findByRole('button', { name: 'Retry' });
     await waitFor(() => expect(document.activeElement).toBe(retry));
     fireEvent.click(retry);
@@ -145,6 +336,7 @@ describe('Settings tracking configuration', () => {
     storage.saveCatalogItem.mockRejectedValueOnce(new Error('offline'));
     renderSettings([{ ...exercise, isActive: false }, { ...exercise, id: 'row', name: 'Row' }], { supersets: [{ exerciseIds: ['bench-press', 'row'], restPlacement: 'AFTER_ROUND' }] });
     const originalReactivate = await screen.findByRole('button', { name: 'Reactivate Bench Press' });
+    openSettingsJob('Supersets');
     fireEvent.click(originalReactivate);
     await screen.findByRole('button', { name: 'Retry' });
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
@@ -159,6 +351,7 @@ describe('Settings tracking configuration', () => {
       { exerciseIds: ['barbell-curl', 'hammer-curl'], restPlacement: 'AFTER_ROUND' },
     ] });
     const remainingSummary = (await screen.findByText('Barbell Curl, Hammer Curl')).closest('.superset-summary');
+    openSettingsJob('Supersets');
     fireEvent.click((await screen.findAllByRole('button', { name: 'Remove superset' }))[0]);
     fireEvent.click(screen.getAllByRole('button', { name: 'Remove superset' })[1]);
     await waitFor(() => expect(document.activeElement).toBe(remainingSummary));
@@ -179,7 +372,9 @@ describe('Settings tracking configuration', () => {
 
   it('moves focus with the exercise and announces its new position', async () => {
     renderSettings([exercise, { ...exercise, id: 'row', name: 'Row' }], { supersets: [{ exerciseIds: ['bench-press', 'row'], restPlacement: 'AFTER_ROUND' }] });
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit superset' }));
+    const edit = await screen.findByRole('button', { name: 'Edit superset' });
+    openSettingsJob('Supersets');
+    fireEvent.click(edit);
     fireEvent.click(screen.getAllByRole('button', { name: 'Move down' })[0]);
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Superset member 2')));
     expect(screen.getByText('Moved Bench Press to position 2 of 2')).toBeTruthy();
@@ -187,7 +382,9 @@ describe('Settings tracking configuration', () => {
 
   it('keeps focus with an unselected member while it moves', async () => {
     renderSettings([exercise], { supersets: [] });
-    fireEvent.click(await screen.findByRole('button', { name: 'Add superset' }));
+    const add = await screen.findByRole('button', { name: 'Add superset' });
+    openSettingsJob('Supersets');
+    fireEvent.click(add);
     fireEvent.click(screen.getAllByRole('button', { name: 'Move down' })[0]);
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Superset member 2')));
   });
@@ -212,7 +409,9 @@ describe('Settings tracking configuration', () => {
     let resolveBatch;
     storage.saveSettingsAndCatalogItem.mockReturnValue(new Promise(resolve => { resolveBatch = resolve; }));
     renderSettings([exercise, { ...exercise, id: 'row', name: 'Row' }], { supersets: [{ exerciseIds: ['bench-press', 'row'], restPlacement: 'AFTER_ROUND' }] });
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Deactivate' }))[0]);
+    const deactivate = (await screen.findAllByRole('button', { name: 'Deactivate' }))[0];
+    openSettingsJob('Catalog');
+    fireEvent.click(deactivate);
     const pause = screen.getByRole('button', { name: 'Deactivate and pause' });
     await waitFor(() => expect(document.activeElement).toBe(pause));
     expect(screen.getByRole('button', { name: 'Remove and deactivate' })).toBeTruthy();
@@ -224,7 +423,9 @@ describe('Settings tracking configuration', () => {
     cleanup();
 
     renderSettings([exercise, { ...exercise, id: 'row', name: 'Row' }, { ...exercise, id: 'press', name: 'Press' }], { supersets: [{ exerciseIds: ['bench-press', 'row', 'press'], restPlacement: 'AFTER_ROUND' }] });
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Deactivate' }))[0]);
+    const deactivateAgain = (await screen.findAllByRole('button', { name: 'Deactivate' }))[0];
+    openSettingsJob('Catalog');
+    fireEvent.click(deactivateAgain);
     expect(screen.getAllByRole('button', { name: 'Remove and deactivate' })[0]).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Deactivate and pause' })).toBeTruthy();
   });
@@ -233,6 +434,7 @@ describe('Settings tracking configuration', () => {
     storage.saveSettingsAndCatalogItem.mockRejectedValueOnce(new Error('offline'));
     renderSettings([exercise, { ...exercise, id: 'row', name: 'Row' }], { supersets: [{ exerciseIds: ['bench-press', 'row'], restPlacement: 'AFTER_ROUND' }] });
     const deactivate = (await screen.findAllByRole('button', { name: 'Deactivate' }))[0];
+    openSettingsJob('Catalog');
     fireEvent.click(deactivate);
     fireEvent.click(screen.getByRole('button', { name: 'Deactivate and pause' }));
     const retry = await screen.findByRole('button', { name: 'Retry' });
@@ -453,8 +655,10 @@ describe('Settings tracking configuration', () => {
     fireEvent.click(deactivate);
     await waitFor(() => expect(item.querySelector('[role="alert"]').textContent).toMatch(/could not update the catalog.*try again/i));
     expect(screen.getByText('Active')).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Deactivate' }).disabled).toBe(false));
     fireEvent.click(screen.getByRole('button', { name: 'Deactivate' }));
-    await waitFor(() => expect(item.querySelector('[role="alert"]')).toBeNull());
+    await waitFor(() => expect(storage.saveCatalogItem).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(document.querySelector('.catalog-item [role="alert"]')).toBeNull());
   });
 
   it('preserves default rest and Leg Day when their saves overlap and finish out of order', async () => {

@@ -148,6 +148,9 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
   const [deactivationConfirm, setDeactivationConfirm] = useState(null);
   const [supersetFeedback, setSupersetFeedback] = useState('');
   const [postRenderFocus, setPostRenderFocus] = useState('');
+  const [jobOutcome, setJobOutcome] = useState(null);
+  const jobDetailsRefs = useRef({});
+  const defaultsInitiallyOpened = useRef(false);
   const supersetActionRef = useRef(null);
   const supersetEditorRef = useRef(null);
   const supersetGroupRefs = useRef({});
@@ -201,6 +204,13 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
   const [editDirty, setEditDirty] = useState(false);
   const editSaveInFlight = useRef(false);
   const editSetsRef = useRef(null);
+  const setInitialDefaultsRef = useCallback(node => {
+    jobDetailsRefs.current.defaults = node;
+    if (node && !defaultsInitiallyOpened.current) {
+      node.open = true;
+      defaultsInitiallyOpened.current = true;
+    }
+  }, []);
 
   const loadData = useCallback(async () => {
     if (!user) {
@@ -242,16 +252,30 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   useEffect(() => {
     if (!postRenderFocus) return;
-    if (postRenderFocus === 'add') addSupersetRef.current?.focus();
-    else if (postRenderFocus.startsWith('reactivate:')) supersetReactivateRefs.current[postRenderFocus.slice('reactivate:'.length)]?.focus();
-    else supersetGroupRefs.current[postRenderFocus]?.focus();
+    const activeJob = document.activeElement?.closest?.('details.settings-job');
+    if (jobDetailsRefs.current.supersets?.open && (!activeJob || activeJob === jobDetailsRefs.current.supersets)) {
+      if (postRenderFocus === 'add') addSupersetRef.current?.focus();
+      else if (postRenderFocus.startsWith('reactivate:')) supersetReactivateRefs.current[postRenderFocus.slice('reactivate:'.length)]?.focus();
+      else supersetGroupRefs.current[postRenderFocus]?.focus();
+    }
     setPostRenderFocus('');
   }, [postRenderFocus, supersets]);
+
+  const focusJob = (job, callback) => {
+    const details = jobDetailsRefs.current[job];
+    if (!details?.open) return;
+    requestAnimationFrame(() => {
+      if (jobDetailsRefs.current[job]?.open) callback();
+    });
+  };
+  const focusSupersets = callback => focusJob('supersets', callback);
+  const focusCatalog = callback => focusJob('catalog', callback);
 
   const handleSaveSettings = async (updates) => {
     const field = Object.keys(updates)[0];
     const version = (settingsSaveVersion.current[field] || 0) + 1;
     settingsSaveVersion.current[field] = version;
+    setJobOutcome({ job: 'Defaults', message: 'Saving settings.' });
     const previousSave = settingsSaveQueue.current[field];
     const save = (async () => {
       if (previousSave) await previousSave;
@@ -273,6 +297,9 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
         ...(Object.hasOwn(updates, 'warmupSeconds') ? { warmupMinutes: String(updates.warmupSeconds / 60) } : {}),
         ...(Object.hasOwn(updates, 'cooldownSeconds') ? { cooldownMinutes: String(updates.cooldownSeconds / 60) } : {}),
       }));
+      setJobOutcome({ job: 'Defaults', message: 'Settings saved.' });
+    } else {
+      setJobOutcome({ job: 'Defaults', message: 'Could not save settings. Try again.' });
     }
     return saved;
   };
@@ -280,6 +307,7 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
   const handleDefaultRestBlur = async () => {
     const value = Number(defaultRestSeconds);
     if (!isValidRestSeconds(value)) {
+      setJobOutcome(null);
       setSettingsError('Default rest must be a whole number from 5 through 600 seconds.');
       return;
     }
@@ -303,6 +331,7 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
 
   const handlePhaseBlur = async (phase, minutes) => {
     if (minutes === '') {
+      setJobOutcome(null);
       setPhaseErrors(current => ({
         ...current,
         [phase]: `${phase === 'warmup' ? 'Warmup' : 'Cooldown'} must be a whole number from 0 through 60 minutes.`,
@@ -311,6 +340,7 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
     }
     const value = Number(minutes);
     if (!isValidPhaseMinutes(value)) {
+      setJobOutcome(null);
       setPhaseErrors(current => ({
         ...current,
         [phase]: `${phase === 'warmup' ? 'Warmup' : 'Cooldown'} must be a whole number from 0 through 60 minutes.`,
@@ -329,14 +359,17 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
   };
 
   const handleSave = async (newCatalog, changedItem = null) => {
+    setJobOutcome({ job: 'Catalog', message: 'Saving catalog.' });
     try {
       if (changedItem) {
         await saveCatalogItem(user.uid, changedItem);
       }
       setCatalog(newCatalog);
       setCatalogError(null);
+      setJobOutcome({ job: 'Catalog', message: 'Catalog saved.' });
     } catch (error) {
       console.error("Failed to save catalog item:", error);
+      setJobOutcome({ job: 'Catalog', message: 'Could not save catalog. Try again.' });
       throw error;
     }
   };
@@ -346,7 +379,7 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
   const startSuperset = (group = { exerciseIds: ['', ''], restPlacement: SUPERSET_REST_PLACEMENT.AFTER_ROUND }, index = null) => {
     setSupersetDraft({ ...group, exerciseIds: [...group.exerciseIds], index });
     setSupersetError(''); setSupersetSaveError('');
-    requestAnimationFrame(() => supersetEditorRef.current?.querySelector('select')?.focus());
+    focusSupersets(() => supersetEditorRef.current?.querySelector('select')?.focus());
   };
   const saveSuperset = async () => {
     if (supersetSaveInFlight.current) return;
@@ -355,26 +388,30 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
     if (!isValidCatalogSupersetSettings(candidate, catalog)) {
       const members = draft.exerciseIds.map(id => catalog.find(ex => ex.id === id));
       const invalidMemberIndex = members.findIndex((member, memberIndex) => !member || member.isActive === false || draft.exerciseIds.indexOf(draft.exerciseIds[memberIndex]) !== memberIndex);
+      setJobOutcome(null);
       setSupersetError(members.some(ex => !ex) ? 'Choose two different active exercises.'
         : new Set(members.map(ex => ex?.sets)).size > 1 ? `Superset members must have equal sets (${members.map(ex => ex?.name).join(', ')}).`
           : 'Each active exercise can belong to only one superset.');
-      requestAnimationFrame(() => supersetEditorRef.current?.querySelectorAll('select')[Math.max(0, invalidMemberIndex)]?.focus());
+      focusSupersets(() => supersetEditorRef.current?.querySelectorAll('select')[Math.max(0, invalidMemberIndex)]?.focus());
       return;
     }
     supersetSaveInFlight.current = true;
     setIsSavingSuperset(true);
+    setJobOutcome({ job: 'Supersets', message: 'Saving superset.' });
     try {
       await saveSettings(user.uid, { supersets: candidate });
       setSupersets(candidate); setSupersetDraft(null); setSupersetError(''); setSupersetSaveError('');
+      setJobOutcome({ job: 'Supersets', message: 'Superset saved.' });
       setPostRenderFocus(candidate[index === null ? candidate.length - 1 : index]?.exerciseIds.join('|') ?? '');
       supersetSaveInFlight.current = false;
       setIsSavingSuperset(false);
     } catch (error) {
       console.error('Failed to save superset:', error);
       setSupersetSaveError('Could not save superset. Your changes are still here.');
+      setJobOutcome({ job: 'Supersets', message: 'Could not save superset. Your changes are still here.' });
       supersetSaveInFlight.current = false;
       setIsSavingSuperset(false);
-      requestAnimationFrame(() => supersetActionRef.current?.focus());
+      focusSupersets(() => supersetActionRef.current?.focus());
     }
   };
   const removeSuperset = async () => {
@@ -384,18 +421,21 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
     const focusGroup = candidate[index] ?? candidate[index - 1];
     supersetRemoveInFlight.current = true;
     setRemovingSuperset(current => ({ ...current, pending: true, error: '' }));
+    setJobOutcome({ job: 'Supersets', message: 'Removing superset.' });
     try {
       await saveSettings(user.uid, { supersets: candidate });
       setSupersets(candidate); setRemovingSuperset(null);
       supersetRemoveInFlight.current = false;
+      setJobOutcome({ job: 'Supersets', message: 'Superset removed. Exercises remain active and schedule normally.' });
       setSupersetFeedback('Superset removed. Exercises remain active and schedule normally.');
       if (focusGroup) setPostRenderFocus(focusGroup.exerciseIds.join('|'));
-      else requestAnimationFrame(() => addSupersetRef.current?.focus());
+      else focusSupersets(() => addSupersetRef.current?.focus());
     } catch (error) {
       console.error('Failed to remove superset:', error);
       setRemovingSuperset(current => ({ ...current, pending: false, error: 'Could not remove superset.' }));
       supersetRemoveInFlight.current = false;
-      requestAnimationFrame(() => supersetActionRef.current?.focus());
+      setJobOutcome({ job: 'Supersets', message: 'Could not remove superset.' });
+      focusSupersets(() => supersetActionRef.current?.focus());
     }
   };
   const moveSupersetMember = (position, direction) => {
@@ -403,25 +443,29 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
     [members[position], members[next]] = [members[next], members[position]];
     const movedId = members[next];
     setSupersetDraft({ ...supersetDraft, exerciseIds: members });
+    setJobOutcome(null);
     setSupersetFeedback(`Moved ${catalog.find(ex => ex.id === movedId)?.name ?? 'exercise'} to position ${next + 1} of ${members.length}`);
-    requestAnimationFrame(() => supersetMemberRefs.current[movedId || `blank-${next}`]?.focus());
+    focusSupersets(() => supersetMemberRefs.current[movedId || `blank-${next}`]?.focus());
   };
   const reactivateSuperset = async (target = reactivatingSuperset) => {
     if (supersetReactivateInFlight.current) return;
     const { exercise, index } = target;
     supersetReactivateInFlight.current = true;
     setReactivatingSuperset({ ...target, pending: true, error: '' });
+    setJobOutcome({ job: 'Supersets', message: 'Reactivating superset.' });
     try {
       const item = { ...exercise, isActive: true };
       await saveCatalogItem(user.uid, item);
       setCatalog(current => current.map(ex => ex.id === item.id ? item : ex));
+      setJobOutcome({ job: 'Supersets', message: 'Superset active.' });
       setReactivatingSuperset(null); setSupersetFeedback('Superset active.');
       supersetReactivateInFlight.current = false;
       setPostRenderFocus(supersets[index]?.exerciseIds.join('|') ?? '');
     } catch {
       setReactivatingSuperset(current => ({ ...current, pending: false, error: `Could not reactivate ${exercise.name}.` }));
       supersetReactivateInFlight.current = false;
-      requestAnimationFrame(() => supersetActionRef.current?.focus());
+      setJobOutcome({ job: 'Supersets', message: `Could not reactivate ${exercise.name}.` });
+      focusSupersets(() => supersetActionRef.current?.focus());
     }
   };
   const confirmDeactivation = async ({ removeMember }) => {
@@ -434,18 +478,21 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
     const item = { ...exercise, isActive: false };
     deactivationInFlight.current = true;
     setDeactivationConfirm(current => ({ ...current, pending: true, error: '' }));
+    setJobOutcome({ job: 'Catalog', message: 'Updating catalog.' });
     try {
       await saveSettingsAndCatalogItem(user.uid, { supersets: candidate }, item);
       setCatalog(catalog.map(ex => ex.id === item.id ? item : ex)); setSupersets(candidate); setDeactivationConfirm(null);
       deactivationInFlight.current = false;
+      setJobOutcome({ job: 'Catalog', message: 'Catalog updated.' });
       setSupersetFeedback(`${item.name} deactivated.`);
       const focusGroup = candidate[groupIndex] ?? candidate[groupIndex - 1];
       if (focusGroup) setPostRenderFocus(focusGroup.exerciseIds.join('|'));
-      else requestAnimationFrame(() => addSupersetRef.current?.focus());
+      else focusSupersets(() => addSupersetRef.current?.focus());
     } catch {
       setDeactivationConfirm(current => ({ ...current, pending: false, error: 'Could not update the catalog.' }));
       deactivationInFlight.current = false;
-      requestAnimationFrame(() => supersetActionRef.current?.focus());
+      setJobOutcome({ job: 'Catalog', message: 'Could not update catalog. Try again.' });
+      focusCatalog(() => supersetActionRef.current?.focus());
     }
   };
 
@@ -453,7 +500,7 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
     if (catalogMutationInFlight.current) return;
     const exercise = catalog.find(ex => ex.id === id);
     const groupIndex = supersets.findIndex(group => group.exerciseIds.includes(id));
-    if (exercise?.isActive !== false && groupIndex >= 0) { setDeactivationConfirm({ exercise, groupIndex, invoker, pending: false, error: '' }); requestAnimationFrame(() => deactivationActionRef.current?.focus()); return; }
+    if (exercise?.isActive !== false && groupIndex >= 0) { setDeactivationConfirm({ exercise, groupIndex, invoker, pending: false, error: '' }); focusCatalog(() => deactivationActionRef.current?.focus()); return; }
     let changedItem = null;
     const updated = catalog.map(ex => {
       if (ex.id === id) {
@@ -500,6 +547,7 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
 
   const handleSaveEdit = async (id) => {
     if (editSaveInFlight.current || catalogMutationInFlight.current) return;
+    setJobOutcome(null);
     setEditError('');
     setEditErrorIsValidation(false);
     if (!editName.trim()) {
@@ -577,6 +625,7 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
   const handleAdd = async (e) => {
     e.preventDefault();
     if (addSaveInFlight.current || catalogMutationInFlight.current) return;
+    setJobOutcome(null);
     setAddError('');
     setAddErrorIsValidation(false);
     if (!newName.trim()) {
@@ -680,6 +729,16 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
   );
 
   const editFieldInvalid = editErrorIsValidation && !editSetsError;
+  const defaultsFeedback = settingsError || legDayError || phaseErrors.warmup || phaseErrors.cooldown;
+  const supersetsAttention = supersetError || supersetSaveError || removingSuperset?.error || reactivatingSuperset?.error;
+  const catalogAttention = addError || editError || deactivationConfirm?.error || catalogError;
+  const sharedFeedback = jobOutcome ? `${jobOutcome.job}: ${jobOutcome.message}`
+    : isSavingSuperset ? 'Supersets are saving.'
+    : isCatalogMutating ? 'Catalog is saving.'
+        : defaultsFeedback ? 'Defaults need attention.'
+        : supersetsAttention ? 'Supersets need attention.'
+          : catalogAttention ? 'Catalog needs attention.'
+            : supersetFeedback ? `Supersets: ${supersetFeedback}` : '';
 
   return (
     <div className="settings-view">
@@ -689,6 +748,10 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
       </div>
 
       <OrderPreferencePanel {...{ preference, onClearPreferences, onSavePreference, onDismissPreference }} />
+      {sharedFeedback && <div className="settings-job-feedback" role="status" aria-live="polite">{sharedFeedback}</div>}
+      <details className="settings-job" name="settings-job" ref={setInitialDefaultsRef}>
+        <summary><span>Defaults</span>{defaultsFeedback && <span className="settings-job-attention">Needs attention</span>}</summary>
+        <div className="settings-job-body">
       <section className="general-defaults" aria-labelledby="general-defaults-heading">
         <h3 id="general-defaults-heading">General defaults</h3>
         <div className="setting-group">
@@ -764,7 +827,12 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
         )}
       </div>
       </section>
+        </div>
+      </details>
 
+      <details className="settings-job" name="settings-job" ref={node => { jobDetailsRefs.current.supersets = node; }}>
+        <summary><span>Supersets</span>{supersetsAttention && <span className="settings-job-attention">Needs attention</span>}</summary>
+        <div className="settings-job-body">
       <section className="supersets" aria-labelledby="supersets-heading">
         <h3 id="supersets-heading">Supersets</h3>
         <p>Exercises in a superset stay together and use the same number of sets.</p>
@@ -784,7 +852,7 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
               </div>}
               <div className="item-actions">
                 <button type="button" className="edit-btn" disabled={removingSuperset?.index === index && removingSuperset.pending} onClick={() => startSuperset(group, index)}>Edit superset</button>
-                <button type="button" className="cancel-btn" disabled={removingSuperset?.index === index && removingSuperset.pending} onClick={event => { setRemovingSuperset({ index, invoker: event.currentTarget, pending: false, error: '' }); requestAnimationFrame(() => supersetConfirmRef.current?.focus()); }}>Remove superset</button>
+                <button type="button" className="cancel-btn" disabled={removingSuperset?.index === index && removingSuperset.pending} onClick={event => { setRemovingSuperset({ index, invoker: event.currentTarget, pending: false, error: '' }); focusSupersets(() => supersetConfirmRef.current?.focus()); }}>Remove superset</button>
               </div>
               {removingSuperset?.index === index && <div className="catalog-form-error" role="alert">
                 Remove superset for {supersetNames(group)}? The exercises remain active and schedule normally.
@@ -823,7 +891,12 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
           </div>
         )}
       </section>
+        </div>
+      </details>
       
+      <details className="settings-job" name="settings-job" ref={node => { jobDetailsRefs.current.catalog = node; }}>
+        <summary><span>Catalog</span>{catalogAttention && <span className="settings-job-attention">Needs attention</span>}</summary>
+        <div className="settings-job-body">
       <div className="add-exercise">
         <h3>Add exercise</h3>
         <form onSubmit={handleAdd} className="add-form" noValidate>
@@ -1067,6 +1140,8 @@ export default function Settings({ onClose, onDirtyChange, preference, onClearPr
           ))}
         </ul>
       </div>
+        </div>
+      </details>
     </div>
   );
 }

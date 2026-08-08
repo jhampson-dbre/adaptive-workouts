@@ -1171,6 +1171,12 @@ input:focus-visible {
   min-height: 44px;
 }
 
+.settings-job { border: 1px solid var(--border); margin: 4px 0; }
+.settings-job > summary { align-items: center; box-sizing: border-box; cursor: pointer; display: flex; font-weight: 700; justify-content: space-between; min-height: 44px; padding: 10px 12px; }
+.settings-job-attention { color: var(--error); font-family: 'Barlow Condensed', 'Atkinson Hyperlegible', sans-serif; font-size: .72rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.settings-job-body { padding: 0 12px 12px; }
+.settings-job-feedback { min-height: 1.25rem; overflow-wrap: anywhere; }
+
 .settings-header {
   display: flex;
   flex-wrap: wrap;
@@ -1225,6 +1231,10 @@ input:focus-visible {
 
 .general-defaults {
   background: var(--social-bg);
+}
+
+.settings-job-body > .general-defaults {
+  padding-block: 8px;
 }
 
 .supersets {
