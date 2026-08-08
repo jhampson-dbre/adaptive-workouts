@@ -23,7 +23,7 @@ describe('Generator Component', () => {
         );
 
         expect(screen.getByRole('navigation', { name: 'Workout progress' })).toBeTruthy();
-        expect(screen.getByRole('heading', { name: 'How much time do you have?' })).toBeTruthy();
+        expect(screen.getByRole('heading', { name: "Plan today's workout" })).toBeTruthy();
         expect(screen.getByText('Nudge uses your recent workouts and available time to plan today\'s workout.')).toBeTruthy();
         expect(screen.getByRole('button', { name: 'Plan my workout' })).toBeTruthy();
         expect(screen.getByText('Anything to work around?').closest('details').open).toBe(false);

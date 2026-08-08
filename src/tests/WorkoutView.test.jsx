@@ -10,6 +10,7 @@ import { activeWorkoutReducer, initializeActiveWorkout } from '../utils/activeWo
 import { createActiveWorkoutSession } from '../utils/activeWorkoutSession';
 import { createActiveWorkoutCoordinator } from '../utils/activeWorkoutCoordinator';
 const styles = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8');
+const workoutViewSource = readFileSync(resolve(process.cwd(), 'src/components/WorkoutView.jsx'), 'utf8');
 
 afterEach(() => {
   cleanup();
@@ -234,15 +235,15 @@ test('keeps the initiating save and retry control focused across preference stat
   expect(onSavePreference).toHaveBeenCalledWith(candidate, { squat: 'Squat', plank: 'Plank' });
   view.rerender(props({ baseline, resolution: acceptedResolution, operation: { state: 'pending', candidate } }));
   expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Saving order…' }));
-  expect(screen.getByText('Saving this exercise order for future workouts.').compareDocumentPosition(screen.getByRole('button', { name: 'Start workout' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Start workout' }).compareDocumentPosition(screen.getByText('Saving this exercise order for future workouts.')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   view.rerender(props({ baseline: candidate, resolution: acceptedResolution, operation: { state: 'success', candidate, successMessage: 'Order saved.' } }));
   await waitFor(() => expect(document.activeElement).toBe(screen.getByText('Order saved.', { selector: '[role="status"]' })));
-  expect(screen.getByText('Order saved.', { selector: '[role="status"]' }).compareDocumentPosition(screen.getByRole('button', { name: 'Start workout' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Start workout' }).compareDocumentPosition(screen.getByText('Order saved.', { selector: '[role="status"]' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   view.rerender(props({ baseline: candidate, operation: { state: 'success', candidate, successMessage: 'Order saved for workouts with Squat, Plank, and Sit-ups. This order takes priority over your saved preference for Squat before Plank. That preference still applies in workouts without Sit-ups. Nudge removed the saved order for Squat and Plank to keep your 50 most recently used orders.' } }));
   expect(screen.getByText('Order saved for workouts with Squat, Plank, and Sit-ups. This order takes priority over your saved preference for Squat before Plank. That preference still applies in workouts without Sit-ups. Nudge removed the saved order for Squat and Plank to keep your 50 most recently used orders.', { selector: '[role="status"]' })).toBeTruthy();
   view.rerender(props({ baseline, operation: { state: 'failure', candidate } }));
   const retry = screen.getByRole('button', { name: 'Try saving this exercise order again' });
-  expect(screen.getByRole('alert').compareDocumentPosition(screen.getByRole('button', { name: 'Start workout' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Start workout' }).compareDocumentPosition(screen.getByRole('alert')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   retry.focus(); fireEvent.click(retry);
   expect(onSavePreference).toHaveBeenLastCalledWith(candidate, { squat: 'Squat', plank: 'Plank' });
   expect(document.activeElement).toBe(retry);
@@ -282,30 +283,92 @@ test('renders an applied preferred order passively without moving focus', () => 
   const start = screen.getByRole('button', { name: 'Start workout' });
   start.focus();
   view.rerender(props({ baseline: { blocks: [{ exerciseIds: ['squat'] }, { exerciseIds: ['plank'] }] }, resolution: { accepted: [{}] }, operation: null }));
-  const applied = screen.getByText('Saved exercise order applied');
+  const applied = screen.getByText('Review or change order: Saved exercise order applied');
   expect(applied.getAttribute('role')).toBeNull();
   expect(applied.getAttribute('aria-live')).toBeNull();
   expect(applied.getAttribute('aria-atomic')).toBeNull();
   expect(document.activeElement).toBe(start);
 });
 
+test('keeps the Workout-ready summary bounded and puts Start before a closed order disclosure', () => {
+  const workout = [
+    ...timedWorkout,
+    { ...timedWorkout[0], id: 'row', occurrenceId: 'row:2', name: 'Row', setRecords: [{ ...timedWorkout[0].setRecords[0] }] },
+    { ...timedWorkout[1], id: 'press', occurrenceId: 'press:3', name: 'Press', setRecords: [{ ...timedWorkout[1].setRecords[0] }] },
+  ];
+  renderWorkout(workout, () => {}, { uid: 'test-user-id' }, { warmupSeconds: 0, performanceSeconds: 1500, cooldownSeconds: 0 });
+
+  expect(screen.getByText('25 min planned · 4 exercises · 5 sets')).toBeTruthy();
+  expect(screen.getByText('Plank, Squat, Row, and 1 more')).toBeTruthy();
+  const start = screen.getByRole('button', { name: 'Start workout' });
+  const disclosure = screen.getByText('Review or change order').closest('details');
+  expect(disclosure.open).toBe(false);
+  expect(start.compareDocumentPosition(disclosure) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(within(disclosure).getByText(/4 Press/)).toBeTruthy();
+});
+
+test('keeps native order-review state through dirty rerenders and an explicit close', () => {
+  const baseline = { blocks: [{ exerciseIds: ['plank'] }, { exerciseIds: ['squat'] }] };
+  const view = renderWorkout(timedWorkout, () => {}, { uid: 'test-user-id' }, undefined, {}, { baseline });
+  const disclosure = screen.getByText('Review or change order').closest('details');
+
+  fireEvent.click(screen.getByText('Review or change order'));
+  fireEvent.click(screen.getByRole('button', { name: 'Move Squat earlier; position 2 of 2; available' }));
+  expect(disclosure.open).toBe(true);
+  expect(workoutViewSource).not.toContain('<details className="order-review" open=');
+
+  fireEvent.click(screen.getByText('Review or change order'));
+  expect(disclosure.open).toBe(false);
+  view.rerender(<SessionHarness workout={timedWorkout} user={{ uid: 'test-user-id' }} api={view.api} onFinish={() => {}} preference={baseline} />);
+  expect(disclosure.open).toBe(false);
+});
+
+test('defaults order review open for restored operation or dirty state without overriding an explicit close', () => {
+  const restoredOperation = { operation: { state: 'pending' } };
+  const restoredDirtyOrder = { baseline: { blocks: [{ exerciseIds: ['squat'] }, { exerciseIds: ['plank'] }] } };
+  const clean = renderWorkout(timedWorkout);
+  expect(screen.getByText('Review or change order').closest('details').open).toBe(false);
+  clean.unmount();
+
+  const operation = renderWorkout(timedWorkout, () => {}, { uid: 'test-user-id' }, undefined, {}, restoredOperation);
+  const disclosure = screen.getByText('Review or change order').closest('details');
+  expect(disclosure.open).toBe(true);
+  fireEvent.click(screen.getByText('Review or change order'));
+  expect(disclosure.open).toBe(false);
+  operation.rerender(<SessionHarness workout={timedWorkout} user={{ uid: 'test-user-id' }} api={operation.api} onFinish={() => {}} preference={restoredOperation} />);
+  expect(disclosure.open).toBe(false);
+  operation.unmount();
+
+  renderWorkout(timedWorkout, () => {}, { uid: 'test-user-id' }, undefined, {}, restoredDirtyOrder);
+  expect(screen.getByText('Review or change order').closest('details').open).toBe(true);
+  expect(workoutViewSource).not.toContain('<details className="order-review" open=');
+});
+
 test('places the compact future-save action after reordered blocks and before Start workout', () => {
   const baseline = { blocks: [{ exerciseIds: ['plank'] }, { exerciseIds: ['squat'] }] };
-  renderWorkout(timedWorkout, () => {}, { uid: 'test-user-id' }, undefined, {}, { baseline });
+  const view = renderWorkout(timedWorkout, () => {}, { uid: 'test-user-id' }, undefined, {}, { baseline });
+  fireEvent.click(screen.getByText('Review or change order'));
   fireEvent.click(screen.getByRole('button', { name: 'Move Squat earlier; position 2 of 2; available' }));
   const lastBlock = screen.getByRole('button', { name: 'Move Plank later; position 2 of 2; unavailable' }).closest('.order-block');
   const save = screen.getByRole('button', { name: 'Save order for future workouts' });
   const start = screen.getByRole('button', { name: 'Start workout' });
   expect(lastBlock.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(save.compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(screen.getByText('Order changes apply only to today unless you save them.')).toBeTruthy();
+  expect(start.compareDocumentPosition(lastBlock) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(lastBlock.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const explanation = screen.getByText('Order changes apply only to today unless you save them.');
+  expect(explanation.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  view.rerender(<SessionHarness workout={timedWorkout} user={{ uid: 'test-user-id' }} api={view.api} onFinish={() => {}} preference={{ baseline, operation: { state: 'pending' } }} />);
+  const saving = screen.getByRole('button', { name: 'Saving order…' });
+  const feedback = screen.getByText('Saving this exercise order for future workouts.');
+  expect(explanation.compareDocumentPosition(saving) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(saving.compareDocumentPosition(feedback) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(screen.queryByText(/This saved order applies when a future workout includes all these exercises/)).toBeNull();
   expect(screen.queryByText(/To reorder exercises within a superset, go to Settings > Supersets/)).toBeNull();
 });
 
-test('insets WorkoutView ordering content without insetting Start workout or Settings panels', () => {
-  expect(styles).toMatch(/\.workout-view > \.order-controls > :is\(\.order-block, p\),\s*\.workout-view > \.order-preference-panel\s*\{\s*padding-inline: clamp\(22px, 7vw, 52px\);/);
-  expect(styles).toMatch(/@media \(max-width: 420px\)\s*\{\s*\.workout-view > \.order-controls > \.order-block > span\s*\{\s*flex-basis: 100%;/);
+test('insets WorkoutView order review content without insetting Start workout or Settings panels', () => {
+  expect(styles).toMatch(/\.workout-ready-summary, \.order-review > summary, \.order-controls, \.order-preference-panel\s*\{\s*display: grid; gap: \.75rem; padding-inline: clamp\(22px, 7vw, 52px\);/);
+  expect(styles).toMatch(/@media \(max-width: 420px\)\s*\{\s*\.order-controls > \.order-block > span\s*\{\s*flex-basis: 100%;/);
   expect(styles).toMatch(/\.start-btn\s*\{\s*width: 100%;/);
 });
 
