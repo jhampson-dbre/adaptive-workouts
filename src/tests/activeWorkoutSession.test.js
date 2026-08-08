@@ -416,8 +416,10 @@ test('publishes saved only after the real coordinator removes the successful imm
 
   await session.save();
 
-  expect(session.getState()).toMatchObject({ status: 'saved', activeWorkout: null, pendingSave: null });
+  expect(session.getState()).toMatchObject({ status: 'saved', activeWorkout: null, pendingSave: null, savedReceipt: { actualDurationSeconds: expect.any(Number), exercises: [{ name: expect.any(String) }] } });
   expect(storage.getItem(recoveryStorageKey({ projectId: 'p', uid: 'u' }))).toBeNull();
+  await session.exit();
+  expect(session.getState().savedReceipt).toBeNull();
 });
 
 test('keeps the Review recovery pending when cleanup fails, then removes it on the matching retry', async () => {

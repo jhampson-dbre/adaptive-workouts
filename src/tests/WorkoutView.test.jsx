@@ -41,7 +41,11 @@ function SessionHarness({ workout, phaseTargets, onFinish, user, api, preference
       setState(previous => ({ ...previous, status: 'save-pending' }));
       try {
         await api.save(activeWorkout.phaseCandidate);
-        setState(previous => ({ ...previous, status: 'saved', activeWorkout: null }));
+        setState(previous => ({ ...previous, status: 'saved', activeWorkout: null, savedReceipt: {
+          actualDurationSeconds: activeWorkout.phaseCandidate.actualDurationSeconds,
+          phaseDurations: Object.fromEntries(Object.entries(phaseTargets ?? { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }).map(([key, plannedSeconds]) => [key.replace('Seconds', ''), { plannedSeconds, actualSeconds: activeWorkout.phaseCandidate.phaseActualSeconds[key.replace('Seconds', '')] }])),
+          exercises: activeWorkout.exercises,
+        } }));
       } catch (error) { setState(previous => ({ ...previous, status: 'review', error: error.message })); }
     },
     async discard() { await api.discard(); setState(previous => ({ ...previous, activeWorkout: null })); },
@@ -747,7 +751,7 @@ test('labels a completed simple exercise factually in Review', () => {
   };
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{}} sessionState={{ status: 'review', activeWorkout, phaseTargets: { warmupSeconds: 0, performanceSeconds: 60, cooldownSeconds: 0 }, blocked: false }} /></AuthContext.Provider>);
 
-  expect(screen.getByText(/1 set and 1 exercise recorded/)).toBeDefined();
+  expect(screen.getByText('1 set and 2 exercises recorded · 1:00')).toBeDefined();
 });
 
 test('times work inline, confirms a set, and exposes persistent overtime when collapsed', () => {
@@ -1109,23 +1113,17 @@ test('Finish uses a fresh reducer snapshot after Back and saves coherent v4 timi
   expect(screen.getByRole('heading', { level: 2, name: 'Cooldown' })).toBe(document.activeElement);
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   await act(async () => {});
-  expect(screen.getByText(/1 set recorded/)).toBeDefined();
+  expect(screen.getByText(/1 set and 1 exercise recorded/)).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Back to workout' }));
   await act(async () => {});
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Back to plan' })).toBeDefined());
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Return to plan' })).toBeDefined());
   expect(screen.getByRole('heading', { level: 2, name: 'Workout saved' })).toBe(document.activeElement);
-  expect(screen.getByRole('status').textContent).toBe('This workout is complete.');
+  expect(screen.getByRole('status').textContent).toBe('Saved to workout history');
   expect(screen.queryByText('Plan another workout')).toBeNull();
-  expect(screen.getByRole('button', { name: 'Back to plan' }).closest('[role="status"]')).toBeNull();
-  const history = screen.getByRole('button', { name: 'Workout history' });
-  expect(history.getAttribute('aria-expanded')).toBe('false');
-  expect(history.closest('[role="status"]')).toBeNull();
   expect(storage.getHistoryPage).not.toHaveBeenCalled();
-  fireEvent.click(history);
-  await waitFor(() => expect(storage.getHistoryPage).toHaveBeenCalledWith('test-user-id', { cursor: null, pageSize: 20 }));
-  fireEvent.click(screen.getByRole('button', { name: 'Back to plan' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Return to plan' }));
   expect(onFinish).toHaveBeenCalledOnce();
   expect(view.api.save).toHaveBeenCalledOnce();
   expect(view.api.save.mock.calls[0][0].actualDurationSeconds).toBeGreaterThanOrEqual(0);
@@ -1139,8 +1137,8 @@ test('A8 saves a strict v4 document with frozen phase durations instead of the l
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Back to plan' })).toBeDefined());
-  fireEvent.click(screen.getByRole('button', { name: 'Back to plan' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Return to plan' })).toBeDefined());
+  fireEvent.click(screen.getByRole('button', { name: 'Return to plan' }));
   expect(onFinish).toHaveBeenCalledOnce();
   expect(view.api.save).toHaveBeenCalledOnce();
   expect(view.api.save.mock.calls[0][0]).toMatchObject({ actualDurationSeconds: 0, phaseActualSeconds: expect.any(Object) });
@@ -1166,7 +1164,7 @@ test('copies the frozen saved workout, keeps focus, reannounces success, and lea
   expect(view.api.save).toHaveBeenCalledOnce();
 });
 
-test('copies the frozen mixed saved candidate after live workout state is replaced', async () => {
+test('renders the saved receipt from session state after live workout state is replaced', async () => {
   let review = initializeActiveWorkout(mixedSupersetWorkout(), { phaseTimingEnabled: true });
   for (const action of [
     { type: 'startWorkout', timestamp: 1000 },
@@ -1180,11 +1178,37 @@ test('copies the frozen mixed saved candidate after live workout state is replac
   const renderState = state => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={state} /></AuthContext.Provider>;
   const view = render(renderState({ status: 'review', activeWorkout: review, blocked: false }));
   await screen.findByRole('heading', { level: 2, name: 'Review' });
-  view.rerender(renderState({ status: 'saved', activeWorkout: { exercises: [] }, blocked: false }));
+  view.rerender(renderState({ status: 'saved', activeWorkout: null, savedReceipt: { actualDurationSeconds: 6, phaseDurations: { warmup: { plannedSeconds: 0, actualSeconds: 0 }, performance: { plannedSeconds: 0, actualSeconds: 6 }, cooldown: { plannedSeconds: 0, actualSeconds: 0 } }, exercises: review.exercises, supersets: review.supersets }, blocked: false }));
   const copy = await screen.findByRole('button', { name: 'Copy workout results' });
   expect(storage.getHistoryPage).not.toHaveBeenCalled();
+  expect(screen.getByRole('status').textContent).toBe('Saved to workout history');
+  expect(screen.getByText('3 sets and 3 exercises recorded · 0:06')).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Return to plan' })).toBeDefined();
+  expect(screen.getByText('Recorded exercises').closest('details').open).toBe(false);
   fireEvent.click(copy);
   await waitFor(() => expect(writeText).toHaveBeenCalledWith('Carry\n1 set\n0:00\n\nA1. Long Row Exercise Name\n1 set\n0:00\n\nA2. Long Press Exercise Name\n1 set\n0:00'));
+});
+
+test('keeps partial factual totals, omissions, and approved action order in Review and the saved receipt', () => {
+  let review = initializeActiveWorkout(timedWorkout, { phaseTimingEnabled: true });
+  for (const action of [
+    { type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 },
+    { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 1002 }, { type: 'confirmEarlyFinish', timestamp: 1003 },
+    { type: 'finishWorkout', timestamp: 1004 },
+  ]) review = activeWorkoutReducer(review, action);
+  const renderState = state => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={state} /></AuthContext.Provider>;
+  const view = render(renderState({ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, blocked: false }));
+
+  const summary = screen.getByRole('region', { name: 'Workout summary' });
+  expect(summary.textContent).toMatch(/1 set and 1 exercise recorded/);
+  expect(screen.getByText('Planned work not recorded').closest('details').open).toBe(false);
+  expect(screen.getByText('Review recorded exercises').closest('details').className).toContain('summary-remaining');
+  expect([...summary.querySelector('.summary-actions').querySelectorAll('button')].map(button => button.textContent)).toEqual(['Save workout', 'Back to workout']);
+
+  view.rerender(renderState({ status: 'saved', activeWorkout: null, savedReceipt: { actualDurationSeconds: review.phaseCandidate.actualDurationSeconds, phaseDurations: { warmup: { plannedSeconds: 0, actualSeconds: 0 }, performance: { plannedSeconds: 0, actualSeconds: review.phaseCandidate.phaseActualSeconds.performance }, cooldown: { plannedSeconds: 0, actualSeconds: 0 } }, exercises: review.exercises }, blocked: false }));
+  expect(screen.getByText(/1 set and 1 exercise recorded/)).toBeDefined();
+  expect(screen.getByText('Planned work not recorded').closest('details').open).toBe(false);
+  expect(screen.getByText('Recorded exercises').closest('details').className).toContain('summary-remaining');
 });
 
 test('keeps Copy workout results enabled and focused after clipboard absence or rejection, then replaces the error on retry', async () => {
@@ -1324,7 +1348,7 @@ test('renders the session-produced divergent immutable-save conflict as frozen R
   const summary = await screen.findByRole('region', { name: 'Workout summary' });
   expect(screen.getByRole('heading', { level: 2, name: 'Review' })).toBe(document.activeElement);
   expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Main workout: 0:00 actual \/ 45:00 planned/);
-  expect(summary.textContent).toMatch(/1 set recorded/);
+  expect(summary.textContent).toMatch(/1 set and 1 exercise recorded/);
   expect([...summary.querySelectorAll('button')].map(button => button.textContent)).toEqual(['Keep this workout open', 'Exit to Plan']);
   fireEvent.click(screen.getByRole('button', { name: 'Keep this workout open' }));
   expect(save).toHaveBeenCalledOnce();
@@ -1583,7 +1607,7 @@ test('history loading is deferred until disclosure and failures remain nonblocki
   expect(screen.getByRole('button', { name: 'Start workout' })).toBeDefined();
 });
 
-test('refreshes already-open empty history after a successful save without another save', async () => {
+test('does not fetch embedded history after a successful save', async () => {
   let view;
   storage.getHistoryPage
     .mockResolvedValueOnce({ items: [], nextCursor: null, hasMore: false })
@@ -1602,9 +1626,9 @@ test('refreshes already-open empty history after a successful save without anoth
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
 
-  await waitFor(() => expect(storage.getHistoryPage).toHaveBeenCalledTimes(2));
-  expect(history.getAttribute('aria-expanded')).toBe('true');
-  expect(screen.getByRole('article')).toBeDefined();
+  await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Saved to workout history'));
+  expect(storage.getHistoryPage).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole('article')).toBeNull();
   expect(screen.queryByText('No workouts logged yet.')).toBeNull();
   expect(view.api.save).toHaveBeenCalledOnce();
 });
@@ -1646,11 +1670,11 @@ test('duplicate Save clicks share one in-flight request and disable summary navi
 
   await waitFor(() => expect(resolveSave).toBeTypeOf('function'));
   resolveSave();
-  await waitFor(() => expect(screen.getByRole('status').textContent).toBe('This workout is complete.'));
+  await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Saved to workout history'));
   await new Promise(resolve => setTimeout(resolve, 550));
   expect(onFinish).not.toHaveBeenCalled();
   expect(screen.queryByRole('button', { name: 'Save workout' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Back to plan' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Return to plan' }));
   expect(onFinish).toHaveBeenCalledOnce();
   expect(view.api.save).toHaveBeenCalledTimes(1);
 });
@@ -1693,8 +1717,8 @@ test('session account conflict keeps Review and permits a retry after recovery',
   const failedCandidate = view.api.save.mock.calls[0][0];
   expect(screen.getByRole('region', { name: 'Workout summary' })).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Back to plan' })).toBeDefined());
-  fireEvent.click(screen.getByRole('button', { name: 'Back to plan' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Return to plan' })).toBeDefined());
+  fireEvent.click(screen.getByRole('button', { name: 'Return to plan' }));
   expect(onFinish).toHaveBeenCalledOnce();
   expect(view.api.save.mock.calls[1][0]).toBe(failedCandidate);
 });
@@ -1710,8 +1734,8 @@ test('history fetch failure stays separate while a timed workout saves successfu
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Back to plan' })).toBeDefined());
-  fireEvent.click(screen.getByRole('button', { name: 'Back to plan' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Return to plan' })).toBeDefined());
+  fireEvent.click(screen.getByRole('button', { name: 'Return to plan' }));
   expect(onFinish).toHaveBeenCalledOnce();
   expect(view.api.save).toHaveBeenCalledOnce();
 });

@@ -59,6 +59,37 @@ function workoutCounts(exercises) {
   }, { confirmed: 0, planned: 0 });
 }
 
+function recordedWorkText(exercises) {
+  const confirmedSets = exercises.reduce((total, exercise) => total + (exercise.setRecords?.filter(record => record.completed).length ?? 0), 0);
+  const confirmedExercises = exercises.filter(exercise => exercise.setRecords?.some(record => record.completed) || exercise.completed).length;
+  return `${confirmedSets} ${confirmedSets === 1 ? 'set' : 'sets'} and ${confirmedExercises} ${confirmedExercises === 1 ? 'exercise' : 'exercises'}`;
+}
+
+function ReceiptFacts({ phaseDurations }) {
+  return <ul aria-label="Frozen phase timing">
+    {['warmup', 'performance', 'cooldown'].map(phase => {
+      const duration = phaseDurations?.[phase];
+      if (!duration) return null;
+      return <li key={phase}>{phaseReadout(phase === 'performance' ? 'Main workout' : phase[0].toUpperCase() + phase.slice(1), duration.plannedSeconds ?? 0, duration.actualSeconds ?? 0)}</li>;
+    })}
+  </ul>;
+}
+
+function RecordedExercises({ exercises, summary }) {
+  return <details className="summary-remaining summary-recorded"><summary>{summary}</summary><ul>{exercises.filter(exercise => exercise.setRecords?.some(record => record.completed) || exercise.completed).map((exercise, index) => {
+    const records = Array.isArray(exercise.setRecords) ? exercise.setRecords : null;
+    const status = records
+      ? `${records.filter(record => record.completed).length} of ${records.length} sets confirmed`
+      : exercise.completed ? 'confirmed' : 'not confirmed';
+    return <li key={`${exercise.id}-${index}`}>{exercise.name}: {status}</li>;
+  })}</ul></details>;
+}
+
+function PlannedWorkNotRecorded({ exercises }) {
+  const unconfirmed = exercises.filter(exercise => exercise.setRecords?.some(record => !record.completed) || (!exercise.setRecords && !exercise.completed));
+  return unconfirmed.length > 0 && <details className="summary-remaining"><summary>Planned work not recorded</summary><ul>{unconfirmed.map((exercise, index) => <li key={`${exercise.id}-${index}`}>{exercise.name}</li>)}</ul></details>;
+}
+
 function findNextIncompleteExercise(exercises, currentIndex) {
   for (let offset = 1; offset < exercises.length; offset += 1) {
     const index = (currentIndex + offset) % exercises.length;
@@ -153,42 +184,25 @@ function durableDisplayEpoch(activeWorkout, snapshot) {
 }
 
 function WorkoutSummary({ candidate, phaseTargets, isSaving, saveError, saveStatus, blockedConflict, onBack, onSave, onKeepPending, onExit, summaryRef }) {
-  const counts = workoutCounts(candidate.exercises);
-  const completedSimpleExercises = candidate.exercises.filter(exercise => (
-    (!Array.isArray(exercise.setRecords) || exercise.setRecords.length === 0) && exercise.completed
-  )).length;
-  const confirmedSetCount = counts.confirmed - completedSimpleExercises;
-  const recordedWork = [
-    confirmedSetCount > 0 && `${confirmedSetCount} ${confirmedSetCount === 1 ? 'set' : 'sets'}`,
-    completedSimpleExercises > 0 && `${completedSimpleExercises} ${completedSimpleExercises === 1 ? 'exercise' : 'exercises'}`,
-  ].filter(Boolean).join(' and ') || '0 sets';
+  const recordedWork = recordedWorkText(candidate.exercises);
   const hasWork = hasConfirmedWork(candidate.exercises);
-  const unconfirmed = candidate.exercises.filter(exercise => exercise.setRecords?.some(record => !record.completed) || (!exercise.setRecords && !exercise.completed));
   return (
     <section className="workout-summary" role="region" aria-label="Workout summary">
       <h2 tabIndex="-1" ref={summaryRef}>Review</h2>
       <p className="summary-total">{recordedWork} recorded · {formatTime(candidate.actualDurationSeconds)}</p>
-      <ul aria-label="Frozen phase timing">
-        {['warmup', 'performance', 'cooldown'].map(phase => <li key={phase}>{phaseReadout(phase === 'performance' ? 'Main workout' : phase[0].toUpperCase() + phase.slice(1), phaseTargets?.[`${phase}Seconds`] ?? 0, candidate.phaseActualSeconds?.[phase] ?? 0)}</li>)}
-      </ul>
-      <ul>{candidate.exercises.filter(exercise => exercise.setRecords?.some(record => record.completed) || exercise.completed).map((exercise, index) => {
-        const records = Array.isArray(exercise.setRecords) ? exercise.setRecords : null;
-        const status = records
-          ? `${records.filter(record => record.completed).length} of ${records.length} sets confirmed`
-          : exercise.completed ? 'confirmed' : 'not confirmed';
-        return <li key={`${exercise.id}-${index}`}>{exercise.name}: {status}</li>;
-      })}</ul>
+      <ReceiptFacts phaseDurations={Object.fromEntries(['warmup', 'performance', 'cooldown'].map(phase => [phase, { plannedSeconds: phaseTargets?.[`${phase}Seconds`] ?? 0, actualSeconds: candidate.phaseActualSeconds?.[phase] ?? 0 }]))} />
       {!hasWork && <p className="error-message" role="alert">Confirm at least one exercise or set before saving.</p>}
-      {hasWork && unconfirmed.length > 0 && <details className="summary-remaining"><summary>Planned work not recorded</summary><ul>{unconfirmed.map((exercise, index) => <li key={`${exercise.id}-${index}`}>{exercise.name}</li>)}</ul></details>}
+      {hasWork && <PlannedWorkNotRecorded exercises={candidate.exercises} />}
       {saveError && <p className="error-message recovery-feedback" role="alert">{saveError}</p>}
       <div className={`summary-actions${blockedConflict ? ' recovery-actions' : ''}`}>
         {blockedConflict ? <><button className="recovery-primary" type="button" onClick={onKeepPending}>Keep this workout open</button><button className="recovery-secondary" type="button" onClick={onExit}>Exit to Plan</button></> : <>
-          <button type="button" onClick={onBack} disabled={isSaving}>Back to workout</button>
           <button type="button" className="finish-btn" onClick={onSave} disabled={!hasWork || isSaving} aria-busy={isSaving}>
             {isSaving ? 'Saving...' : ['write-pending', 'reconcile-indeterminate'].includes(saveStatus) ? 'Check again' : saveStatus === 'retryable-absent' ? 'Try saving again' : 'Save workout'}
           </button>
+          <button type="button" onClick={onBack} disabled={isSaving}>Back to workout</button>
         </>}
       </div>
+      <RecordedExercises exercises={candidate.exercises} summary="Review recorded exercises" />
     </section>
   );
 }
@@ -624,7 +638,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
   const copyWorkout = async () => {
     try {
       if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
-      await navigator.clipboard.writeText(formatWorkoutClipboard(finishCandidate));
+      await navigator.clipboard.writeText(formatWorkoutClipboard(sessionState?.savedReceipt ?? finishCandidate));
       setClipboardFeedback(current => refreshRepeatedLiveMessage(current, 'Workout results copied.'));
     } catch {
       setClipboardFeedback('Couldn\u2019t copy workout results. Try again.');
@@ -738,7 +752,13 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       </section>
     </div>;
   }
-  if (sessionState?.status === 'saved') return <div className="workout-view"><JourneyProgress current="Review" /><section className="workout-summary"><h2 ref={savedRef} tabIndex="-1">Workout saved</h2><p role="status">This workout is complete.</p><button ref={copyRef} type="button" className="recovery-secondary" onClick={copyWorkout}>Copy workout results</button>{clipboardFeedback && <p role={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'status' : 'alert'} aria-live={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'polite' : 'assertive'} aria-atomic="true">{clipboardFeedback}</p>}<button type="button" className="recovery-secondary" onClick={() => (onComplete ?? onFinish)?.()}>Back to plan</button></section><WorkoutHistory key={user?.uid ?? null} historyKey={user?.uid ?? null} refreshKey loadPage={({ cursor, pageSize }) => getHistoryPage(user?.uid, { cursor, pageSize })} /></div>;
+  if (sessionState?.status === 'saved') {
+    const receipt = sessionState.savedReceipt;
+    const returnToPlan = () => {
+      return session.exit ? session.exit().then(() => (onComplete ?? onFinish)?.()) : (onComplete ?? onFinish)?.();
+    };
+    return <div className="workout-view"><JourneyProgress current="Review" /><section className="workout-summary"><h2 ref={savedRef} tabIndex="-1">Workout saved</h2><p role="status">Saved to workout history</p>{receipt && <><p className="summary-total">{recordedWorkText(receipt.exercises)} recorded · {formatTime(receipt.actualDurationSeconds)}</p><ReceiptFacts phaseDurations={receipt.phaseDurations} /><PlannedWorkNotRecorded exercises={receipt.exercises} /><RecordedExercises exercises={receipt.exercises} summary="Recorded exercises" /></>}<button type="button" className="recovery-secondary" onClick={returnToPlan}>Return to plan</button><button ref={copyRef} type="button" className="recovery-secondary" onClick={copyWorkout}>Copy workout results</button>{clipboardFeedback && <p role={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'status' : 'alert'} aria-live={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'polite' : 'assertive'} aria-atomic="true">{clipboardFeedback}</p>}</section></div>;
+  }
   return <div className={`workout-view phase-${activeWorkout.phase}`}>
     <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{orderAnnouncement || restAnnouncement || recoveryAcknowledgement}</div>
     <JourneyProgress current={finishCandidate ? 'Review' : journeyStep} />

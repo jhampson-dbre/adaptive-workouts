@@ -3,10 +3,16 @@ import { projectActiveWorkoutForRecovery } from './activeWorkoutRecovery';
 import { buildCanonicalV4WorkoutDocument, buildCanonicalV5WorkoutDocument } from './workoutFingerprint';
 import { createImmutableWorkoutId, createSaveOperationToken, executeImmutableSave, prepareImmutableSave } from './immutableWorkoutSave';
 
-const empty = Object.freeze({ status: 'idle', activeWorkout: null, phaseTargets: null, snapshot: null, pendingSave: null, error: null, blocked: false });
+const empty = Object.freeze({ status: 'idle', activeWorkout: null, phaseTargets: null, snapshot: null, pendingSave: null, savedReceipt: null, error: null, blocked: false });
 const okay = status => ['saved', 'acquired', 'removed', 'missing'].includes(status);
 const validExpected = snapshot => typeof snapshot?.draftId === 'string' && snapshot.draftId.length > 0
   && Number.isSafeInteger(snapshot.ownershipGeneration) && snapshot.ownershipGeneration >= 1;
+const savedReceiptFrom = candidate => Object.freeze({
+  actualDurationSeconds: candidate.actualDurationSeconds,
+  phaseDurations: candidate.phaseDurations,
+  exercises: candidate.exercises,
+  supersets: candidate.supersets,
+});
 
 /**
  * App-owned durable state machine.  React only observes this object; every mutation
@@ -142,7 +148,7 @@ export function createActiveWorkoutSession({ coordinator, projectId, saveImmutab
           isCurrent: () => current(token),
         });
         if (!current(token)) return;
-        if (result.status === 'saved') return publish({ ...empty, status: 'saved' });
+        if (result.status === 'saved') return publish({ ...empty, status: 'saved', savedReceipt: savedReceiptFrom(pending.candidate) });
         const nextPending = result.pendingSave ?? pending;
         publish({ ...state, status: 'review', error: result.status, pendingSave: nextPending, blocked: nextPending?.state === 'blocked-conflict' });
       } catch (error) { if (current(token)) fail(error?.message ?? 'save failed', 'review'); }
