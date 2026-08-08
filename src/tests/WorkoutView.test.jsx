@@ -658,6 +658,10 @@ test('offers Edit completed sets in a completed Cooldown and focuses Main workou
   fireEvent.click(editCompletedSets);
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Main workout' })).toBe(document.activeElement));
   expect(view.api.action).toHaveBeenCalledWith(expect.objectContaining({ type: 'resumeWorkout' }));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
+  await waitFor(() => expect(screen.getByRole('heading', { level: 2, name: 'Cooldown' })).toBe(document.activeElement));
+  expect(screen.queryByRole('heading', { name: 'Finish workout early?' })).toBeNull();
 });
 
 test('labels a completed simple exercise factually in Review', () => {

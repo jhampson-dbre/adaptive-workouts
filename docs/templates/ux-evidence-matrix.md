@@ -791,3 +791,23 @@ the safe method attempted and the best available alternative.
 - Journey: On a fresh isolated 390 x 844 UX-10-01 lease, generate and start the canonical workout; confirm Barbell Curl set 1; finish early through Cooldown and Review; save; expand Workout History; inspect the persisted entry; select Back to plan.
 - Result: `READY` with no direct usability defects. The first viewport made `Workout saved` and `This workout is complete.` unmistakable, the expanded History showed the new August 7, 2026 entry with its confirmed set, and Back to plan reached a clean Plan screen. Focus, completion status, accessible control names, and disclosure state were present without stale or contradictory post-save content.
 - Material limitation: The independent review used live in-app Chromium interaction, screenshots, focus/status inspection, and semantic DOM evidence; it did not include a physical phone, gym conditions, or a full screen-reader session.
+
+---
+
+## 2026-08-07 - TREK-314 completed-workout finish re-entry
+
+## Planning
+
+- Classification: `required`
+- Rationale: TREK-314 changes the phase transition and confirmation lifecycle after a completed workout is reopened for possible edits.
+- Approved scenario or artifact: From completed Cooldown, inspect completed sets, make no changes, then use Finish workout to return directly to Cooldown without an empty early-finish confirmation; preserve focused phase orientation and mobile containment.
+
+## Changed scenario
+
+- Scenario: Reopen a fully completed workout from Cooldown, make no set changes, and finish the editing pass.
+- Build / commit: TREK-314 working tree on `codex/trek-314-completed-finish`; full WorkoutView suite 93/93, touched-file lint, production build, diff-check, independent code review, and task-conformance code review green.
+- Viewport and starting state: Chrome DevTools at 390 x 844; fresh isolated UX-10-01 lease with an approved synthetic identity, a generated two-exercise workout, and all seven sets confirmed.
+- Actions: Complete the generated workout; observe focused Cooldown; activate Edit completed sets; verify focused Main workout with both exercises at zero sets remaining; activate Finish workout without changing a set; inspect the resulting phase, confirmation content, focus, containment, and browser diagnostics.
+- Observed result: The edit action exposed the completed exercise list with one Finish workout action, no early-finish prompt, and no Unfinished work label. Finish workout returned directly to focused Cooldown with the dominant Finish workout and secondary Edit completed sets actions restored. The early-finish heading and Unfinished work label remained absent, and document client/scroll widths stayed equal at 390/390 before editing, during editing, and after the return. Chrome logged no application warning or error; observed warnings came only from an unrelated installed extension.
+- Rendered evidence: Live Chrome DevTools screenshots, accessibility snapshots, active-element/content inventory, browser diagnostics, and programmatic viewport measurements from isolated lease `843abe30-d0ca-41c7-97db-76bfbd5b8292`.
+- Material limitation: Chrome rendering and programmatic focus evidence do not replace physical-device Safari or a full screen-reader session. The unrelated extension warnings were outside the application origin and did not affect the journey.
