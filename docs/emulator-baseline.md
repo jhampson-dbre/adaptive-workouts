@@ -75,7 +75,7 @@ emulator flow with the fixed synthetic identity. Scenario applicability is
 proportional: use only scenarios relevant to the changed surface. The revisioned
 manifest at `scripts/emulator/scenarios/manifest.mjs` supplies setup, actions,
 expected internal and visible outcomes, viewport/state coverage, and fields for the
-canonical UX evidence matrix.
+task-scoped rendered-evidence handoff.
 
 ## Shutdown and recovery
 
