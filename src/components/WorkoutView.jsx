@@ -1,13 +1,10 @@
-import { useState, useEffect, useContext, useRef, useCallback } from 'react';
-import { getHistoryPage } from '../utils/storage';
-import { AuthContext } from '../context/AuthContext';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { getSetStatus } from '../utils/activeWorkout';
 import { calculateElapsedSeconds } from '../utils/workoutTiming';
 import { getPhaseElapsedSeconds } from '../utils/activeWorkout';
 import { hasConfirmedWork } from '../utils/workoutSchema';
 import { RECOVERY_MESSAGES } from '../utils/timingPresentationController';
 import { formatWorkoutClipboard } from '../utils/workoutClipboard';
-import WorkoutHistory from './WorkoutHistory';
 import JourneyProgress from './JourneyProgress';
 
 function deepFreeze(value) {
@@ -299,7 +296,6 @@ function exerciseTimingStatus(exercise, exerciseIndex, activeTimer, now) {
 }
 
 export default function WorkoutView({ session, sessionState, onFinish, onComplete, onDiscard, onResume, preference, onSavePreference, onStarted, onDismissPreference }) {
-  const user = useContext(AuthContext);
   const activeWorkout = sessionState?.activeWorkout ?? EMPTY_ACTIVE_WORKOUT;
   const durableEpochFloor = durableDisplayEpoch(activeWorkout, sessionState?.snapshot);
   const initialDisplayEpochMs = Math.max(Date.now(), durableEpochFloor);
@@ -778,6 +774,5 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       {activeWorkout.phase !== 'cooldown' && exerciseList}
       {(activeWorkout.phase === 'performance' || (!activeWorkout._phaseTimingEnabled && started)) && <div className="summary-actions"><button ref={finishRef} className="finish-btn" aria-describedby={finishError ? 'finish-feedback' : undefined} onClick={handleFinish}>Finish workout</button>{finishError && <p id="finish-feedback" className="error-message" role="alert">{finishError}</p>}{earlyFinishPrompt === 'partial' && <section className="early-finish-confirmation" role="region" aria-label="Finish workout early"><h2 ref={promptHeadingRef} tabIndex="-1">Finish workout early?</h2><p>Unfinished work:</p><ul>{activeWorkout.exercises.filter(exercise => exercise.setRecords.some(record => !record.completed)).map(exercise => <li key={exercise.occurrenceId || exercise.id}>{exercise.name}: {exercise.setRecords.filter(record => !record.completed).length} {exercise.setRecords.filter(record => !record.completed).length === 1 ? 'set' : 'sets'} remaining</li>)}</ul><button type="button" className="return-to-workout" onClick={dismissEarlyFinish}>Return to workout</button><button type="button" onClick={confirmEarlyFinish}>Continue to cooldown</button></section>}{earlyFinishPrompt === 'zero' && <section className="early-finish-confirmation" role="region" aria-label="Cancel workout"><h2 ref={promptHeadingRef} tabIndex="-1">Cancel workout?</h2><p>No work has been confirmed.</p><button type="button" onClick={() => void cancelWorkout()}>Cancel workout</button><button type="button" onClick={dismissEarlyFinish}>Keep working</button></section>}</div>}
     </>}
-    <WorkoutHistory key={user?.uid ?? null} historyKey={user?.uid ?? null} loadPage={({ cursor, pageSize }) => getHistoryPage(user?.uid, { cursor, pageSize })} />
   </div>;
 }

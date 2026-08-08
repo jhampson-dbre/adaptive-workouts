@@ -1,6 +1,7 @@
 import { Component, Suspense, lazy, useEffect, useRef } from 'react'
 
 const copy = {
+  history: { loadingHeading: 'Loading workout history…', loading: 'Loading workout history.', failureHeading: 'Workout history unavailable', failure: 'Workout history couldn’t be loaded.', retry: 'Retry loading workout history' },
   plan: { loadingHeading: 'Loading workout planner…', loading: 'Loading the workout planner.', failureHeading: 'Workout planner unavailable', failure: 'The workout planner couldn’t be loaded.', retry: 'Retry loading planner' },
   settings: { loadingHeading: 'Loading catalog settings…', loading: 'Loading catalog settings.', failureHeading: 'Catalog settings unavailable', failure: 'Catalog settings couldn’t be loaded.', retry: 'Retry loading catalog settings' },
   workout: { loadingHeading: 'Loading your workout…', loading: 'Loading your workout.', failureHeading: 'Workout unavailable', failure: 'Your generated workout couldn’t be loaded.', retry: 'Retry loading workout' },

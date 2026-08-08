@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { mkdirSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { relative, resolve } from 'node:path'
 
 // https://vite.dev/config/
 export default defineConfig(({ command, mode }) => {
@@ -11,10 +11,13 @@ export default defineConfig(({ command, mode }) => {
   }
   const baselineMode = mode === 'baseline';
   const lazyEntries = {
+    history: resolve('src/components/WorkoutHistory.jsx'),
     plan: resolve('src/components/AuthorizedApp.jsx'),
     settings: resolve('src/components/Settings.jsx'),
     workout: resolve('src/components/WorkoutView.jsx'),
   };
+  const lazyEntryKeys = Object.values(lazyEntries).map(entry => relative(resolve(), entry).replaceAll('\\', '/'));
+  const lazyEntryUrls = Object.fromEntries(Object.entries(lazyEntries).map(([key, entry]) => [key, `/${relative(resolve(), entry).replaceAll('\\', '/')}`]));
   return {
   build: {
     manifest: true,
@@ -40,7 +43,7 @@ export default defineConfig(({ command, mode }) => {
       resolveId(id) { if (id === 'virtual:lazy-entry-urls') return '\0virtual:lazy-entry-urls'; },
       load(id) {
         if (id !== '\0virtual:lazy-entry-urls') return null;
-        if (command !== 'build') return `export default ${JSON.stringify(Object.fromEntries(Object.keys(lazyEntries).map(key => [key, `/src/components/${key === 'plan' ? 'AuthorizedApp' : key === 'settings' ? 'Settings' : 'WorkoutView'}.jsx`])))};`;
+        if (command !== 'build') return `export default ${JSON.stringify(lazyEntryUrls)};`;
         const references = Object.fromEntries(Object.entries(lazyEntries).map(([key, entry]) => [key, this.emitFile({ type: 'chunk', id: entry, implicitlyLoadedAfterOneOf: [resolve('src/App.jsx')] })]));
         return `export default {${Object.entries(references).map(([key, reference]) => `${key}: import.meta.ROLLUP_FILE_URL_${reference}`).join(',')}};`;
       },
@@ -99,7 +102,7 @@ export default defineConfig(({ command, mode }) => {
           const asset = bundle['.vite/manifest.json'];
           if (!asset || asset.type !== 'asset') return;
           const manifest = JSON.parse(String(asset.source));
-          for (const key of ['src/components/AuthorizedApp.jsx', 'src/components/Settings.jsx', 'src/components/WorkoutView.jsx']) {
+          for (const key of lazyEntryKeys) {
             if (manifest[key]?.isEntry) {
               delete manifest[key].isEntry;
               manifest[key].isDynamicEntry = true;

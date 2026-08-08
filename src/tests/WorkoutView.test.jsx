@@ -1596,29 +1596,8 @@ test('a failed session save keeps the frozen candidate for retry', async () => {
   expect(view.api.save.mock.calls[1][0]).toBe(view.api.save.mock.calls[0][0]);
 });
 
-test('history loading is deferred until disclosure and failures remain nonblocking', async () => {
-  storage.getHistoryPage.mockRejectedValueOnce(new Error('offline'));
-  renderWorkout([]);
-  expect(storage.getHistoryPage).not.toHaveBeenCalled();
-  expect(screen.queryByText('Failed to load workout history.')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
-  expect(await screen.findByText('Couldn’t load workout history.')).toBeDefined();
-  expect(storage.getHistoryPage).toHaveBeenCalledWith('test-user-id', { cursor: null, pageSize: 20 });
-  expect(screen.getByRole('button', { name: 'Start workout' })).toBeDefined();
-});
-
-test('does not fetch embedded history after a successful save', async () => {
-  let view;
-  storage.getHistoryPage
-    .mockResolvedValueOnce({ items: [], nextCursor: null, hasMore: false })
-    .mockImplementationOnce(() => Promise.resolve({
-      items: [{ ...view.api.save.mock.calls[0][0], id: 'newly-saved' }], nextCursor: null, hasMore: false,
-    }));
-  view = renderWorkout([{ ...timedWorkout[1] }]);
-
-  const history = screen.getByRole('button', { name: 'Workout history' });
-  fireEvent.click(history);
-  expect(await screen.findByText('No workouts logged yet.')).toBeDefined();
+test('saves a completed timed workout', async () => {
+  const view = renderWorkout([{ ...timedWorkout[1] }]);
 
   fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
@@ -1627,9 +1606,6 @@ test('does not fetch embedded history after a successful save', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
 
   await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Saved to workout history'));
-  expect(storage.getHistoryPage).toHaveBeenCalledTimes(1);
-  expect(screen.queryByRole('article')).toBeNull();
-  expect(screen.queryByText('No workouts logged yet.')).toBeNull();
   expect(view.api.save).toHaveBeenCalledOnce();
 });
 
@@ -1723,12 +1699,9 @@ test('session account conflict keeps Review and permits a retry after recovery',
   expect(view.api.save.mock.calls[1][0]).toBe(failedCandidate);
 });
 
-test('history fetch failure stays separate while a timed workout saves successfully', async () => {
-  storage.getHistoryPage.mockRejectedValueOnce(new Error('history offline'));
+test('returns to plan after a timed workout saves successfully', async () => {
   const onFinish = vi.fn();
   const view = renderWorkout([{ ...timedWorkout[1] }], onFinish);
-  fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
-  expect(await screen.findByText('Couldn’t load workout history.')).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));

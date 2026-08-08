@@ -34,6 +34,8 @@ p { margin: 0; }
 .history-list, .history-exercise-list, .history-legacy-list, .history-set-list { display: grid; }
 .history-card-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px; }
 .history-exercise { min-width: 0; }
+.history-exercise summary { min-height: 44px; cursor: pointer; overflow-wrap: anywhere; }
+.history-exercise-details { padding-top: 6px; }
 .history-exercise-summary, .history-simple-status, .history-recommendation { margin-top: 6px; }
 .history-set-row { display: grid; grid-template-columns: minmax(52px, auto) minmax(0, 1fr); gap: 4px 12px; }
 .history-set-performance, .history-set-timing { overflow-wrap: anywhere; }
@@ -921,13 +923,14 @@ input:focus-visible {
   box-shadow: none;
 }
 
-.history-card-heading h3,
+.history-card-heading h4,
 .history-exercise h4 {
   font-family: var(--heading);
   font-weight: 700;
 }
 
 .history-card-heading > p,
+.history-work-summary,
 .history-exercise-summary,
 .history-simple-status,
 .history-recommendation,
@@ -937,6 +940,7 @@ input:focus-visible {
 }
 
 .history-card-heading > p,
+.history-work-summary,
 .history-set-timing,
 .history-phase-durations,
 .completed-set-details {
@@ -945,6 +949,15 @@ input:focus-visible {
 
 .history-exercise {
   border-color: var(--border);
+}
+
+.history-work-summary {
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+}
+
+.history-action {
+  min-height: 44px;
 }
 
 .history-set-row {
