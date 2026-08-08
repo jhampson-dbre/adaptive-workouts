@@ -171,6 +171,24 @@ export default function Generator({
           onChange={(e) => setTimeBudget(Number(e.target.value))}
           className="slider"
         />
+        <div className="time-stepper" aria-label="Precise time adjustment">
+          <button
+            type="button"
+            aria-label="Decrease time by 5 minutes"
+            disabled={timeBudget <= 15}
+            onClick={() => setTimeBudget(Math.max(15, timeBudget - 5))}
+          >
+            −5 min
+          </button>
+          <button
+            type="button"
+            aria-label="Increase time by 5 minutes"
+            disabled={timeBudget >= 120}
+            onClick={() => setTimeBudget(Math.min(120, timeBudget + 5))}
+          >
+            +5 min
+          </button>
+        </div>
       </div>
 
       <button className="generate-btn" onClick={handleGenerate} disabled={isGenerating}>
@@ -183,17 +201,18 @@ export default function Generator({
       </section>}
 
       <details className="groups-container">
-        <summary>Anything to work around?</summary>
+        <summary>Any areas need rest?</summary>
         <p>Select any muscle groups you would rather rest today.</p>
         <div className="checkbox-grid">
           {MUSCLE_GROUPS.map((group) => (
-            <label key={group} className="checkbox-label">
+            <label key={group} className="area-status-button">
+              <span>{group}</span>
+              <span className="area-state">{unrecoveredGroups.includes(group) ? 'Rest' : 'Ready'}</span>
               <input
                 type="checkbox"
                 checked={unrecoveredGroups.includes(group)}
                 onChange={() => handleToggleGroup(group)}
               />
-              {group}
             </label>
           ))}
         </div>

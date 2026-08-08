@@ -10,7 +10,6 @@ import { activeWorkoutReducer, initializeActiveWorkout } from '../utils/activeWo
 import { createActiveWorkoutSession } from '../utils/activeWorkoutSession';
 import { createActiveWorkoutCoordinator } from '../utils/activeWorkoutCoordinator';
 const styles = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8');
-const workoutViewSource = readFileSync(resolve(process.cwd(), 'src/components/WorkoutView.jsx'), 'utf8');
 
 afterEach(() => {
   cleanup();
@@ -204,13 +203,13 @@ test('keeps move focus and gives each order control its position, availability, 
 
   const earlier = screen.getByRole('button', { name: 'Move Carry earlier; position 1 of 2; unavailable' });
   expect(earlier.disabled).toBe(true);
-  const moveSupersetEarlier = screen.getByRole('button', { name: 'Move superset Long Row Exercise Name and Long Press Exercise Name earlier; position 2 of 2; available' });
-  expect(screen.getByText('Superset: Long Row Exercise Name and Long Press Exercise Name. Moves together. To reorder exercises within this superset, go to Settings > Supersets.')).toBeDefined();
+  const moveSupersetEarlier = screen.getByRole('button', { name: 'Move Long Row Exercise Name with its superset earlier; position 2 of 2; available' });
+  expect(screen.getByText('Moves with Long Press Exercise Name as one superset.')).toBeDefined();
 
   moveSupersetEarlier.focus();
   fireEvent.click(moveSupersetEarlier);
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Move superset Long Row Exercise Name and Long Press Exercise Name earlier; position 1 of 2; unavailable' }).disabled).toBe(true));
-  expect(document.activeElement).toBe(screen.getByText('Superset: Long Row Exercise Name and Long Press Exercise Name. Moves together. To reorder exercises within this superset, go to Settings > Supersets.').closest('.order-block'));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Move Long Row Exercise Name with its superset earlier; position 1 of 2; unavailable' }).disabled).toBe(true));
+  expect(document.activeElement).toBe(screen.getByText('Moves with Long Press Exercise Name as one superset.').closest('.order-block'));
 });
 
 test('retires the temporary order-move announcement after saving that order', async () => {
@@ -287,14 +286,14 @@ test('renders an applied preferred order passively without moving focus', () => 
   const start = screen.getByRole('button', { name: 'Start workout' });
   start.focus();
   view.rerender(props({ baseline: { blocks: [{ exerciseIds: ['squat'] }, { exerciseIds: ['plank'] }] }, resolution: { accepted: [{}] }, operation: null }));
-  const applied = screen.getByText('Review or change order: Saved exercise order applied');
+  const applied = screen.getByText('Saved exercise order applied.');
   expect(applied.getAttribute('role')).toBeNull();
   expect(applied.getAttribute('aria-live')).toBeNull();
   expect(applied.getAttribute('aria-atomic')).toBeNull();
   expect(document.activeElement).toBe(start);
 });
 
-test('keeps the Workout-ready summary bounded and puts Start before a closed order disclosure', () => {
+test('keeps the Workout-ready summary bounded and embeds order controls in each exercise row after Start', () => {
   const workout = [
     ...timedWorkout,
     { ...timedWorkout[0], id: 'row', occurrenceId: 'row:2', name: 'Row', setRecords: [{ ...timedWorkout[0].setRecords[0] }] },
@@ -305,53 +304,20 @@ test('keeps the Workout-ready summary bounded and puts Start before a closed ord
   expect(screen.getByText('25 min planned · 4 exercises · 5 sets')).toBeTruthy();
   expect(screen.getByText('Plank, Squat, Row, and 1 more')).toBeTruthy();
   const start = screen.getByRole('button', { name: 'Start workout' });
-  const disclosure = screen.getByText('Review or change order').closest('details');
-  expect(disclosure.open).toBe(false);
-  expect(start.compareDocumentPosition(disclosure) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(within(disclosure).getByText(/4 Press/)).toBeTruthy();
+  const exercisesHeading = screen.getByRole('heading', { name: 'Exercises' });
+  const checklist = document.querySelector('.workout-checklist');
+  const rows = within(checklist).getAllByRole('listitem');
+  expect(screen.queryByText(/Review or change order/)).toBeNull();
+  expect(start.compareDocumentPosition(exercisesHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(exercisesHeading.compareDocumentPosition(checklist) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(rows).toHaveLength(4);
+  expect(rows.every(row => row.querySelector(':scope > .exercise-row > .exercise-order-actions'))).toBe(true);
+  expect(within(rows[0]).getByRole('button', { name: 'Move Plank later; position 1 of 4; available' })).toBeTruthy();
 });
 
-test('keeps native order-review state through dirty rerenders and an explicit close', () => {
+test('places the compact future-save action after the reordered exercise rows', () => {
   const baseline = { blocks: [{ exerciseIds: ['plank'] }, { exerciseIds: ['squat'] }] };
   const view = renderWorkout(timedWorkout, () => {}, { uid: 'test-user-id' }, undefined, {}, { baseline });
-  const disclosure = screen.getByText('Review or change order').closest('details');
-
-  fireEvent.click(screen.getByText('Review or change order'));
-  fireEvent.click(screen.getByRole('button', { name: 'Move Squat earlier; position 2 of 2; available' }));
-  expect(disclosure.open).toBe(true);
-  expect(workoutViewSource).not.toContain('<details className="order-review" open=');
-
-  fireEvent.click(screen.getByText('Review or change order'));
-  expect(disclosure.open).toBe(false);
-  view.rerender(<SessionHarness workout={timedWorkout} user={{ uid: 'test-user-id' }} api={view.api} onFinish={() => {}} preference={baseline} />);
-  expect(disclosure.open).toBe(false);
-});
-
-test('defaults order review open for restored operation or dirty state without overriding an explicit close', () => {
-  const restoredOperation = { operation: { state: 'pending' } };
-  const restoredDirtyOrder = { baseline: { blocks: [{ exerciseIds: ['squat'] }, { exerciseIds: ['plank'] }] } };
-  const clean = renderWorkout(timedWorkout);
-  expect(screen.getByText('Review or change order').closest('details').open).toBe(false);
-  clean.unmount();
-
-  const operation = renderWorkout(timedWorkout, () => {}, { uid: 'test-user-id' }, undefined, {}, restoredOperation);
-  const disclosure = screen.getByText('Review or change order').closest('details');
-  expect(disclosure.open).toBe(true);
-  fireEvent.click(screen.getByText('Review or change order'));
-  expect(disclosure.open).toBe(false);
-  operation.rerender(<SessionHarness workout={timedWorkout} user={{ uid: 'test-user-id' }} api={operation.api} onFinish={() => {}} preference={restoredOperation} />);
-  expect(disclosure.open).toBe(false);
-  operation.unmount();
-
-  renderWorkout(timedWorkout, () => {}, { uid: 'test-user-id' }, undefined, {}, restoredDirtyOrder);
-  expect(screen.getByText('Review or change order').closest('details').open).toBe(true);
-  expect(workoutViewSource).not.toContain('<details className="order-review" open=');
-});
-
-test('places the compact future-save action after reordered blocks and before Start workout', () => {
-  const baseline = { blocks: [{ exerciseIds: ['plank'] }, { exerciseIds: ['squat'] }] };
-  const view = renderWorkout(timedWorkout, () => {}, { uid: 'test-user-id' }, undefined, {}, { baseline });
-  fireEvent.click(screen.getByText('Review or change order'));
   fireEvent.click(screen.getByRole('button', { name: 'Move Squat earlier; position 2 of 2; available' }));
   const lastBlock = screen.getByRole('button', { name: 'Move Plank later; position 2 of 2; unavailable' }).closest('.order-block');
   const save = screen.getByRole('button', { name: 'Save order for future workouts' });
@@ -370,9 +336,9 @@ test('places the compact future-save action after reordered blocks and before St
   expect(screen.queryByText(/To reorder exercises within a superset, go to Settings > Supersets/)).toBeNull();
 });
 
-test('insets WorkoutView order review content without insetting Start workout or Settings panels', () => {
-  expect(styles).toMatch(/\.workout-ready-summary, \.order-review > summary, \.order-controls, \.order-preference-panel\s*\{\s*display: grid; gap: \.75rem; padding-inline: clamp\(22px, 7vw, 52px\);/);
-  expect(styles).toMatch(/@media \(max-width: 420px\)\s*\{\s*\.order-controls > \.order-block > span\s*\{\s*flex-basis: 100%;/);
+test('keeps embedded order actions usable without insetting Start workout', () => {
+  expect(styles).toMatch(/\.exercise-row\s*\{\s*display: grid;\s*grid-template-columns: minmax\(0, 1fr\) auto;/);
+  expect(styles).toMatch(/\.exercise-order-actions button\s*\{\s*min-height: 44px;/);
   expect(styles).toMatch(/\.start-btn\s*\{\s*width: 100%;/);
 });
 

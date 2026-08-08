@@ -335,6 +335,29 @@ input:focus-visible {
   accent-color: var(--text-h);
 }
 
+.time-stepper {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.time-stepper button {
+  min-height: 48px;
+  border: 2px solid var(--border);
+  border-radius: 0;
+  background: var(--code-bg);
+  color: var(--text-h);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.time-stepper button:disabled {
+  color: var(--text);
+  cursor: default;
+  opacity: 0.55;
+}
+
 .groups-container {
   margin: 0;
   padding: 32px clamp(22px, 7vw, 52px) 38px;
@@ -365,30 +388,43 @@ input:focus-visible {
   gap: 8px;
 }
 
-.checkbox-label {
-  min-height: 48px;
+.area-status-button {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
   box-sizing: border-box;
   padding: 10px 12px;
-  border: 1px solid var(--border);
+  border: 2px solid var(--border);
   border-radius: 0;
   background: var(--code-bg);
-  color: var(--border);
+  color: var(--text-h);
   font-weight: 700;
+  cursor: pointer;
 }
 
-.checkbox-label:has(input:checked) {
+.area-status-button:has(input:checked) {
   background: var(--accent);
 }
 
-.checkbox-label:hover {
-  border-color: var(--border);
-  background: var(--accent-bg);
+.area-status-button:focus-within {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
 }
 
-.checkbox-label input[type='checkbox'] {
-  width: 22px;
-  height: 22px;
-  accent-color: var(--text-h);
+.area-status-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.area-status-button .area-state {
+  font-size: var(--type-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .leg-day-choice {
@@ -549,6 +585,12 @@ input:focus-visible {
   background: var(--code-bg);
 }
 
+.exercise-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+}
+
 .exercise-toggle {
   display: grid;
   grid-template-columns: 62px minmax(0, 1fr) auto;
@@ -567,14 +609,28 @@ input:focus-visible {
   background: var(--accent-bg);
 }
 
-.selected > .exercise-toggle {
+.selected > .exercise-row > .exercise-toggle {
   background: var(--text-h);
   color: var(--code-bg);
 }
 
-.selected > .exercise-toggle:hover,
-.selected > .exercise-toggle:focus-visible {
+.selected > .exercise-row > .exercise-toggle:hover,
+.selected > .exercise-row > .exercise-toggle:focus-visible {
   background: var(--text-h);
+}
+
+.exercise-order-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(58px, auto));
+  gap: 8px;
+  align-content: center;
+  padding: 8px clamp(12px, 3vw, 20px) 8px 0;
+}
+
+.exercise-order-actions button {
+  min-height: 44px;
+  padding: 8px 10px;
+  font-size: var(--type-metadata);
 }
 
 .exercise-number {
@@ -1531,16 +1587,11 @@ input:focus-visible {
     grid-column: 1 / -1;
   }
 }
- .workout-ready-summary, .order-review > summary, .order-controls, .order-preference-panel { display: grid; gap: .75rem; padding-inline: clamp(22px, 7vw, 52px); }
+ .workout-ready-summary, .order-applied, .order-save-controls, .order-preference-panel { display: grid; gap: .75rem; padding-inline: clamp(22px, 7vw, 52px); }
  .workout-ready-summary { padding-block: 20px; background: var(--bg); }
  .workout-ready-summary p { margin: 0; overflow-wrap: anywhere; }
- .order-review { padding-block: 28px; background: var(--bg); }
- .order-review > summary { min-height: 44px; box-sizing: border-box; align-items: center; cursor: pointer; color: var(--border); font-weight: 700; }
- .order-controls { padding-top: 20px; }
- .order-block { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
- .order-block span { flex: 1 1 12rem; }
- .order-block button, .order-preference-panel button { min-height: 44px; }
-
-@media (max-width: 420px) {
- .order-controls > .order-block > span { flex-basis: 100%; min-width: 0; overflow-wrap: anywhere; }
-}
+ .order-applied { margin-block: 0 16px; }
+ .order-save-controls { padding-block: 20px 28px; background: var(--bg); }
+ .order-save-controls:empty { display: none; }
+ .order-save-controls p { margin: 0; }
+ .order-save-controls button, .order-preference-panel button { min-height: 44px; }

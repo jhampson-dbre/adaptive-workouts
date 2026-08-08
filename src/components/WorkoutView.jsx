@@ -341,10 +341,10 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
   const wasShowingRecoveryRef = useRef(false);
   const started = activeWorkout.workoutStartedAt !== null;
   const hasUnfinishedSets = activeWorkout.exercises.some(exercise => exercise.setRecords.some(record => !record.completed));
-  const orderBlocks = activeWorkout.exercises.reduce((blocks, exercise, index) => {
+  const orderBlocks = activeWorkout.exercises.reduce((blocks, exercise) => {
     const group = supersetFor(activeWorkout, exercise)?.occurrenceIds ?? [exercise.occurrenceId];
     if (blocks.some(block => block.ids.join('|') === group.join('|'))) return blocks;
-    blocks.push({ ids: group, index, exercises: group.map(id => activeWorkout.exercises.find(item => item.occurrenceId === id)).filter(Boolean) }); return blocks;
+    blocks.push({ ids: group, exercises: group.map(id => activeWorkout.exercises.find(item => item.occurrenceId === id)).filter(Boolean) }); return blocks;
   }, []);
   const orderRule = { blocks: orderBlocks.map(block => ({ exerciseIds: block.exercises.map(exercise => exercise.id) })) };
   const plannedSeconds = Object.values(sessionState?.phaseTargets ?? {}).reduce((total, seconds) => total + (Number.isFinite(seconds) ? seconds : 0), 0);
@@ -356,15 +356,13 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
   const counts = workoutCounts(activeWorkout.exercises);
   const dirtyOrder = Boolean(preference?.baseline) && JSON.stringify(orderRule) !== JSON.stringify(preference.baseline);
   const orderBusy = ['pending', 'indeterminate', 'clearing'].includes(preference?.operation?.state);
-  const initiallyOpenOrderReview = useRef(dirtyOrder || Boolean(preference?.operation));
-  const setOrderReviewRef = useCallback(node => { if (node && initiallyOpenOrderReview.current) node.open = true; }, []);
-  const moveBlock = async (block, direction) => {
-    const key = block.ids.join('|');
-    pendingOrderFocusRef.current = { key, direction };
+  const moveBlock = async (block, direction, focusKey) => {
+    pendingOrderFocusRef.current = { key: focusKey, direction };
     const accepted = await session.action({ type: 'moveGeneratedBlock', occurrenceId: block.exercises[0].occurrenceId, direction });
     if (!accepted) { pendingOrderFocusRef.current = null; return; }
     setRecoveryAcknowledgement('');
-    const next = direction === 'earlier' ? block.index : block.index + 2;
+    const currentPosition = orderBlocks.indexOf(block);
+    const next = direction === 'earlier' ? currentPosition : currentPosition + 2;
     setOrderAnnouncement(`${block.exercises.map(exercise => exercise.name).join(' / ')} moved to position ${next} of ${orderBlocks.length}. This change is for this workout only.`);
   };
   const journeyStep = activeWorkout.phase === 'cooldown'
@@ -704,6 +702,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
 
   const exerciseList = <>
     <h2 className="exercise-list-heading">Exercises</h2>
+    {!started && preference?.resolution?.accepted?.length > 0 && <p className="order-applied">Saved exercise order applied.</p>}
     <ul className="workout-checklist">{activeWorkout.exercises.map((exercise, exerciseIndex) => {
       const confirmed = exercise.setRecords.filter(record => record.completed).length;
       const isExpanded = Boolean(expanded[exerciseIndex]);
@@ -715,14 +714,31 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       const superset = supersetFor(activeWorkout, exercise);
       const next = superset && nextSupersetSet(activeWorkout, superset);
       const supersetContext = superset && `Superset ${superset.occurrenceIds.indexOf(exercise.occurrenceId) + 1} of ${superset.occurrenceIds.length}${next?.exerciseIndex === exerciseIndex ? ' · Next' : ''}`;
+      const orderBlock = started ? null : orderBlocks.find(block => block.ids.includes(exercise.occurrenceId));
+      const orderIndex = orderBlock && orderBlocks.indexOf(orderBlock);
+      const orderFocusKey = orderBlock && `${orderBlock.ids.join('|')}:${exercise.occurrenceId}`;
+      const isSupersetOrder = orderBlock?.exercises.length > 1;
+      const orderLabel = isSupersetOrder ? `${exercise.name} with its superset` : exercise.name;
+      const supersetPartners = isSupersetOrder && orderBlock.exercises.filter(item => item.occurrenceId !== exercise.occurrenceId).map(item => item.name).join(' and ');
       return <li key={exercise.occurrenceId || `${exercise.id}-${exerciseIndex}`} className={`${confirmed === exercise.setRecords.length ? 'completed ' : ''}${isExpanded ? 'selected' : ''}`}>
-        <button type="button" className="exercise-toggle" ref={element => { headerRefs.current[exerciseIndex] = element; }} aria-expanded={isExpanded} aria-controls={`exercise-${exerciseIndex}-sets`} aria-label={`${exercise.name}, ${supersetContext ? `${supersetContext}, ` : ''}${confirmed} of ${exercise.setRecords.length} confirmed, ${timing}, ${isExpanded ? 'collapse' : 'expand'}`} onClick={() => setExpanded(current => ({ ...current, [exerciseIndex]: !isExpanded }))}>
-          <span className="exercise-number" aria-hidden="true">{String(exerciseIndex + 1).padStart(2, '0')}</span><span className="exercise-name"><strong>{exercise.name}</strong> <small>{exercise.muscleGroup}</small></span><span className="exercise-status">{confirmed}/{exercise.setRecords.length} · {timing} · {isExpanded ? 'Collapse' : 'Expand'}</span>
-        </button>
+        <div className="exercise-row">
+          <button type="button" className="exercise-toggle" ref={element => { headerRefs.current[exerciseIndex] = element; }} aria-expanded={isExpanded} aria-controls={`exercise-${exerciseIndex}-sets`} aria-label={`${exercise.name}, ${supersetContext ? `${supersetContext}, ` : ''}${confirmed} of ${exercise.setRecords.length} confirmed, ${timing}, ${isExpanded ? 'collapse' : 'expand'}`} onClick={() => setExpanded(current => ({ ...current, [exerciseIndex]: !isExpanded }))}>
+            <span className="exercise-number" aria-hidden="true">{String(exerciseIndex + 1).padStart(2, '0')}</span><span className="exercise-name"><strong>{exercise.name}</strong> <small>{exercise.muscleGroup}</small></span><span className="exercise-status">{confirmed}/{exercise.setRecords.length} · {timing} · {isExpanded ? 'Collapse' : 'Expand'}</span>
+          </button>
+          {orderBlock && <div className="exercise-order-actions order-block" ref={node => { orderBlockRefs.current[orderFocusKey] = node; }} tabIndex="-1">
+            {supersetPartners && <span className="visually-hidden">Moves with {supersetPartners} as one superset.</span>}
+            <button type="button" data-order-direction="earlier" aria-label={`Move ${orderLabel} earlier; position ${orderIndex + 1} of ${orderBlocks.length}; ${orderIndex === 0 ? 'unavailable' : 'available'}`} disabled={orderBusy || orderIndex === 0} onClick={() => moveBlock(orderBlock, 'earlier', orderFocusKey)}>Earlier</button>
+            <button type="button" data-order-direction="later" aria-label={`Move ${orderLabel} later; position ${orderIndex + 1} of ${orderBlocks.length}; ${orderIndex === orderBlocks.length - 1 ? 'unavailable' : 'available'}`} disabled={orderBusy || orderIndex === orderBlocks.length - 1} onClick={() => moveBlock(orderBlock, 'later', orderFocusKey)}>Later</button>
+          </div>}
+        </div>
         {supersetContext && <span className="superset-context">{supersetContext}</span>}
         {isExpanded && <div id={`exercise-${exerciseIndex}-sets`} className="set-list">{focusedSet >= 0 && renderSetRow(exercise, exerciseIndex, focusedSet)}{focusedSet < 0 && renderOptionalSetDetails(exercise, exerciseIndex, focusedSet)}</div>}
       </li>;
     })}</ul>
+    {!started && <section className="order-save-controls" aria-label="Exercise order saving">
+      {dirtyOrder && <><p>Order changes apply only to today unless you save them.</p><button type="button" disabled={orderBusy} onClick={() => onSavePreference?.(orderRule, Object.fromEntries(activeWorkout.exercises.map(exercise => [exercise.id, exercise.name])))}>{preference?.operation?.state === 'pending' || preference?.operation?.state === 'indeterminate' ? 'Saving order…' : preference?.operation?.state === 'failure' ? 'Try saving this exercise order again' : 'Save order for future workouts'}</button></>}
+      {preference?.operation?.state === 'pending' && <p role="status">Saving this exercise order for future workouts.</p>}{preference?.operation?.state === 'indeterminate' && <p role="status">Saving is taking longer than expected. You can start your workout; we'll confirm when it finishes.</p>}{preference?.operation?.state === 'failure' && <p role="alert">Couldn't save this exercise order. Your saved exercise orders and today's workout order are unchanged.</p>}{preference?.operation?.state === 'success' && <p ref={saveOutcomeRef} role="status" tabIndex="-1">{preference.operation.successMessage ?? 'Order saved.'}</p>}
+    </section>}
     <div className="deferred-set-details">{activeWorkout.exercises.map((exercise, exerciseIndex) => {
       if (!expanded[exerciseIndex]) return null;
       const focusedSet = focusedSetIndex(exercise, exerciseIndex);
@@ -770,11 +786,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       {!started && activeWorkout.phase !== 'cancelled' && <section className="workout-ready" aria-label="Workout ready">
         <div className="workout-ready-summary"><p>{plannedSeconds > 0 ? `${Math.round(plannedSeconds / 60)} min planned · ` : ''}{activeWorkout.exercises.length} {activeWorkout.exercises.length === 1 ? 'exercise' : 'exercises'} · {counts.planned} {counts.planned === 1 ? 'set' : 'sets'}</p>{orderSummary && <p>{orderSummary}</p>}</div>
         <button className="start-btn" disabled={preference?.operation?.state === 'pending'} onClick={async () => { const timestamp = acceptDisplayTime(Date.now()); const successOperationId = preference?.operation?.state === 'success' ? preference.operation.id : null; if (await session.action({ type: 'startWorkout', timestamp })) { setRecoveryAcknowledgement(''); onStarted?.(activeWorkout.exercises, successOperationId); } }}>Start workout</button>
-        <details className="order-review" ref={setOrderReviewRef}><summary>Review or change order{preference?.resolution?.accepted?.length ? ': Saved exercise order applied' : ''}</summary><section className="order-controls" aria-label="Exercise order">
-        {orderBlocks.map((block, index) => { const isSuperset = block.exercises.length > 1; const names = block.exercises.map(exercise => exercise.name).join(' and '); const description = isSuperset ? `Superset: ${names}. Moves together. To reorder exercises within this superset, go to Settings > Supersets.` : block.exercises[0].name; const position = `position ${index + 1} of ${orderBlocks.length}`; return <div className="order-block" key={block.ids.join('|')} ref={node => { orderBlockRefs.current[block.ids.join('|')] = node; }} tabIndex="-1"><span>{index + 1} {isSuperset ? `Superset · ${block.exercises.map(exercise => exercise.name).join(' / ')}` : names}</span>{isSuperset && <span className="order-superset-help">{description}</span>}<button type="button" data-order-direction="earlier" aria-label={`Move ${isSuperset ? `superset ${names}` : names} earlier; ${position}; ${index === 0 ? 'unavailable' : 'available'}`} disabled={orderBusy || index === 0} onClick={() => moveBlock(block, 'earlier')}>Move earlier</button><button type="button" data-order-direction="later" aria-label={`Move ${isSuperset ? `superset ${names}` : names} later; ${position}; ${index === orderBlocks.length - 1 ? 'unavailable' : 'available'}`} disabled={orderBusy || index === orderBlocks.length - 1} onClick={() => moveBlock(block, 'later')}>Move later</button></div>; })}
-        {dirtyOrder && <><p>Order changes apply only to today unless you save them.</p><button type="button" disabled={orderBusy} onClick={() => onSavePreference?.(orderRule, Object.fromEntries(activeWorkout.exercises.map(exercise => [exercise.id, exercise.name])))}>{preference?.operation?.state === 'pending' || preference?.operation?.state === 'indeterminate' ? 'Saving order…' : preference?.operation?.state === 'failure' ? 'Try saving this exercise order again' : 'Save order for future workouts'}</button></>}
-        {preference?.operation?.state === 'pending' && <p role="status">Saving this exercise order for future workouts.</p>}{preference?.operation?.state === 'indeterminate' && <p role="status">Saving is taking longer than expected. You can start your workout; we'll confirm when it finishes.</p>}{preference?.operation?.state === 'failure' && <p role="alert">Couldn't save this exercise order. Your saved exercise orders and today's workout order are unchanged.</p>}{preference?.operation?.state === 'success' && <p ref={saveOutcomeRef} role="status" tabIndex="-1">{preference.operation.successMessage ?? 'Order saved.'}</p>}
-      </section></details></section>}
+      </section>}
       {activeWorkout.phase === 'cooldown' && <div className="summary-actions"><button ref={finishRef} className="finish-btn" aria-describedby={finishError ? 'finish-feedback' : undefined} onClick={handleFinish}>Finish workout</button><button type="button" onClick={() => dispatch({ type: 'resumeWorkout', timestamp: acceptDisplayTime(Date.now()) })}>{hasUnfinishedSets ? 'Continue workout' : 'Edit completed sets'}</button>{finishError && <p id="finish-feedback" className="error-message" role="alert">{finishError}</p>}</div>}
       {activeWorkout.phase !== 'cooldown' && exerciseList}
       {(activeWorkout.phase === 'performance' || (!activeWorkout._phaseTimingEnabled && started)) && <div className="summary-actions"><button ref={finishRef} className="finish-btn" aria-describedby={finishError ? 'finish-feedback' : undefined} onClick={handleFinish}>Finish workout</button>{finishError && <p id="finish-feedback" className="error-message" role="alert">{finishError}</p>}{earlyFinishPrompt === 'partial' && <section className="early-finish-confirmation" role="region" aria-label="Finish workout early"><h2 ref={promptHeadingRef} tabIndex="-1">Finish workout early?</h2><p>Unfinished work:</p><ul>{activeWorkout.exercises.filter(exercise => exercise.setRecords.some(record => !record.completed)).map(exercise => <li key={exercise.occurrenceId || exercise.id}>{exercise.name}: {exercise.setRecords.filter(record => !record.completed).length} {exercise.setRecords.filter(record => !record.completed).length === 1 ? 'set' : 'sets'} remaining</li>)}</ul><button type="button" className="return-to-workout" onClick={dismissEarlyFinish}>Return to workout</button><button type="button" onClick={confirmEarlyFinish}>Continue to cooldown</button></section>}{earlyFinishPrompt === 'zero' && <section className="early-finish-confirmation" role="region" aria-label="Cancel workout"><h2 ref={promptHeadingRef} tabIndex="-1">Cancel workout?</h2><p>No work has been confirmed.</p><button type="button" onClick={() => void cancelWorkout()}>Cancel workout</button><button type="button" onClick={dismissEarlyFinish}>Keep working</button></section>}</div>}

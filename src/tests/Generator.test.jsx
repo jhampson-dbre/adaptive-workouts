@@ -26,7 +26,27 @@ describe('Generator Component', () => {
         expect(screen.getByRole('heading', { name: "Plan today's workout" })).toBeTruthy();
         expect(screen.getByText('Nudge uses your recent workouts and available time to plan today\'s workout.')).toBeTruthy();
         expect(screen.getByRole('button', { name: 'Plan my workout' })).toBeTruthy();
-        expect(screen.getByText('Anything to work around?').closest('details').open).toBe(false);
+        expect(screen.getByText('Any areas need rest?').closest('details').open).toBe(false);
+    });
+
+    it('offers precise five-minute adjustments alongside the slider', () => {
+        const setTimeBudget = vi.fn();
+        const view = render(
+            <AuthContext.Provider value={{ uid: 'test-user' }}>
+                <Generator timeBudget={20} setTimeBudget={setTimeBudget} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />
+            </AuthContext.Provider>
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'Decrease time by 5 minutes' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Increase time by 5 minutes' }));
+        expect(setTimeBudget.mock.calls).toEqual([[15], [25]]);
+
+        view.rerender(
+            <AuthContext.Provider value={{ uid: 'test-user' }}>
+                <Generator timeBudget={15} setTimeBudget={setTimeBudget} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />
+            </AuthContext.Provider>
+        );
+        expect(screen.getByRole('button', { name: 'Decrease time by 5 minutes' }).disabled).toBe(true);
     });
 
     afterEach(() => cleanup());
