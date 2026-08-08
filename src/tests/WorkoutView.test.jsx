@@ -1193,12 +1193,16 @@ test('keeps partial factual totals, omissions, and approved action order in Revi
   const view = render(renderState({ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, blocked: false }));
 
   const summary = screen.getByRole('region', { name: 'Workout summary' });
+  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).className).toContain('summary-facts');
   expect(summary.textContent).toMatch(/1 set and 1 exercise recorded/);
   expect(screen.getByText('Planned work not recorded').closest('details').open).toBe(false);
   expect(screen.getByText('Review recorded exercises').closest('details').className).toContain('summary-remaining');
   expect([...summary.querySelector('.summary-actions').querySelectorAll('button')].map(button => button.textContent)).toEqual(['Save workout', 'Back to workout']);
 
   view.rerender(renderState({ status: 'saved', activeWorkout: null, savedReceipt: { actualDurationSeconds: review.phaseCandidate.actualDurationSeconds, phaseDurations: { warmup: { plannedSeconds: 0, actualSeconds: 0 }, performance: { plannedSeconds: 0, actualSeconds: review.phaseCandidate.phaseActualSeconds.performance }, cooldown: { plannedSeconds: 0, actualSeconds: 0 } }, exercises: review.exercises }, blocked: false }));
+  expect(screen.getByRole('heading', { name: 'Workout saved' }).closest('section').className).toContain('workout-summary--saved');
+  expect(screen.getByRole('status').className).toContain('summary-save-status');
+  expect(screen.getByRole('button', { name: 'Return to plan' }).parentElement.className).toContain('saved-actions');
   expect(screen.getByText(/1 set and 1 exercise recorded/)).toBeDefined();
   expect(screen.getByText('Planned work not recorded').closest('details').open).toBe(false);
   expect(screen.getByText('Recorded exercises').closest('details').className).toContain('summary-remaining');

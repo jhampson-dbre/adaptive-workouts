@@ -900,8 +900,12 @@ input:focus-visible {
   background: var(--code-bg);
 }
 
+.workout-summary--saved {
+  background: var(--bg);
+}
+
 .workout-summary h2 {
-  margin: 0 0 28px;
+  margin: 0 0 22px;
   font-size: var(--type-display);
   font-weight: 700;
   letter-spacing: -0.04em;
@@ -909,9 +913,81 @@ input:focus-visible {
   text-wrap: balance;
 }
 
-.workout-summary > ul {
-  padding: 18px 0 18px 24px;
-  border-block: 1px solid var(--border);
+.workout-summary .summary-total {
+  margin: 0;
+  padding: 18px 20px;
+  background: var(--text-h);
+  color: var(--code-bg);
+  font-family: var(--heading);
+  font-size: clamp(1.55rem, 5vw, 2.35rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  text-wrap: balance;
+}
+
+.workout-summary > .summary-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 22px 0;
+  border: 0;
+  list-style: none;
+}
+
+.summary-facts li {
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 2px solid var(--border);
+}
+
+.summary-facts strong,
+.summary-facts span {
+  display: block;
+}
+
+.summary-facts strong {
+  color: var(--text-h);
+  font-family: var(--heading);
+  font-size: var(--type-label);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.summary-facts span {
+  margin-top: 4px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.summary-save-status {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  box-sizing: border-box;
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  background: var(--accent);
+  color: var(--text-h);
+  font-weight: 700;
+}
+
+.summary-save-status::before {
+  width: 16px;
+  height: 9px;
+  justify-self: center;
+  border-bottom: 4px solid currentColor;
+  border-left: 4px solid currentColor;
+  content: '';
+  transform: translateY(-2px) rotate(-45deg);
+}
+
+.workout-summary--saved .summary-remaining {
+  background: var(--code-bg);
 }
 
 .summary-remaining {
@@ -924,11 +1000,23 @@ input:focus-visible {
 
 .workout-summary .summary-actions {
   display: grid;
+  gap: 8px;
   margin-top: 28px;
+}
+
+.workout-summary .saved-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .workout-summary .finish-btn {
   order: -1;
+}
+
+@media (max-width: 600px) {
+  .workout-summary > .summary-facts,
+  .workout-summary .saved-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .workout-history-section {
