@@ -561,6 +561,10 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
           return;
         }
         setFinishError('');
+        if (hasConfirmedWork(activeWorkout.exercises) && !hasUnfinishedSets) {
+          dispatch({ type: 'confirmEarlyFinish', timestamp });
+          return;
+        }
         setEarlyFinishPrompt(hasConfirmedWork(activeWorkout.exercises) ? 'partial' : 'zero');
         return;
       }
