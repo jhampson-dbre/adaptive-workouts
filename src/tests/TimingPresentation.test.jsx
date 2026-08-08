@@ -192,10 +192,8 @@ describe('Timing presentation controller', () => {
     cleanup();
     render(<TimingHarness initialScenario="T-09" />);
     fireEvent.click(screen.getByRole('button', { name: 'Show empty History' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
     expect(screen.getByText('No workouts logged yet.')).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: 'Show exhausted History' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
     expect(await screen.findByText('All available workouts are shown.')).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: 'Show progression History' }));
     expect(screen.getByText('Starting recommendation: 100 lb.')).toBeDefined();

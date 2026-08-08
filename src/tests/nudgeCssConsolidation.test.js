@@ -43,7 +43,8 @@ describe('Nudge CSS consolidation', () => {
 
   it('keeps the live Settings catalog list and action layout rules', () => {
     expect(indexCss).toMatch(/\.catalog-list ul\s*\{[^}]*list-style:\s*none[^}]*padding:\s*0[^}]*margin:\s*0/s);
-    expect(indexCss).toMatch(/\.item-display\s*\{[^}]*display:\s*flex[^}]*justify-content:\s*space-between[^}]*align-items:\s*center[^}]*flex-wrap:\s*wrap[^}]*gap:\s*12px/s);
+    expect(indexCss).toMatch(/\.item-display\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto[^}]*align-items:\s*center[^}]*gap:\s*12px/s);
+    expect(indexCss).toMatch(/@media \(max-width:\s*600px\)[\s\S]*?\.item-display\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s);
   });
 
   it('keeps the live Settings tracking field layout', () => {

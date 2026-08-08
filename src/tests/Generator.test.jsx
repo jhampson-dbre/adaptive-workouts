@@ -23,10 +23,53 @@ describe('Generator Component', () => {
         );
 
         expect(screen.getByRole('navigation', { name: 'Workout progress' })).toBeTruthy();
-        expect(screen.getByRole('heading', { name: 'How much time do you have?' })).toBeTruthy();
+        expect(screen.getByRole('heading', { name: "Plan today's workout" })).toBeTruthy();
         expect(screen.getByText('Nudge uses your recent workouts and available time to plan today\'s workout.')).toBeTruthy();
         expect(screen.getByRole('button', { name: 'Plan my workout' })).toBeTruthy();
-        expect(screen.getByText('Anything to work around?').closest('details').open).toBe(false);
+        expect(screen.getByText('Any areas need rest?').closest('details').open).toBe(false);
+    });
+
+    it('reports a returned order-save outcome without moving focus from the Plan heading', () => {
+        render(
+            <AuthContext.Provider value={{ uid: 'test-user' }}>
+                <Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} preference={{ operation: { state: 'success', successMessage: 'Order saved.' } }} />
+            </AuthContext.Provider>
+        );
+
+        const heading = screen.getByRole('heading', { name: "Plan today's workout" });
+        expect(screen.getByRole('status').textContent).toBe('Order saved.');
+        expect(document.activeElement).not.toBe(screen.getByRole('status'));
+        expect(heading).toBeTruthy();
+    });
+
+    it('keeps a returned order-save failure visible on Plan', () => {
+        render(
+            <AuthContext.Provider value={{ uid: 'test-user' }}>
+                <Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} preference={{ operation: { state: 'failure' } }} />
+            </AuthContext.Provider>
+        );
+
+        expect(screen.getByRole('alert').textContent).toBe("Couldn't save this exercise order. Your saved exercise orders and today's workout order are unchanged.");
+    });
+
+    it('offers precise five-minute adjustments alongside the slider', () => {
+        const setTimeBudget = vi.fn();
+        const view = render(
+            <AuthContext.Provider value={{ uid: 'test-user' }}>
+                <Generator timeBudget={20} setTimeBudget={setTimeBudget} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />
+            </AuthContext.Provider>
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'Decrease time by 5 minutes' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Increase time by 5 minutes' }));
+        expect(setTimeBudget.mock.calls).toEqual([[15], [25]]);
+
+        view.rerender(
+            <AuthContext.Provider value={{ uid: 'test-user' }}>
+                <Generator timeBudget={15} setTimeBudget={setTimeBudget} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />
+            </AuthContext.Provider>
+        );
+        expect(screen.getByRole('button', { name: 'Decrease time by 5 minutes' }).disabled).toBe(true);
     });
 
     afterEach(() => cleanup());
@@ -69,10 +112,48 @@ describe('Generator Component', () => {
         fireEvent.click(btn);
         
         await waitFor(() => {
-            expect(engine.generateWorkout).toHaveBeenCalledWith(30, [], false, expect.any(Array), expect.any(Array), expect.any(Object));
+            expect(engine.generateWorkout).toHaveBeenCalledWith(15, [], false, expect.any(Array), expect.any(Array), expect.any(Object));
             expect(onGenerate).toHaveBeenCalled();
             expect(window.confirm).not.toHaveBeenCalled();
         });
+    });
+
+    it('uses Time available as the total phase budget', async () => {
+        storage.getCatalog.mockResolvedValue([]);
+        storage.getSettings.mockResolvedValue({ legDayOfWeek: 'None', warmupSeconds: 420, cooldownSeconds: 180 });
+        const onGenerate = vi.fn();
+        renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
+
+        fireEvent.click(screen.getByText('Plan my workout'));
+        await waitFor(() => {
+            expect(engine.generateWorkout).toHaveBeenCalledWith(35, [], false, expect.any(Array), expect.any(Array), expect.any(Object));
+            expect(onGenerate).toHaveBeenCalledWith([], { phaseTargets: { warmupSeconds: 420, performanceSeconds: 2100, cooldownSeconds: 180 } });
+        });
+    });
+
+    it('recalculates the main budget when configured phases change', async () => {
+        storage.getCatalog.mockResolvedValue([]);
+        storage.getSettings.mockResolvedValueOnce({ legDayOfWeek: 'None', warmupSeconds: 420, cooldownSeconds: 180 }).mockResolvedValueOnce({ legDayOfWeek: 'None', warmupSeconds: 600, cooldownSeconds: 300 });
+        const first = renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />);
+
+        fireEvent.click(screen.getByText('Plan my workout'));
+        await waitFor(() => expect(engine.generateWorkout).toHaveBeenLastCalledWith(35, [], false, expect.any(Array), expect.any(Array), expect.any(Object)));
+        first.unmount();
+        renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />);
+        fireEvent.click(screen.getByText('Plan my workout'));
+        await waitFor(() => expect(engine.generateWorkout).toHaveBeenLastCalledWith(30, [], false, expect.any(Array), expect.any(Array), expect.any(Object)));
+    });
+
+    it('reports a no-fit plan when configured phases consume the total budget', async () => {
+        storage.getCatalog.mockResolvedValue([]);
+        storage.getSettings.mockResolvedValue({ legDayOfWeek: 'None', warmupSeconds: 1800, cooldownSeconds: 900 });
+        const onGenerate = vi.fn();
+        renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
+
+        fireEvent.click(screen.getByText('Plan my workout'));
+        expect((await screen.findByRole('alert')).textContent).toMatch(/no time remains for exercises/i);
+        expect(engine.generateWorkout).not.toHaveBeenCalled();
+        expect(onGenerate).not.toHaveBeenCalled();
     });
 
     it('forwards the engine phase target snapshot without changing the array-based handoff', async () => {
@@ -84,7 +165,7 @@ describe('Generator Component', () => {
         renderWithAuth(<Generator timeBudget={30} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
 
         fireEvent.click(screen.getByText('Plan my workout'));
-        await waitFor(() => expect(onGenerate).toHaveBeenCalledWith(generated, { phaseTargets: { warmupSeconds: 600, performanceSeconds: 1800, cooldownSeconds: 300 } }));
+        await waitFor(() => expect(onGenerate).toHaveBeenCalledWith(generated, { phaseTargets: { warmupSeconds: 600, performanceSeconds: 900, cooldownSeconds: 300 }, preferredOrderResolution: undefined }));
     });
 
     it('offers a neutral inline leg-day choice when legs are due', async () => {
@@ -108,8 +189,8 @@ describe('Generator Component', () => {
         expect(window.confirm).not.toHaveBeenCalled();
         fireEvent.click(screen.getByRole('button', { name: 'Include legs today' }));
         await waitFor(() => {
-            expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], true, expect.any(Array), expect.any(Array), expect.any(Object)); // doLegDay=true
-            expect(onGenerate).toHaveBeenCalledWith([], { phaseTargets: { warmupSeconds: 0, performanceSeconds: 2700, cooldownSeconds: 0 } });
+            expect(engine.generateWorkout).toHaveBeenCalledWith(30, [], true, expect.any(Array), expect.any(Array), expect.any(Object)); // doLegDay=true
+            expect(onGenerate).toHaveBeenCalledWith([], { phaseTargets: { warmupSeconds: 600, performanceSeconds: 1800, cooldownSeconds: 300 }, preferredOrderResolution: undefined });
         });
     });
 
@@ -137,7 +218,7 @@ describe('Generator Component', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Leave legs out today' }));
         await waitFor(() => {
             expect(window.confirm).not.toHaveBeenCalled();
-            expect(engine.generateWorkout).toHaveBeenCalledWith(45, [], false, expect.any(Array), expect.any(Array), expect.any(Object));
+            expect(engine.generateWorkout).toHaveBeenCalledWith(30, [], false, expect.any(Array), expect.any(Array), expect.any(Object));
         });
     });
 

@@ -1,13 +1,10 @@
-import { useState, useEffect, useContext, useRef, useCallback } from 'react';
-import { getHistoryPage } from '../utils/storage';
-import { AuthContext } from '../context/AuthContext';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { getSetStatus } from '../utils/activeWorkout';
 import { calculateElapsedSeconds } from '../utils/workoutTiming';
 import { getPhaseElapsedSeconds } from '../utils/activeWorkout';
 import { hasConfirmedWork } from '../utils/workoutSchema';
 import { RECOVERY_MESSAGES } from '../utils/timingPresentationController';
 import { formatWorkoutClipboard } from '../utils/workoutClipboard';
-import WorkoutHistory from './WorkoutHistory';
 import JourneyProgress from './JourneyProgress';
 
 function deepFreeze(value) {
@@ -57,6 +54,38 @@ function workoutCounts(exercises) {
       : exercise.completed ? 1 : 0;
     return totals;
   }, { confirmed: 0, planned: 0 });
+}
+
+function recordedWorkText(exercises) {
+  const confirmedSets = exercises.reduce((total, exercise) => total + (exercise.setRecords?.filter(record => record.completed).length ?? 0), 0);
+  const confirmedExercises = exercises.filter(exercise => exercise.setRecords?.some(record => record.completed) || exercise.completed).length;
+  return `${confirmedSets} ${confirmedSets === 1 ? 'set' : 'sets'} and ${confirmedExercises} ${confirmedExercises === 1 ? 'exercise' : 'exercises'}`;
+}
+
+function ReceiptFacts({ phaseDurations }) {
+  return <ul className="summary-facts" aria-label="Frozen phase timing">
+    {['warmup', 'performance', 'cooldown'].map(phase => {
+      const duration = phaseDurations?.[phase];
+      if (!duration) return null;
+      const label = phase === 'performance' ? 'Main workout' : phase[0].toUpperCase() + phase.slice(1);
+      return <li key={phase}><strong>{label}:</strong>{' '}<span>{formatTime(duration.actualSeconds ?? 0)} actual / {formatTime(duration.plannedSeconds ?? 0)} planned</span></li>;
+    })}
+  </ul>;
+}
+
+function RecordedExercises({ exercises, summary }) {
+  return <details className="summary-remaining summary-recorded"><summary>{summary}</summary><ul>{exercises.filter(exercise => exercise.setRecords?.some(record => record.completed) || exercise.completed).map((exercise, index) => {
+    const records = Array.isArray(exercise.setRecords) ? exercise.setRecords : null;
+    const status = records
+      ? `${records.filter(record => record.completed).length} of ${records.length} sets confirmed`
+      : exercise.completed ? 'confirmed' : 'not confirmed';
+    return <li key={`${exercise.id}-${index}`}>{exercise.name}: {status}</li>;
+  })}</ul></details>;
+}
+
+function PlannedWorkNotRecorded({ exercises }) {
+  const unconfirmed = exercises.filter(exercise => exercise.setRecords?.some(record => !record.completed) || (!exercise.setRecords && !exercise.completed));
+  return unconfirmed.length > 0 && <details className="summary-remaining"><summary>Planned work not recorded</summary><ul>{unconfirmed.map((exercise, index) => <li key={`${exercise.id}-${index}`}>{exercise.name}</li>)}</ul></details>;
 }
 
 function findNextIncompleteExercise(exercises, currentIndex) {
@@ -153,42 +182,25 @@ function durableDisplayEpoch(activeWorkout, snapshot) {
 }
 
 function WorkoutSummary({ candidate, phaseTargets, isSaving, saveError, saveStatus, blockedConflict, onBack, onSave, onKeepPending, onExit, summaryRef }) {
-  const counts = workoutCounts(candidate.exercises);
-  const completedSimpleExercises = candidate.exercises.filter(exercise => (
-    (!Array.isArray(exercise.setRecords) || exercise.setRecords.length === 0) && exercise.completed
-  )).length;
-  const confirmedSetCount = counts.confirmed - completedSimpleExercises;
-  const recordedWork = [
-    confirmedSetCount > 0 && `${confirmedSetCount} ${confirmedSetCount === 1 ? 'set' : 'sets'}`,
-    completedSimpleExercises > 0 && `${completedSimpleExercises} ${completedSimpleExercises === 1 ? 'exercise' : 'exercises'}`,
-  ].filter(Boolean).join(' and ') || '0 sets';
+  const recordedWork = recordedWorkText(candidate.exercises);
   const hasWork = hasConfirmedWork(candidate.exercises);
-  const unconfirmed = candidate.exercises.filter(exercise => exercise.setRecords?.some(record => !record.completed) || (!exercise.setRecords && !exercise.completed));
   return (
     <section className="workout-summary" role="region" aria-label="Workout summary">
       <h2 tabIndex="-1" ref={summaryRef}>Review</h2>
       <p className="summary-total">{recordedWork} recorded · {formatTime(candidate.actualDurationSeconds)}</p>
-      <ul aria-label="Frozen phase timing">
-        {['warmup', 'performance', 'cooldown'].map(phase => <li key={phase}>{phaseReadout(phase === 'performance' ? 'Main workout' : phase[0].toUpperCase() + phase.slice(1), phaseTargets?.[`${phase}Seconds`] ?? 0, candidate.phaseActualSeconds?.[phase] ?? 0)}</li>)}
-      </ul>
-      <ul>{candidate.exercises.filter(exercise => exercise.setRecords?.some(record => record.completed) || exercise.completed).map((exercise, index) => {
-        const records = Array.isArray(exercise.setRecords) ? exercise.setRecords : null;
-        const status = records
-          ? `${records.filter(record => record.completed).length} of ${records.length} sets confirmed`
-          : exercise.completed ? 'confirmed' : 'not confirmed';
-        return <li key={`${exercise.id}-${index}`}>{exercise.name}: {status}</li>;
-      })}</ul>
+      <ReceiptFacts phaseDurations={Object.fromEntries(['warmup', 'performance', 'cooldown'].map(phase => [phase, { plannedSeconds: phaseTargets?.[`${phase}Seconds`] ?? 0, actualSeconds: candidate.phaseActualSeconds?.[phase] ?? 0 }]))} />
       {!hasWork && <p className="error-message" role="alert">Confirm at least one exercise or set before saving.</p>}
-      {hasWork && unconfirmed.length > 0 && <details className="summary-remaining"><summary>Planned work not recorded</summary><ul>{unconfirmed.map((exercise, index) => <li key={`${exercise.id}-${index}`}>{exercise.name}</li>)}</ul></details>}
+      {hasWork && <PlannedWorkNotRecorded exercises={candidate.exercises} />}
       {saveError && <p className="error-message recovery-feedback" role="alert">{saveError}</p>}
       <div className={`summary-actions${blockedConflict ? ' recovery-actions' : ''}`}>
         {blockedConflict ? <><button className="recovery-primary" type="button" onClick={onKeepPending}>Keep this workout open</button><button className="recovery-secondary" type="button" onClick={onExit}>Exit to Plan</button></> : <>
-          <button type="button" onClick={onBack} disabled={isSaving}>Back to workout</button>
           <button type="button" className="finish-btn" onClick={onSave} disabled={!hasWork || isSaving} aria-busy={isSaving}>
             {isSaving ? 'Saving...' : ['write-pending', 'reconcile-indeterminate'].includes(saveStatus) ? 'Check again' : saveStatus === 'retryable-absent' ? 'Try saving again' : 'Save workout'}
           </button>
+          <button type="button" onClick={onBack} disabled={isSaving}>Back to workout</button>
         </>}
       </div>
+      <RecordedExercises exercises={candidate.exercises} summary="Review recorded exercises" />
     </section>
   );
 }
@@ -284,8 +296,7 @@ function exerciseTimingStatus(exercise, exerciseIndex, activeTimer, now) {
   return `${remaining} ${remaining === 1 ? 'set' : 'sets'} remaining`;
 }
 
-export default function WorkoutView({ session, sessionState, onFinish, onComplete, onDiscard, onResume, preference, onSavePreference, onStarted, onDismissPreference }) {
-  const user = useContext(AuthContext);
+export default function WorkoutView({ session, sessionState, onFinish, onComplete, onDiscard, onBackToPlan, onResume, preference, onSavePreference, onStarted, onDismissPreference }) {
   const activeWorkout = sessionState?.activeWorkout ?? EMPTY_ACTIVE_WORKOUT;
   const durableEpochFloor = durableDisplayEpoch(activeWorkout, sessionState?.snapshot);
   const initialDisplayEpochMs = Math.max(Date.now(), durableEpochFloor);
@@ -331,21 +342,28 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
   const wasShowingRecoveryRef = useRef(false);
   const started = activeWorkout.workoutStartedAt !== null;
   const hasUnfinishedSets = activeWorkout.exercises.some(exercise => exercise.setRecords.some(record => !record.completed));
-  const orderBlocks = activeWorkout.exercises.reduce((blocks, exercise, index) => {
+  const orderBlocks = activeWorkout.exercises.reduce((blocks, exercise) => {
     const group = supersetFor(activeWorkout, exercise)?.occurrenceIds ?? [exercise.occurrenceId];
     if (blocks.some(block => block.ids.join('|') === group.join('|'))) return blocks;
-    blocks.push({ ids: group, index, exercises: group.map(id => activeWorkout.exercises.find(item => item.occurrenceId === id)).filter(Boolean) }); return blocks;
+    blocks.push({ ids: group, exercises: group.map(id => activeWorkout.exercises.find(item => item.occurrenceId === id)).filter(Boolean) }); return blocks;
   }, []);
   const orderRule = { blocks: orderBlocks.map(block => ({ exerciseIds: block.exercises.map(exercise => exercise.id) })) };
+  const plannedSeconds = Object.values(sessionState?.phaseTargets ?? {}).reduce((total, seconds) => total + (Number.isFinite(seconds) ? seconds : 0), 0);
+  const orderSummaryNames = orderBlocks.slice(0, 3).map(block => block.exercises.length > 1
+    ? `Superset: ${block.exercises.map(exercise => exercise.name).join(' / ')}`
+    : block.exercises[0]?.name
+  ).filter(Boolean);
+  const orderSummary = `${orderSummaryNames.join(', ')}${orderBlocks.length > 3 ? `, and ${orderBlocks.length - 3} more` : ''}`;
+  const counts = workoutCounts(activeWorkout.exercises);
   const dirtyOrder = Boolean(preference?.baseline) && JSON.stringify(orderRule) !== JSON.stringify(preference.baseline);
   const orderBusy = ['pending', 'indeterminate', 'clearing'].includes(preference?.operation?.state);
-  const moveBlock = async (block, direction) => {
-    const key = block.ids.join('|');
-    pendingOrderFocusRef.current = { key, direction };
+  const moveBlock = async (block, direction, focusKey) => {
+    pendingOrderFocusRef.current = { key: focusKey, direction };
     const accepted = await session.action({ type: 'moveGeneratedBlock', occurrenceId: block.exercises[0].occurrenceId, direction });
     if (!accepted) { pendingOrderFocusRef.current = null; return; }
     setRecoveryAcknowledgement('');
-    const next = direction === 'earlier' ? block.index : block.index + 2;
+    const currentPosition = orderBlocks.indexOf(block);
+    const next = direction === 'earlier' ? currentPosition : currentPosition + 2;
     setOrderAnnouncement(`${block.exercises.map(exercise => exercise.name).join(' / ')} moved to position ${next} of ${orderBlocks.length}. This change is for this workout only.`);
   };
   const journeyStep = activeWorkout.phase === 'cooldown'
@@ -435,6 +453,11 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
 
   useEffect(() => {
     if (document.visibilityState !== 'visible') return;
+    if (activeWorkout.phase === 'review') {
+      restAnnouncementsRef.current.clear();
+      setRestAnnouncement('');
+      return;
+    }
     const activeRestIds = new Set();
     const startedRestAnnouncements = new Map();
     const completedRestAnnouncements = new Map();
@@ -465,7 +488,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       setRecoveryAcknowledgement('');
       setRestAnnouncement(current => refreshRepeatedLiveMessage(current, message));
     }
-  }, [activeWorkout.exercises, now]);
+  }, [activeWorkout.exercises, activeWorkout.phase, now]);
 
   useEffect(() => { if (finishCandidate) summaryRef.current?.focus(); }, [finishCandidate, blockedSaveConflict]);
   useEffect(() => { if (phasePresentation) phaseHeadingRef.current?.focus(); }, [phasePresentation]);
@@ -615,7 +638,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
   const copyWorkout = async () => {
     try {
       if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
-      await navigator.clipboard.writeText(formatWorkoutClipboard(finishCandidate));
+      await navigator.clipboard.writeText(formatWorkoutClipboard(sessionState?.savedReceipt ?? finishCandidate));
       setClipboardFeedback(current => refreshRepeatedLiveMessage(current, 'Workout results copied.'));
     } catch {
       setClipboardFeedback('Couldn\u2019t copy workout results. Try again.');
@@ -680,6 +703,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
 
   const exerciseList = <>
     <h2 className="exercise-list-heading">Exercises</h2>
+    {!started && preference?.resolution?.accepted?.length > 0 && <p className="order-applied">Saved exercise order applied.</p>}
     <ul className="workout-checklist">{activeWorkout.exercises.map((exercise, exerciseIndex) => {
       const confirmed = exercise.setRecords.filter(record => record.completed).length;
       const isExpanded = Boolean(expanded[exerciseIndex]);
@@ -691,14 +715,31 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       const superset = supersetFor(activeWorkout, exercise);
       const next = superset && nextSupersetSet(activeWorkout, superset);
       const supersetContext = superset && `Superset ${superset.occurrenceIds.indexOf(exercise.occurrenceId) + 1} of ${superset.occurrenceIds.length}${next?.exerciseIndex === exerciseIndex ? ' · Next' : ''}`;
+      const orderBlock = started ? null : orderBlocks.find(block => block.ids.includes(exercise.occurrenceId));
+      const orderIndex = orderBlock && orderBlocks.indexOf(orderBlock);
+      const orderFocusKey = orderBlock && `${orderBlock.ids.join('|')}:${exercise.occurrenceId}`;
+      const isSupersetOrder = orderBlock?.exercises.length > 1;
+      const orderLabel = isSupersetOrder ? `${exercise.name} with its superset` : exercise.name;
+      const supersetPartners = isSupersetOrder && orderBlock.exercises.filter(item => item.occurrenceId !== exercise.occurrenceId).map(item => item.name).join(' and ');
       return <li key={exercise.occurrenceId || `${exercise.id}-${exerciseIndex}`} className={`${confirmed === exercise.setRecords.length ? 'completed ' : ''}${isExpanded ? 'selected' : ''}`}>
-        <button type="button" className="exercise-toggle" ref={element => { headerRefs.current[exerciseIndex] = element; }} aria-expanded={isExpanded} aria-controls={`exercise-${exerciseIndex}-sets`} aria-label={`${exercise.name}, ${supersetContext ? `${supersetContext}, ` : ''}${confirmed} of ${exercise.setRecords.length} confirmed, ${timing}, ${isExpanded ? 'collapse' : 'expand'}`} onClick={() => setExpanded(current => ({ ...current, [exerciseIndex]: !isExpanded }))}>
-          <span className="exercise-number" aria-hidden="true">{String(exerciseIndex + 1).padStart(2, '0')}</span><span className="exercise-name"><strong>{exercise.name}</strong> <small>{exercise.muscleGroup}</small></span><span className="exercise-status">{confirmed}/{exercise.setRecords.length} · {timing} · {isExpanded ? 'Collapse' : 'Expand'}</span>
-        </button>
+        <div className="exercise-row">
+          <button type="button" className="exercise-toggle" ref={element => { headerRefs.current[exerciseIndex] = element; }} aria-expanded={isExpanded} aria-controls={`exercise-${exerciseIndex}-sets`} aria-label={`${exercise.name}, ${supersetContext ? `${supersetContext}, ` : ''}${confirmed} of ${exercise.setRecords.length} confirmed, ${timing}, ${isExpanded ? 'collapse' : 'expand'}`} onClick={() => setExpanded(current => ({ ...current, [exerciseIndex]: !isExpanded }))}>
+            <span className="exercise-number" aria-hidden="true">{String(exerciseIndex + 1).padStart(2, '0')}</span><span className="exercise-name"><strong>{exercise.name}</strong> <small>{exercise.muscleGroup}</small></span><span className="exercise-status">{confirmed}/{exercise.setRecords.length} · {timing} · {isExpanded ? 'Collapse' : 'Expand'}</span>
+          </button>
+          {orderBlock && <div className="exercise-order-actions order-block" ref={node => { orderBlockRefs.current[orderFocusKey] = node; }} tabIndex="-1">
+            {supersetPartners && <span className="visually-hidden">Moves with {supersetPartners} as one superset.</span>}
+            <button type="button" data-order-direction="earlier" aria-label={`Move ${orderLabel} earlier; position ${orderIndex + 1} of ${orderBlocks.length}; ${orderIndex === 0 ? 'unavailable' : 'available'}`} disabled={orderBusy || orderIndex === 0} onClick={() => moveBlock(orderBlock, 'earlier', orderFocusKey)}>Earlier</button>
+            <button type="button" data-order-direction="later" aria-label={`Move ${orderLabel} later; position ${orderIndex + 1} of ${orderBlocks.length}; ${orderIndex === orderBlocks.length - 1 ? 'unavailable' : 'available'}`} disabled={orderBusy || orderIndex === orderBlocks.length - 1} onClick={() => moveBlock(orderBlock, 'later', orderFocusKey)}>Later</button>
+          </div>}
+        </div>
         {supersetContext && <span className="superset-context">{supersetContext}</span>}
         {isExpanded && <div id={`exercise-${exerciseIndex}-sets`} className="set-list">{focusedSet >= 0 && renderSetRow(exercise, exerciseIndex, focusedSet)}{focusedSet < 0 && renderOptionalSetDetails(exercise, exerciseIndex, focusedSet)}</div>}
       </li>;
     })}</ul>
+    {!started && <section className="order-save-controls" aria-label="Exercise order saving">
+      {dirtyOrder && <><p>Order changes apply only to today unless you save them.</p><button type="button" disabled={orderBusy} onClick={() => onSavePreference?.(orderRule, Object.fromEntries(activeWorkout.exercises.map(exercise => [exercise.id, exercise.name])))}>{preference?.operation?.state === 'pending' || preference?.operation?.state === 'indeterminate' ? 'Saving order…' : preference?.operation?.state === 'failure' ? 'Try saving this exercise order again' : 'Save order for future workouts'}</button></>}
+      {preference?.operation?.state === 'pending' && <p role="status">Saving this exercise order for future workouts.</p>}{preference?.operation?.state === 'indeterminate' && <p role="status">Saving is taking longer than expected. You can start your workout; we'll confirm when it finishes.</p>}{preference?.operation?.state === 'failure' && <p role="alert">Couldn't save this exercise order. Your saved exercise orders and today's workout order are unchanged.</p>}{preference?.operation?.state === 'success' && <p ref={saveOutcomeRef} role="status" tabIndex="-1">{preference.operation.successMessage ?? 'Order saved.'}</p>}
+    </section>}
     <div className="deferred-set-details">{activeWorkout.exercises.map((exercise, exerciseIndex) => {
       if (!expanded[exerciseIndex]) return null;
       const focusedSet = focusedSetIndex(exercise, exerciseIndex);
@@ -729,7 +770,13 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       </section>
     </div>;
   }
-  if (sessionState?.status === 'saved') return <div className="workout-view"><JourneyProgress current="Review" /><section className="workout-summary"><h2 ref={savedRef} tabIndex="-1">Workout saved</h2><p role="status">This workout is complete.</p><button ref={copyRef} type="button" className="recovery-secondary" onClick={copyWorkout}>Copy workout results</button>{clipboardFeedback && <p role={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'status' : 'alert'} aria-live={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'polite' : 'assertive'} aria-atomic="true">{clipboardFeedback}</p>}<button type="button" className="recovery-secondary" onClick={() => (onComplete ?? onFinish)?.()}>Back to plan</button></section><WorkoutHistory key={user?.uid ?? null} historyKey={user?.uid ?? null} refreshKey loadPage={({ cursor, pageSize }) => getHistoryPage(user?.uid, { cursor, pageSize })} /></div>;
+  if (sessionState?.status === 'saved') {
+    const receipt = sessionState.savedReceipt;
+    const returnToPlan = () => {
+      return session.exit ? session.exit().then(() => (onComplete ?? onFinish)?.()) : (onComplete ?? onFinish)?.();
+    };
+    return <div className="workout-view"><JourneyProgress current="Review" /><section className="workout-summary workout-summary--saved"><h2 ref={savedRef} tabIndex="-1">Workout saved</h2><p className="summary-save-status" role="status">Saved to workout history</p>{receipt && <><p className="summary-total">{recordedWorkText(receipt.exercises)} recorded · {formatTime(receipt.actualDurationSeconds)}</p><ReceiptFacts phaseDurations={receipt.phaseDurations} /><PlannedWorkNotRecorded exercises={receipt.exercises} /><RecordedExercises exercises={receipt.exercises} summary="Recorded exercises" /></>}<div className="summary-actions saved-actions"><button type="button" className="recovery-secondary" onClick={returnToPlan}>Return to plan</button><button ref={copyRef} type="button" className="recovery-secondary" onClick={copyWorkout}>Copy workout results</button></div>{clipboardFeedback && <p role={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'status' : 'alert'} aria-live={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'polite' : 'assertive'} aria-atomic="true">{clipboardFeedback}</p>}</section></div>;
+  }
   return <div className={`workout-view phase-${activeWorkout.phase}`}>
     <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{orderAnnouncement || restAnnouncement || recoveryAcknowledgement}</div>
     <JourneyProgress current={finishCandidate ? 'Review' : journeyStep} />
@@ -737,17 +784,14 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       <div className="workout-header"><h2 className="workout-title" ref={phaseHeadingRef} tabIndex="-1">{phaseTitle}</h2>{started && <div className="timer" aria-label={`Total elapsed ${formatTime(displayedElapsedSeconds)}`}>{formatTime(displayedElapsedSeconds)}</div>}</div>
       <p id="workout-start-help" className="workout-help">{['warmup', 'cooldown'].includes(activeWorkout.phase) && activeWorkout.phaseLedger ? phaseReadout(activeWorkout.phase === 'warmup' ? 'Warmup' : 'Cooldown', sessionState?.phaseTargets?.[`${activeWorkout.phase}Seconds`] ?? 0, getPhaseElapsedSeconds(activeWorkout, activeWorkout.phase, now), true) : started ? 'Start each set as you begin it, then confirm when you finish.' : 'Start the workout to time your sets.'}</p>
       {started && preference?.operation && <section className="order-preference-panel" aria-label="Saved exercise orders">{['pending', 'indeterminate'].includes(preference.operation.state) && <p role="status">{preference.operation.state === 'pending' ? 'Saving this exercise order for future workouts.' : 'Saving is taking longer than expected. We’ll confirm when it finishes.'}</p>}{preference.operation.state === 'success' && <><p role="status">{preference.operation.successMessage ?? 'Order saved.'}</p><button type="button" onClick={onDismissPreference}>Dismiss</button></>}{preference.operation.state === 'failure' && <><p role="alert">Couldn't save this exercise order. Your saved exercise orders and today's workout order are unchanged.</p><button type="button" onClick={() => onSavePreference?.(preference.operation.candidate)}>Try saving this exercise order again</button></>}</section>}
-      {!started && activeWorkout.phase !== 'cancelled' && <section className="order-controls" aria-label="Exercise order">
-        {preference?.resolution?.accepted?.length ? <p>Saved exercise order applied</p> : null}
-        {orderBlocks.map((block, index) => { const isSuperset = block.exercises.length > 1; const names = block.exercises.map(exercise => exercise.name).join(' and '); const description = isSuperset ? `Superset: ${names}. Moves together. To reorder exercises within this superset, go to Settings > Supersets.` : block.exercises[0].name; const position = `position ${index + 1} of ${orderBlocks.length}`; return <div className="order-block" key={block.ids.join('|')} ref={node => { orderBlockRefs.current[block.ids.join('|')] = node; }} tabIndex="-1"><span>{index + 1} {isSuperset ? `Superset · ${block.exercises.map(exercise => exercise.name).join(' / ')}` : names}</span>{isSuperset && <span className="order-superset-help">{description}</span>}<button type="button" data-order-direction="earlier" aria-label={`Move ${isSuperset ? `superset ${names}` : names} earlier; ${position}; ${index === 0 ? 'unavailable' : 'available'}`} disabled={orderBusy || index === 0} onClick={() => moveBlock(block, 'earlier')}>Move earlier</button><button type="button" data-order-direction="later" aria-label={`Move ${isSuperset ? `superset ${names}` : names} later; ${position}; ${index === orderBlocks.length - 1 ? 'unavailable' : 'available'}`} disabled={orderBusy || index === orderBlocks.length - 1} onClick={() => moveBlock(block, 'later')}>Move later</button></div>; })}
-        {dirtyOrder && <><button type="button" disabled={orderBusy} onClick={() => onSavePreference?.(orderRule, Object.fromEntries(activeWorkout.exercises.map(exercise => [exercise.id, exercise.name])))}>{preference?.operation?.state === 'pending' || preference?.operation?.state === 'indeterminate' ? 'Saving order…' : preference?.operation?.state === 'failure' ? 'Try saving this exercise order again' : 'Save order for future workouts'}</button><p>Order changes apply only to today unless you save them.</p></>}
-        {preference?.operation?.state === 'pending' && <p role="status">Saving this exercise order for future workouts.</p>}{preference?.operation?.state === 'indeterminate' && <p role="status">Saving is taking longer than expected. You can start your workout; we'll confirm when it finishes.</p>}{preference?.operation?.state === 'failure' && <p role="alert">Couldn't save this exercise order. Your saved exercise orders and today's workout order are unchanged.</p>}{preference?.operation?.state === 'success' && <p ref={saveOutcomeRef} role="status" tabIndex="-1">{preference.operation.successMessage ?? 'Order saved.'}</p>}
+      {!started && activeWorkout.phase !== 'cancelled' && <section className="workout-ready" aria-label="Workout ready">
+        <div className="workout-ready-summary"><p>{plannedSeconds > 0 ? `${Math.round(plannedSeconds / 60)} min planned · ` : ''}{activeWorkout.exercises.length} {activeWorkout.exercises.length === 1 ? 'exercise' : 'exercises'} · {counts.planned} {counts.planned === 1 ? 'set' : 'sets'}</p>{orderSummary && <p>{orderSummary}</p>}</div>
         <button className="start-btn" disabled={preference?.operation?.state === 'pending'} onClick={async () => { const timestamp = acceptDisplayTime(Date.now()); const successOperationId = preference?.operation?.state === 'success' ? preference.operation.id : null; if (await session.action({ type: 'startWorkout', timestamp })) { setRecoveryAcknowledgement(''); onStarted?.(activeWorkout.exercises, successOperationId); } }}>Start workout</button>
+        <button className="recovery-secondary workout-ready-back" type="button" onClick={async () => { await session.discard(); onBackToPlan?.(); }}>Back to Plan</button>
       </section>}
       {activeWorkout.phase === 'cooldown' && <div className="summary-actions"><button ref={finishRef} className="finish-btn" aria-describedby={finishError ? 'finish-feedback' : undefined} onClick={handleFinish}>Finish workout</button><button type="button" onClick={() => dispatch({ type: 'resumeWorkout', timestamp: acceptDisplayTime(Date.now()) })}>{hasUnfinishedSets ? 'Continue workout' : 'Edit completed sets'}</button>{finishError && <p id="finish-feedback" className="error-message" role="alert">{finishError}</p>}</div>}
       {activeWorkout.phase !== 'cooldown' && exerciseList}
       {(activeWorkout.phase === 'performance' || (!activeWorkout._phaseTimingEnabled && started)) && <div className="summary-actions"><button ref={finishRef} className="finish-btn" aria-describedby={finishError ? 'finish-feedback' : undefined} onClick={handleFinish}>Finish workout</button>{finishError && <p id="finish-feedback" className="error-message" role="alert">{finishError}</p>}{earlyFinishPrompt === 'partial' && <section className="early-finish-confirmation" role="region" aria-label="Finish workout early"><h2 ref={promptHeadingRef} tabIndex="-1">Finish workout early?</h2><p>Unfinished work:</p><ul>{activeWorkout.exercises.filter(exercise => exercise.setRecords.some(record => !record.completed)).map(exercise => <li key={exercise.occurrenceId || exercise.id}>{exercise.name}: {exercise.setRecords.filter(record => !record.completed).length} {exercise.setRecords.filter(record => !record.completed).length === 1 ? 'set' : 'sets'} remaining</li>)}</ul><button type="button" className="return-to-workout" onClick={dismissEarlyFinish}>Return to workout</button><button type="button" onClick={confirmEarlyFinish}>Continue to cooldown</button></section>}{earlyFinishPrompt === 'zero' && <section className="early-finish-confirmation" role="region" aria-label="Cancel workout"><h2 ref={promptHeadingRef} tabIndex="-1">Cancel workout?</h2><p>No work has been confirmed.</p><button type="button" onClick={() => void cancelWorkout()}>Cancel workout</button><button type="button" onClick={dismissEarlyFinish}>Keep working</button></section>}</div>}
     </>}
-    <WorkoutHistory key={user?.uid ?? null} historyKey={user?.uid ?? null} loadPage={({ cursor, pageSize }) => getHistoryPage(user?.uid, { cursor, pageSize })} />
   </div>;
 }

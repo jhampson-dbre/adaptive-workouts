@@ -40,7 +40,11 @@ function SessionHarness({ workout, phaseTargets, onFinish, user, api, preference
       setState(previous => ({ ...previous, status: 'save-pending' }));
       try {
         await api.save(activeWorkout.phaseCandidate);
-        setState(previous => ({ ...previous, status: 'saved', activeWorkout: null }));
+        setState(previous => ({ ...previous, status: 'saved', activeWorkout: null, savedReceipt: {
+          actualDurationSeconds: activeWorkout.phaseCandidate.actualDurationSeconds,
+          phaseDurations: Object.fromEntries(Object.entries(phaseTargets ?? { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }).map(([key, plannedSeconds]) => [key.replace('Seconds', ''), { plannedSeconds, actualSeconds: activeWorkout.phaseCandidate.phaseActualSeconds[key.replace('Seconds', '')] }])),
+          exercises: activeWorkout.exercises,
+        } }));
       } catch (error) { setState(previous => ({ ...previous, status: 'review', error: error.message })); }
     },
     async discard() { await api.discard(); setState(previous => ({ ...previous, activeWorkout: null })); },
@@ -199,13 +203,13 @@ test('keeps move focus and gives each order control its position, availability, 
 
   const earlier = screen.getByRole('button', { name: 'Move Carry earlier; position 1 of 2; unavailable' });
   expect(earlier.disabled).toBe(true);
-  const moveSupersetEarlier = screen.getByRole('button', { name: 'Move superset Long Row Exercise Name and Long Press Exercise Name earlier; position 2 of 2; available' });
-  expect(screen.getByText('Superset: Long Row Exercise Name and Long Press Exercise Name. Moves together. To reorder exercises within this superset, go to Settings > Supersets.')).toBeDefined();
+  const moveSupersetEarlier = screen.getByRole('button', { name: 'Move Long Row Exercise Name with its superset earlier; position 2 of 2; available' });
+  expect(screen.getByText('Moves with Long Press Exercise Name as one superset.')).toBeDefined();
 
   moveSupersetEarlier.focus();
   fireEvent.click(moveSupersetEarlier);
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Move superset Long Row Exercise Name and Long Press Exercise Name earlier; position 1 of 2; unavailable' }).disabled).toBe(true));
-  expect(document.activeElement).toBe(screen.getByText('Superset: Long Row Exercise Name and Long Press Exercise Name. Moves together. To reorder exercises within this superset, go to Settings > Supersets.').closest('.order-block'));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Move Long Row Exercise Name with its superset earlier; position 1 of 2; unavailable' }).disabled).toBe(true));
+  expect(document.activeElement).toBe(screen.getByText('Moves with Long Press Exercise Name as one superset.').closest('.order-block'));
 });
 
 test('retires the temporary order-move announcement after saving that order', async () => {
@@ -234,15 +238,15 @@ test('keeps the initiating save and retry control focused across preference stat
   expect(onSavePreference).toHaveBeenCalledWith(candidate, { squat: 'Squat', plank: 'Plank' });
   view.rerender(props({ baseline, resolution: acceptedResolution, operation: { state: 'pending', candidate } }));
   expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Saving order…' }));
-  expect(screen.getByText('Saving this exercise order for future workouts.').compareDocumentPosition(screen.getByRole('button', { name: 'Start workout' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Start workout' }).compareDocumentPosition(screen.getByText('Saving this exercise order for future workouts.')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   view.rerender(props({ baseline: candidate, resolution: acceptedResolution, operation: { state: 'success', candidate, successMessage: 'Order saved.' } }));
   await waitFor(() => expect(document.activeElement).toBe(screen.getByText('Order saved.', { selector: '[role="status"]' })));
-  expect(screen.getByText('Order saved.', { selector: '[role="status"]' }).compareDocumentPosition(screen.getByRole('button', { name: 'Start workout' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Start workout' }).compareDocumentPosition(screen.getByText('Order saved.', { selector: '[role="status"]' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   view.rerender(props({ baseline: candidate, operation: { state: 'success', candidate, successMessage: 'Order saved for workouts with Squat, Plank, and Sit-ups. This order takes priority over your saved preference for Squat before Plank. That preference still applies in workouts without Sit-ups. Nudge removed the saved order for Squat and Plank to keep your 50 most recently used orders.' } }));
   expect(screen.getByText('Order saved for workouts with Squat, Plank, and Sit-ups. This order takes priority over your saved preference for Squat before Plank. That preference still applies in workouts without Sit-ups. Nudge removed the saved order for Squat and Plank to keep your 50 most recently used orders.', { selector: '[role="status"]' })).toBeTruthy();
   view.rerender(props({ baseline, operation: { state: 'failure', candidate } }));
   const retry = screen.getByRole('button', { name: 'Try saving this exercise order again' });
-  expect(screen.getByRole('alert').compareDocumentPosition(screen.getByRole('button', { name: 'Start workout' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Start workout' }).compareDocumentPosition(screen.getByRole('alert')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   retry.focus(); fireEvent.click(retry);
   expect(onSavePreference).toHaveBeenLastCalledWith(candidate, { squat: 'Squat', plank: 'Plank' });
   expect(document.activeElement).toBe(retry);
@@ -282,30 +286,72 @@ test('renders an applied preferred order passively without moving focus', () => 
   const start = screen.getByRole('button', { name: 'Start workout' });
   start.focus();
   view.rerender(props({ baseline: { blocks: [{ exerciseIds: ['squat'] }, { exerciseIds: ['plank'] }] }, resolution: { accepted: [{}] }, operation: null }));
-  const applied = screen.getByText('Saved exercise order applied');
+  const applied = screen.getByText('Saved exercise order applied.');
   expect(applied.getAttribute('role')).toBeNull();
   expect(applied.getAttribute('aria-live')).toBeNull();
   expect(applied.getAttribute('aria-atomic')).toBeNull();
   expect(document.activeElement).toBe(start);
 });
 
-test('places the compact future-save action after reordered blocks and before Start workout', () => {
+test('keeps the Workout-ready summary bounded and embeds order controls in each exercise row after Start', () => {
+  const workout = [
+    ...timedWorkout,
+    { ...timedWorkout[0], id: 'row', occurrenceId: 'row:2', name: 'Row', setRecords: [{ ...timedWorkout[0].setRecords[0] }] },
+    { ...timedWorkout[1], id: 'press', occurrenceId: 'press:3', name: 'Press', setRecords: [{ ...timedWorkout[1].setRecords[0] }] },
+  ];
+  renderWorkout(workout, () => {}, { uid: 'test-user-id' }, { warmupSeconds: 0, performanceSeconds: 1500, cooldownSeconds: 0 });
+
+  expect(screen.getByText('25 min planned · 4 exercises · 5 sets')).toBeTruthy();
+  expect(screen.getByText('Plank, Squat, Row, and 1 more')).toBeTruthy();
+  const start = screen.getByRole('button', { name: 'Start workout' });
+  const exercisesHeading = screen.getByRole('heading', { name: 'Exercises' });
+  const checklist = document.querySelector('.workout-checklist');
+  const rows = within(checklist).getAllByRole('listitem');
+  expect(screen.queryByText(/Review or change order/)).toBeNull();
+  expect(start.compareDocumentPosition(exercisesHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(exercisesHeading.compareDocumentPosition(checklist) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(rows).toHaveLength(4);
+  expect(rows.every(row => row.querySelector(':scope > .exercise-row > .exercise-order-actions'))).toBe(true);
+  expect(within(rows[0]).getByRole('button', { name: 'Move Plank later; position 1 of 4; available' })).toBeTruthy();
+});
+
+test('puts Back to Plan below Start workout, discards the unstarted session, and hides it after start', async () => {
+  const discard = vi.fn().mockResolvedValue(undefined); const onBackToPlan = vi.fn();
+  const generated = initializeActiveWorkout(timedWorkout, { phaseTimingEnabled: true });
+  const props = activeWorkout => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn().mockResolvedValue(true), discard }} sessionState={{ status: 'owned', activeWorkout, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, blocked: false }} onBackToPlan={onBackToPlan} /></AuthContext.Provider>;
+  const view = render(props(generated));
+  const start = screen.getByRole('button', { name: 'Start workout' }); const back = screen.getByRole('button', { name: 'Back to Plan' });
+  expect(start.compareDocumentPosition(back) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(back.compareDocumentPosition(screen.getByRole('heading', { name: 'Exercises' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  fireEvent.click(back); await waitFor(() => expect(discard).toHaveBeenCalledOnce()); expect(onBackToPlan).toHaveBeenCalledOnce();
+  view.rerender(props(activeWorkoutReducer(generated, { type: 'startWorkout', timestamp: 1 })));
+  expect(screen.queryByRole('button', { name: 'Back to Plan' })).toBeNull();
+});
+
+test('places the compact future-save action after the reordered exercise rows', () => {
   const baseline = { blocks: [{ exerciseIds: ['plank'] }, { exerciseIds: ['squat'] }] };
-  renderWorkout(timedWorkout, () => {}, { uid: 'test-user-id' }, undefined, {}, { baseline });
+  const view = renderWorkout(timedWorkout, () => {}, { uid: 'test-user-id' }, undefined, {}, { baseline });
   fireEvent.click(screen.getByRole('button', { name: 'Move Squat earlier; position 2 of 2; available' }));
   const lastBlock = screen.getByRole('button', { name: 'Move Plank later; position 2 of 2; unavailable' }).closest('.order-block');
   const save = screen.getByRole('button', { name: 'Save order for future workouts' });
   const start = screen.getByRole('button', { name: 'Start workout' });
   expect(lastBlock.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(save.compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(screen.getByText('Order changes apply only to today unless you save them.')).toBeTruthy();
+  expect(start.compareDocumentPosition(lastBlock) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(lastBlock.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const explanation = screen.getByText('Order changes apply only to today unless you save them.');
+  expect(explanation.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  view.rerender(<SessionHarness workout={timedWorkout} user={{ uid: 'test-user-id' }} api={view.api} onFinish={() => {}} preference={{ baseline, operation: { state: 'pending' } }} />);
+  const saving = screen.getByRole('button', { name: 'Saving order…' });
+  const feedback = screen.getByText('Saving this exercise order for future workouts.');
+  expect(explanation.compareDocumentPosition(saving) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(saving.compareDocumentPosition(feedback) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(screen.queryByText(/This saved order applies when a future workout includes all these exercises/)).toBeNull();
   expect(screen.queryByText(/To reorder exercises within a superset, go to Settings > Supersets/)).toBeNull();
 });
 
-test('insets WorkoutView ordering content without insetting Start workout or Settings panels', () => {
-  expect(styles).toMatch(/\.workout-view > \.order-controls > :is\(\.order-block, p\),\s*\.workout-view > \.order-preference-panel\s*\{\s*padding-inline: clamp\(22px, 7vw, 52px\);/);
-  expect(styles).toMatch(/@media \(max-width: 420px\)\s*\{\s*\.workout-view > \.order-controls > \.order-block > span\s*\{\s*flex-basis: 100%;/);
+test('keeps embedded order actions usable without insetting Start workout', () => {
+  expect(styles).toMatch(/\.exercise-row\s*\{\s*display: grid;\s*grid-template-columns: minmax\(0, 1fr\) auto;/);
+  expect(styles).toMatch(/\.exercise-order-actions button\s*\{\s*min-height: 44px;/);
   expect(styles).toMatch(/\.start-btn\s*\{\s*width: 100%;/);
 });
 
@@ -409,6 +455,20 @@ test('announces a newly started group rest once without repeating the ready-set 
   expect(status.textContent).not.toMatch(/Start set|Long Press Exercise Name exercise 2 set 1/i);
   await act(async () => {});
   expect(status.textContent).toBe('Long Row Exercise Name set 1 rest started.');
+});
+
+test('retires active-rest feedback when the workout enters Review', async () => {
+  renderWorkout([timedWorkout[0]]);
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+  await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Plank set 1 rest started.'));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to cooldown' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
+  await screen.findByRole('heading', { level: 2, name: 'Review' });
+  expect(screen.getByRole('status').textContent).toBe('');
 });
 
 test('starting the recommended member retires its rest-start announcement but keeps an unrelated rest announcement', async () => {
@@ -684,7 +744,7 @@ test('labels a completed simple exercise factually in Review', () => {
   };
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{}} sessionState={{ status: 'review', activeWorkout, phaseTargets: { warmupSeconds: 0, performanceSeconds: 60, cooldownSeconds: 0 }, blocked: false }} /></AuthContext.Provider>);
 
-  expect(screen.getByText(/1 set and 1 exercise recorded/)).toBeDefined();
+  expect(screen.getByText('1 set and 2 exercises recorded · 1:00')).toBeDefined();
 });
 
 test('times work inline, confirms a set, and exposes persistent overtime when collapsed', () => {
@@ -1046,23 +1106,17 @@ test('Finish uses a fresh reducer snapshot after Back and saves coherent v4 timi
   expect(screen.getByRole('heading', { level: 2, name: 'Cooldown' })).toBe(document.activeElement);
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   await act(async () => {});
-  expect(screen.getByText(/1 set recorded/)).toBeDefined();
+  expect(screen.getByText(/1 set and 1 exercise recorded/)).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Back to workout' }));
   await act(async () => {});
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Back to plan' })).toBeDefined());
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Return to plan' })).toBeDefined());
   expect(screen.getByRole('heading', { level: 2, name: 'Workout saved' })).toBe(document.activeElement);
-  expect(screen.getByRole('status').textContent).toBe('This workout is complete.');
+  expect(screen.getByRole('status').textContent).toBe('Saved to workout history');
   expect(screen.queryByText('Plan another workout')).toBeNull();
-  expect(screen.getByRole('button', { name: 'Back to plan' }).closest('[role="status"]')).toBeNull();
-  const history = screen.getByRole('button', { name: 'Workout history' });
-  expect(history.getAttribute('aria-expanded')).toBe('false');
-  expect(history.closest('[role="status"]')).toBeNull();
   expect(storage.getHistoryPage).not.toHaveBeenCalled();
-  fireEvent.click(history);
-  await waitFor(() => expect(storage.getHistoryPage).toHaveBeenCalledWith('test-user-id', { cursor: null, pageSize: 20 }));
-  fireEvent.click(screen.getByRole('button', { name: 'Back to plan' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Return to plan' }));
   expect(onFinish).toHaveBeenCalledOnce();
   expect(view.api.save).toHaveBeenCalledOnce();
   expect(view.api.save.mock.calls[0][0].actualDurationSeconds).toBeGreaterThanOrEqual(0);
@@ -1076,8 +1130,8 @@ test('A8 saves a strict v4 document with frozen phase durations instead of the l
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Back to plan' })).toBeDefined());
-  fireEvent.click(screen.getByRole('button', { name: 'Back to plan' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Return to plan' })).toBeDefined());
+  fireEvent.click(screen.getByRole('button', { name: 'Return to plan' }));
   expect(onFinish).toHaveBeenCalledOnce();
   expect(view.api.save).toHaveBeenCalledOnce();
   expect(view.api.save.mock.calls[0][0]).toMatchObject({ actualDurationSeconds: 0, phaseActualSeconds: expect.any(Object) });
@@ -1103,7 +1157,7 @@ test('copies the frozen saved workout, keeps focus, reannounces success, and lea
   expect(view.api.save).toHaveBeenCalledOnce();
 });
 
-test('copies the frozen mixed saved candidate after live workout state is replaced', async () => {
+test('renders the saved receipt from session state after live workout state is replaced', async () => {
   let review = initializeActiveWorkout(mixedSupersetWorkout(), { phaseTimingEnabled: true });
   for (const action of [
     { type: 'startWorkout', timestamp: 1000 },
@@ -1117,11 +1171,41 @@ test('copies the frozen mixed saved candidate after live workout state is replac
   const renderState = state => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={state} /></AuthContext.Provider>;
   const view = render(renderState({ status: 'review', activeWorkout: review, blocked: false }));
   await screen.findByRole('heading', { level: 2, name: 'Review' });
-  view.rerender(renderState({ status: 'saved', activeWorkout: { exercises: [] }, blocked: false }));
+  view.rerender(renderState({ status: 'saved', activeWorkout: null, savedReceipt: { actualDurationSeconds: 6, phaseDurations: { warmup: { plannedSeconds: 0, actualSeconds: 0 }, performance: { plannedSeconds: 0, actualSeconds: 6 }, cooldown: { plannedSeconds: 0, actualSeconds: 0 } }, exercises: review.exercises, supersets: review.supersets }, blocked: false }));
   const copy = await screen.findByRole('button', { name: 'Copy workout results' });
   expect(storage.getHistoryPage).not.toHaveBeenCalled();
+  expect(screen.getByRole('status').textContent).toBe('Saved to workout history');
+  expect(screen.getByText('3 sets and 3 exercises recorded · 0:06')).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Return to plan' })).toBeDefined();
+  expect(screen.getByText('Recorded exercises').closest('details').open).toBe(false);
   fireEvent.click(copy);
   await waitFor(() => expect(writeText).toHaveBeenCalledWith('Carry\n1 set\n0:00\n\nA1. Long Row Exercise Name\n1 set\n0:00\n\nA2. Long Press Exercise Name\n1 set\n0:00'));
+});
+
+test('keeps partial factual totals, omissions, and approved action order in Review and the saved receipt', () => {
+  let review = initializeActiveWorkout(timedWorkout, { phaseTimingEnabled: true });
+  for (const action of [
+    { type: 'startWorkout', timestamp: 1000 }, { type: 'startSet', exerciseIndex: 0, setIndex: 0, timestamp: 1001 },
+    { type: 'confirmSet', exerciseIndex: 0, setIndex: 0, timestamp: 1002 }, { type: 'confirmEarlyFinish', timestamp: 1003 },
+    { type: 'finishWorkout', timestamp: 1004 },
+  ]) review = activeWorkoutReducer(review, action);
+  const renderState = state => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={state} /></AuthContext.Provider>;
+  const view = render(renderState({ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, blocked: false }));
+
+  const summary = screen.getByRole('region', { name: 'Workout summary' });
+  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).className).toContain('summary-facts');
+  expect(summary.textContent).toMatch(/1 set and 1 exercise recorded/);
+  expect(screen.getByText('Planned work not recorded').closest('details').open).toBe(false);
+  expect(screen.getByText('Review recorded exercises').closest('details').className).toContain('summary-remaining');
+  expect([...summary.querySelector('.summary-actions').querySelectorAll('button')].map(button => button.textContent)).toEqual(['Save workout', 'Back to workout']);
+
+  view.rerender(renderState({ status: 'saved', activeWorkout: null, savedReceipt: { actualDurationSeconds: review.phaseCandidate.actualDurationSeconds, phaseDurations: { warmup: { plannedSeconds: 0, actualSeconds: 0 }, performance: { plannedSeconds: 0, actualSeconds: review.phaseCandidate.phaseActualSeconds.performance }, cooldown: { plannedSeconds: 0, actualSeconds: 0 } }, exercises: review.exercises }, blocked: false }));
+  expect(screen.getByRole('heading', { name: 'Workout saved' }).closest('section').className).toContain('workout-summary--saved');
+  expect(screen.getByRole('status').className).toContain('summary-save-status');
+  expect(screen.getByRole('button', { name: 'Return to plan' }).parentElement.className).toContain('saved-actions');
+  expect(screen.getByText(/1 set and 1 exercise recorded/)).toBeDefined();
+  expect(screen.getByText('Planned work not recorded').closest('details').open).toBe(false);
+  expect(screen.getByText('Recorded exercises').closest('details').className).toContain('summary-remaining');
 });
 
 test('keeps Copy workout results enabled and focused after clipboard absence or rejection, then replaces the error on retry', async () => {
@@ -1261,7 +1345,7 @@ test('renders the session-produced divergent immutable-save conflict as frozen R
   const summary = await screen.findByRole('region', { name: 'Workout summary' });
   expect(screen.getByRole('heading', { level: 2, name: 'Review' })).toBe(document.activeElement);
   expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Main workout: 0:00 actual \/ 45:00 planned/);
-  expect(summary.textContent).toMatch(/1 set recorded/);
+  expect(summary.textContent).toMatch(/1 set and 1 exercise recorded/);
   expect([...summary.querySelectorAll('button')].map(button => button.textContent)).toEqual(['Keep this workout open', 'Exit to Plan']);
   fireEvent.click(screen.getByRole('button', { name: 'Keep this workout open' }));
   expect(save).toHaveBeenCalledOnce();
@@ -1509,29 +1593,8 @@ test('a failed session save keeps the frozen candidate for retry', async () => {
   expect(view.api.save.mock.calls[1][0]).toBe(view.api.save.mock.calls[0][0]);
 });
 
-test('history loading is deferred until disclosure and failures remain nonblocking', async () => {
-  storage.getHistoryPage.mockRejectedValueOnce(new Error('offline'));
-  renderWorkout([]);
-  expect(storage.getHistoryPage).not.toHaveBeenCalled();
-  expect(screen.queryByText('Failed to load workout history.')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
-  expect(await screen.findByText('Couldn’t load workout history.')).toBeDefined();
-  expect(storage.getHistoryPage).toHaveBeenCalledWith('test-user-id', { cursor: null, pageSize: 20 });
-  expect(screen.getByRole('button', { name: 'Start workout' })).toBeDefined();
-});
-
-test('refreshes already-open empty history after a successful save without another save', async () => {
-  let view;
-  storage.getHistoryPage
-    .mockResolvedValueOnce({ items: [], nextCursor: null, hasMore: false })
-    .mockImplementationOnce(() => Promise.resolve({
-      items: [{ ...view.api.save.mock.calls[0][0], id: 'newly-saved' }], nextCursor: null, hasMore: false,
-    }));
-  view = renderWorkout([{ ...timedWorkout[1] }]);
-
-  const history = screen.getByRole('button', { name: 'Workout history' });
-  fireEvent.click(history);
-  expect(await screen.findByText('No workouts logged yet.')).toBeDefined();
+test('saves a completed timed workout', async () => {
+  const view = renderWorkout([{ ...timedWorkout[1] }]);
 
   fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
@@ -1539,10 +1602,7 @@ test('refreshes already-open empty history after a successful save without anoth
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
 
-  await waitFor(() => expect(storage.getHistoryPage).toHaveBeenCalledTimes(2));
-  expect(history.getAttribute('aria-expanded')).toBe('true');
-  expect(screen.getByRole('article')).toBeDefined();
-  expect(screen.queryByText('No workouts logged yet.')).toBeNull();
+  await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Saved to workout history'));
   expect(view.api.save).toHaveBeenCalledOnce();
 });
 
@@ -1583,11 +1643,11 @@ test('duplicate Save clicks share one in-flight request and disable summary navi
 
   await waitFor(() => expect(resolveSave).toBeTypeOf('function'));
   resolveSave();
-  await waitFor(() => expect(screen.getByRole('status').textContent).toBe('This workout is complete.'));
+  await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Saved to workout history'));
   await new Promise(resolve => setTimeout(resolve, 550));
   expect(onFinish).not.toHaveBeenCalled();
   expect(screen.queryByRole('button', { name: 'Save workout' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Back to plan' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Return to plan' }));
   expect(onFinish).toHaveBeenCalledOnce();
   expect(view.api.save).toHaveBeenCalledTimes(1);
 });
@@ -1630,25 +1690,22 @@ test('session account conflict keeps Review and permits a retry after recovery',
   const failedCandidate = view.api.save.mock.calls[0][0];
   expect(screen.getByRole('region', { name: 'Workout summary' })).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Back to plan' })).toBeDefined());
-  fireEvent.click(screen.getByRole('button', { name: 'Back to plan' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Return to plan' })).toBeDefined());
+  fireEvent.click(screen.getByRole('button', { name: 'Return to plan' }));
   expect(onFinish).toHaveBeenCalledOnce();
   expect(view.api.save.mock.calls[1][0]).toBe(failedCandidate);
 });
 
-test('history fetch failure stays separate while a timed workout saves successfully', async () => {
-  storage.getHistoryPage.mockRejectedValueOnce(new Error('history offline'));
+test('returns to plan after a timed workout saves successfully', async () => {
   const onFinish = vi.fn();
   const view = renderWorkout([{ ...timedWorkout[1] }], onFinish);
-  fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
-  expect(await screen.findByText('Couldn’t load workout history.')).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Back to plan' })).toBeDefined());
-  fireEvent.click(screen.getByRole('button', { name: 'Back to plan' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Return to plan' })).toBeDefined());
+  fireEvent.click(screen.getByRole('button', { name: 'Return to plan' }));
   expect(onFinish).toHaveBeenCalledOnce();
   expect(view.api.save).toHaveBeenCalledOnce();
 });

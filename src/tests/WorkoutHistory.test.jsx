@@ -5,7 +5,7 @@ import WorkoutHistory from '../components/WorkoutHistory';
 afterEach(cleanup);
 
 function openHistory() {
-  fireEvent.click(screen.getByRole('button', { name: 'Workout history' }));
+  document.querySelectorAll('details:not([open]) > summary').forEach(summary => fireEvent.click(summary));
 }
 
 const identity = { id: 'bench', name: 'Bench Press', muscleGroup: 'Chest', tier: 1 };
@@ -74,36 +74,29 @@ function v3Workout(overrides = {}) {
   };
 }
 
-test('keeps history content semantically quiet until its stable disclosure opens', () => {
+test('renders Workouts directly as the scan-first History destination', () => {
   const { rerender } = render(<WorkoutHistory loading history={[]} />);
-  const disclosure = screen.getByRole('button', { name: 'Workout history' });
-  expect(disclosure.getAttribute('aria-expanded')).toBe('false');
-  expect(disclosure.getAttribute('aria-controls')).toBeTruthy();
-  expect(screen.queryByText('Loading workout history…')).toBeNull();
+  expect(screen.getByRole('heading', { name: 'History' })).toBeDefined();
+  expect(screen.getByRole('heading', { name: 'Workouts' })).toBeDefined();
+  expect(screen.getByText('Loading workout history…')).toBeDefined();
   rerender(<WorkoutHistory error="Failed to load workout history." history={[]} />);
-  expect(screen.queryByRole('alert')).toBeNull();
-  openHistory();
-  expect(disclosure.getAttribute('aria-expanded')).toBe('true');
   expect(screen.getByRole('alert').textContent).toMatch(/failed to load/i);
-  openHistory();
-  expect(disclosure.getAttribute('aria-expanded')).toBe('false');
-  expect(screen.queryByRole('alert')).toBeNull();
 });
 
 test('renders loading, error, empty, and a semantic read-only history section after opening', () => {
   const { rerender } = render(<WorkoutHistory loading history={[]} />);
-  expect(screen.getByRole('region', { name: 'Workout History' })).toBeDefined();
+  expect(screen.getByRole('region', { name: 'History' })).toBeDefined();
   openHistory();
   expect(screen.getByText('Loading workout history…')).toBeDefined();
   rerender(<WorkoutHistory error="Failed to load workout history." history={[]} />);
   expect(screen.getByRole('alert').textContent).toMatch(/failed to load/i);
   rerender(<WorkoutHistory history={[]} />);
   expect(screen.getByText('No workouts logged yet.')).toBeDefined();
-  expect(screen.queryAllByRole('button')).toHaveLength(1);
+  expect(screen.queryAllByRole('button')).toHaveLength(0);
   expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
 });
 
-test('loads only when first opened, appends older pages, and focuses the appended heading', async () => {
+test('loads on entry, appends older pages, and focuses the appended heading', async () => {
   const firstPage = Array.from({ length: 20 }, (_, index) => workout({ id: `new-${index}`, date: '2026-07-20' }));
   const olderPage = [workout({ id: 'old-1', date: '2026-07-01' })];
   const loadPage = vi.fn()
@@ -111,21 +104,40 @@ test('loads only when first opened, appends older pages, and focuses the appende
     .mockResolvedValueOnce({ items: olderPage, nextCursor: 'cursor-2', hasMore: false });
   render(<WorkoutHistory loadPage={loadPage} />);
 
-  expect(loadPage).not.toHaveBeenCalled();
-  openHistory();
+  await waitFor(() => expect(loadPage).toHaveBeenCalledTimes(1));
+  expect(screen.getByRole('heading', { level: 2, name: 'History' })).toBeDefined();
+  expect(screen.getByRole('heading', { level: 3, name: 'Workouts' })).toBeDefined();
+  expect(screen.getAllByRole('heading', { level: 4, name: 'July 20, 2026' })).toHaveLength(20);
   expect(await screen.findByText('20 workouts loaded.')).toBeDefined();
   expect(loadPage).toHaveBeenCalledWith({ cursor: null, pageSize: 20 });
   fireEvent.click(screen.getByRole('button', { name: 'Load older' }));
   expect(await screen.findByText('All available workouts are shown.')).toBeDefined();
   expect(screen.queryByText('1 older workout loaded.')).toBeNull();
   await waitFor(() => expect(document.activeElement?.textContent).toMatch(/July 1, 2026/));
+  expect(document.activeElement?.tagName).toBe('H4');
   expect(document.activeElement?.getAttribute('tabindex')).toBe('-1');
   fireEvent.blur(document.activeElement);
   await waitFor(() => expect(screen.getByText(/July 1, 2026/).getAttribute('tabindex')).toBeNull());
   expect(loadPage).toHaveBeenLastCalledWith({ cursor: 'cursor-1', pageSize: 20 });
 });
 
-test('keeps a collapsed refresh lazy and resets an open history to its refreshed first page', async () => {
+test('marks history recovery and pagination controls as touch-sized actions', async () => {
+  render(<WorkoutHistory loadPage={vi.fn().mockRejectedValueOnce(new Error('offline'))} />);
+  expect((await screen.findByRole('button', { name: 'Retry' })).className).toBe('history-action');
+  cleanup();
+
+  const loadPage = vi.fn()
+    .mockResolvedValueOnce({ items: [workout()], nextCursor: 'cursor-1', hasMore: true })
+    .mockRejectedValueOnce(new Error('offline'));
+  render(<WorkoutHistory loadPage={loadPage} />);
+  await screen.findByText('1 workout loaded.');
+  const loadOlder = screen.getByRole('button', { name: 'Load older' });
+  expect(loadOlder.className).toBe('history-action');
+  fireEvent.click(loadOlder);
+  expect((await screen.findByRole('button', { name: 'Retry older workouts' })).className).toBe('history-action');
+});
+
+test('refreshes the first page when the History refresh key changes', async () => {
   const loadPage = vi.fn()
     .mockResolvedValueOnce({ items: [workout({ id: 'before-refresh' })], nextCursor: 'before-cursor', hasMore: true })
     .mockResolvedValueOnce({ items: [workout({ id: 'after-refresh' })], nextCursor: 'after-cursor', hasMore: true })
@@ -133,35 +145,23 @@ test('keeps a collapsed refresh lazy and resets an open history to its refreshed
   const { rerender } = render(<WorkoutHistory refreshKey={0} loadPage={loadPage} />);
 
   rerender(<WorkoutHistory refreshKey={1} loadPage={loadPage} />);
-  expect(loadPage).not.toHaveBeenCalled();
-  openHistory();
-  await waitFor(() => expect(loadPage).toHaveBeenCalledTimes(1));
-  expect(loadPage).toHaveBeenLastCalledWith({ cursor: null, pageSize: 20 });
-
-  rerender(<WorkoutHistory refreshKey={2} loadPage={loadPage} />);
   await waitFor(() => expect(loadPage).toHaveBeenCalledTimes(2));
   expect(loadPage).toHaveBeenLastCalledWith({ cursor: null, pageSize: 20 });
-  rerender(<WorkoutHistory refreshKey={2} loadPage={loadPage} />);
-  expect(loadPage).toHaveBeenCalledTimes(2);
+
   expect(screen.getAllByRole('article')).toHaveLength(1);
   fireEvent.click(screen.getByRole('button', { name: 'Load older' }));
   await waitFor(() => expect(loadPage).toHaveBeenCalledTimes(3));
   expect(loadPage).toHaveBeenLastCalledWith({ cursor: 'after-cursor', pageSize: 20 });
 });
 
-test('invalidates closed empty history for its next lazy disclosure refresh', async () => {
+test('refreshes an empty History destination', async () => {
   const loadPage = vi.fn()
     .mockResolvedValueOnce({ items: [], nextCursor: null, hasMore: false })
     .mockResolvedValueOnce({ items: [workout({ id: 'saved-after-collapse' })], nextCursor: null, hasMore: false });
   const { rerender } = render(<WorkoutHistory refreshKey={0} loadPage={loadPage} />);
 
-  openHistory();
   expect(await screen.findByText('No workouts logged yet.')).toBeDefined();
-  openHistory();
   rerender(<WorkoutHistory refreshKey={1} loadPage={loadPage} />);
-  expect(loadPage).toHaveBeenCalledTimes(1);
-
-  openHistory();
   await waitFor(() => expect(loadPage).toHaveBeenCalledTimes(2));
   expect(loadPage).toHaveBeenLastCalledWith({ cursor: null, pageSize: 20 });
   expect(screen.getByRole('article')).toBeDefined();
@@ -226,33 +226,27 @@ test('keeps cards visible and exposes a busy Load older control during a normal 
   expect(await screen.findByText('1 older workout loaded.')).toBeDefined();
 });
 
-test('retains pending work across collapse without replaying a live message', async () => {
+test('retains pending work without replaying a live message', async () => {
   let resolvePage;
   const loadPage = vi.fn(() => new Promise(resolve => { resolvePage = resolve; }));
   render(<WorkoutHistory loadPage={loadPage} />);
-  openHistory();
   expect(screen.getByText('Loading workout history…')).toBeDefined();
-  openHistory();
   resolvePage({ items: [workout()], nextCursor: null, hasMore: false });
   await waitFor(() => expect(screen.queryByText('Loading workout history…')).toBeNull());
-  openHistory();
   expect(screen.getByRole('article')).toBeDefined();
   expect(screen.queryByText('1 workout loaded.')).toBeNull();
 });
 
-test('drops a prior account pending result and lazily loads the next account after identity changes', async () => {
+test('drops a prior account pending result and loads the next account after identity changes', async () => {
   let resolveFirst;
   const firstLoad = new Promise(resolve => { resolveFirst = resolve; });
   const loadPage = vi.fn()
     .mockReturnValueOnce(firstLoad)
     .mockResolvedValueOnce({ items: [workout({ id: 'account-b' })], nextCursor: null, hasMore: false });
   const { rerender } = render(<WorkoutHistory historyKey="account-a" loadPage={loadPage} />);
-  openHistory();
   rerender(<WorkoutHistory historyKey="account-b" loadPage={loadPage} />);
   resolveFirst({ items: [workout({ id: 'account-a' })], nextCursor: null, hasMore: false });
   await waitFor(() => expect(screen.queryByRole('article')).toBeNull());
-  expect(screen.getByRole('button', { name: 'Workout history' }).getAttribute('aria-expanded')).toBe('false');
-  openHistory();
   expect(await screen.findByText('All available workouts are shown.')).toBeDefined();
   expect(screen.getAllByRole('article')).toHaveLength(1);
   expect(screen.queryByText('1 workout loaded.')).toBeNull();
@@ -336,6 +330,38 @@ test('renders valid v2 modes and hides unconfirmed tracked performance', () => {
   expect(screen.queryByText(/Work:/)).toBeNull();
 });
 
+test('keeps opened exercise details under the workout date without a duplicate heading', () => {
+  render(<WorkoutHistory history={[workout({ exercises: [weighted()] })]} />);
+
+  const disclosure = screen.getByText('Bench Press: 2 of 2 sets confirmed');
+  fireEvent.click(disclosure);
+
+  expect(screen.getByRole('heading', { level: 4, name: 'July 12, 2026' })).toBeDefined();
+  expect(screen.queryByRole('heading', { name: 'Bench Press' })).toBeNull();
+  expect(disclosure).toBeDefined();
+  expect(screen.getByText(/2 sets.*weighted/)).toBeDefined();
+  expect(screen.getAllByText(/Target: 100 lb.*Actual: 100 lb.*8 reps.*Confirmed/)).toHaveLength(2);
+});
+
+test('shows a bounded factual work summary before exercise details for full and partial canonical workouts', () => {
+  const full = workout({ id: 'full', exercises: [weighted(), bodyweight(), { id: 'plank', name: 'Plank', muscleGroup: 'Core', tier: 1, trackingMode: 'simple', sets: 1, prescribedSetCount: 1, completed: true }] });
+  const partial = workout({ id: 'partial', exercises: [
+    weighted({ setRecords: [weightedRecord(0), weightedRecord(1, { completed: false })] }),
+    bodyweight({ setRecords: [{ index: 0, targetReps: 8, fullReps: 0, assistedReps: 0, eccentricReps: 0, completed: false }] }),
+    { id: 'plank', name: 'Plank', muscleGroup: 'Core', tier: 1, trackingMode: 'simple', sets: 1, prescribedSetCount: 1, completed: false },
+  ] });
+  render(<WorkoutHistory history={[full, partial]} />);
+  expect(screen.getByText('Confirmed work: 3 of 3 sets confirmed; 1 of 1 simple exercise confirmed. All planned work confirmed.')).toBeDefined();
+  expect(screen.getByText('Confirmed work: 1 of 3 sets confirmed; 0 of 1 simple exercise confirmed. Partial work.')).toBeDefined();
+});
+
+test('omits the work summary for a persisted valid v2 workout without exercises', () => {
+  render(<WorkoutHistory history={[workout({ exercises: [] })]} />);
+
+  expect(screen.getByRole('article')).toBeDefined();
+  expect(screen.queryByText(/^Confirmed work:/)).toBeNull();
+});
+
 test('shows confirmed bodyweight categories and totals', () => {
   render(<WorkoutHistory history={[workout({ exercises: [bodyweight()] })]} />);
   openHistory();
@@ -386,8 +412,8 @@ test('salvages valid siblings from a valid v2 envelope but falls back for invali
   const invalidEnvelope = workout({ id: 'bad-envelope', exercises: 'nope' });
   render(<WorkoutHistory history={[mixed, invalidEnvelope, null, { schemaVersion: 99 }]} />);
   openHistory();
-  expect(screen.getByText('Pull Up')).toBeDefined();
-  expect(screen.getByText('Bench Press')).toBeDefined();
+  expect(screen.getByText(/^Pull Up:/)).toBeDefined();
+  expect(screen.getByText(/^Bench Press:/)).toBeDefined();
   expect(screen.getAllByText('Exercise details unavailable.')).toHaveLength(2);
   expect(screen.getAllByText('Saved workout details are unavailable.')).toHaveLength(3);
 });
@@ -408,7 +434,7 @@ test('formats date-only values without rollback, guards invalid dates, and prese
   expect(screen.getByText(/January 1, 2026/)).toBeDefined();
   expect(screen.getAllByText('Unknown date')).toHaveLength(2);
   const cards = screen.getAllByRole('article');
-  expect(within(cards[0]).getByText('First workout exercise')).toBeDefined();
+  expect(within(cards[0]).getByText(/^First workout exercise:/)).toBeDefined();
   expect(within(cards[3]).getByText('Saved workout details are unavailable.')).toBeDefined();
 });
 
@@ -461,4 +487,5 @@ test('treats malformed v3 as wholly unavailable instead of salvaging occurrences
   expect(screen.getByText('Saved workout details are unavailable.')).toBeDefined();
   expect(screen.queryByText('Plank')).toBeNull();
   expect(screen.queryByText(/Work:/)).toBeNull();
+  expect(screen.queryByText(/^Confirmed work:/)).toBeNull();
 });
