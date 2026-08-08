@@ -1352,7 +1352,7 @@ input:focus-visible {
 
 .superset-steps [aria-current='step'] {
   background: var(--accent);
-  color: #050505;
+  color: var(--text-h);
   padding: 4px 8px;
 }
 

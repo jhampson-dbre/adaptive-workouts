@@ -56,8 +56,9 @@ the eventual saved workout.
 - Keep each decision surface to four or fewer peer choices. The shell has three
   destination choices at most (Plan or active Workout, History, Settings); Sign out is
   a separated account utility, not a peer job. Settings has exactly three job
-  summaries. Workout ready has Start plus one order disclosure. Review and receipt
-  have no more than two action peers.
+  summaries. Workout ready has Start plus one quieter Back-to-Plan utility; order
+  moves remain contextual actions within exercise rows. Review and receipt have no
+  more than two action peers.
 - Signal yellow remains reserved for a current primary action. The saved receipt is
   an intentional exception: it is an endpoint, so its two exit utilities remain
   neutral rather than manufacturing another-workout urgency.
@@ -81,6 +82,12 @@ that remove those verified hierarchy failures while retaining every capability.
 Keep `Generator`, `App`, `WorkoutView`, and the active-workout session in their
 current ownership roles.
 
+**Approved follow-up refinement (2026-08-08):** The trainee-directed refinement
+replaces the separate order-only disclosure below Start with contextual move actions
+inside each pre-start exercise row and adds a compact **Back to Plan** utility directly
+after Start. This supersedes the original disclosure topology without changing the
+durable workout, order-preference, save, focus, or interruption authorities below.
+
 **Plan hierarchy**
 
 1. `Plan` heading and concise purpose.
@@ -99,24 +106,26 @@ the physical viewport; DOM order and immediate adjacency still remain authoritat
 1. Journey progress, `Workout ready` heading, and current generated-workout truth.
 2. Bounded compact summary: planned duration, exercise count, set count, and at most
    the first three ordered exercise names or named superset blocks followed by a
-   factual `and N more` count when needed. Do not invent readiness or rationale. The
-   complete order belongs only in the disclosure below.
+   factual `and N more` count when needed. Do not invent readiness or rationale.
 3. Signal-yellow **Start workout** in the first decision viewport at the reference
    phone and desktop sizes for the normal fixture.
-4. Native **Review or change order** disclosure, closed by default. Its summary may
-   include passive `Saved exercise order applied` when true.
-5. Inside the disclosure, render the existing ordered blocks and atomic **Move
-   earlier/later** controls in current DOM order, followed by dirty explanation,
-   **Save order for future workouts**, and its adjacent lifecycle feedback.
+4. Compact neutral **Back to Plan** directly after Start. It discards only the staged,
+   unstarted workout, preserves Plan inputs and authoritative order-operation truth,
+   and returns focus through the existing keyed Plan destination.
+5. `Exercises` heading and the complete generated order. Each pre-start exercise row
+   contains its contextual **Earlier/Later** controls beside the expandable exercise
+   control. Supersets move atomically and announce that relationship without adding a
+   second order-only list or disclosure. Passive `Saved exercise order applied`
+   remains adjacent to the list when true.
+6. After the exercise rows, render the dirty today-only explanation, **Save order for
+   future workouts**, and adjacent lifecycle feedback only when applicable.
 
-Opening or closing the disclosure is presentation only. It does not reset the
-generated workout, dirty comparison, captured save candidate, move focus, operation,
-or later Start result. Pending keeps the existing bounded Start gate; indeterminate,
-failure/retry, late success, override, and eviction semantics remain exactly as
-owned today. The disclosure remains open while dirty or while an operation is
-pending, indeterminate, failed, or has just succeeded unless the trainee explicitly
-closes it; interruption/remount restores authoritative workout and App-owned
-operation state, without a new persisted open/closed preference.
+Moving or expanding a row is presentation only around the durable generated workout.
+It does not reset the dirty comparison, captured save candidate, move focus,
+operation, or later Start result. Pending keeps the existing bounded Start gate;
+indeterminate, failure/retry, late success, override, and eviction semantics remain
+exactly as owned today. Interruption/remount restores authoritative workout and
+App-owned operation state without a new persisted presentation preference.
 
 This supersedes only TREK-300's visible pre-start placement because the whole order
 editor is now optional. It preserves TREK-294's atomic block, save, focus, lifecycle,
@@ -251,12 +260,12 @@ checks include names, expanded state, live-region/alert role, and reading order.
 | --- | --- | --- |
 | UX-306-01 | Plan default; phone + desktop, touch + keyboard | Time and **Plan my workout** precede the closed optional disclosure; primary is in the first decision viewport for the normal fixture; focus and 44px targets are visible. |
 | UX-306-02 | Plan long names/content and all constraints; phone + reflow | Optional content wraps without overflow; primary remains before it in DOM/reading order; constraint labels and validation remain associated. |
-| UX-306-03 | Workout ready default with long workout/names; phone + desktop | Bounded truthful totals and at most three names plus `and N more` precede dominant **Start workout** and closed **Review or change order**; Start remains promptly discoverable in the first decision viewport for both normal and long phone fixtures. |
-| UX-306-04 | Open order review; phone, desktop, touch, keyboard, reflow | Existing blocks, superset context, positions, disabled boundaries, and atomic move controls remain usable; long labels wrap; disclosure has a correct accessible name/state. |
+| UX-306-03 | Workout ready default with long workout/names; phone + desktop | Bounded truthful totals and at most three names plus `and N more` precede dominant **Start workout**, compact **Back to Plan**, and the exercise list; Start remains promptly discoverable in the first decision viewport for both normal and long phone fixtures. |
+| UX-306-04 | Pre-start order editing; phone, desktop, touch, keyboard, reflow | Existing exercise rows expose contextual atomic move controls without a duplicate order-only panel; superset context, positions, disabled boundaries, and accessible names remain usable; long labels wrap without separating controls from their exercise. |
 | UX-306-05 | Dirty today-only order and return to baseline | Move focus follows the moved block/control; polite announcement identifies position and today-only scope; future-save appears only while dirty and retires at baseline. |
-| UX-306-06 | Preference save pending then indeterminate, including interruption/destination detour | Pending gates Start only for the existing bound; indeterminate truthfully releases Start without retry; captured operation and disclosure feedback survive remount without duplicate write. |
+| UX-306-06 | Preference save pending then indeterminate, including interruption/destination detour | Pending gates Start only for the existing bound; indeterminate truthfully releases Start without retry; captured operation and adjacent feedback survive remount without duplicate write. |
 | UX-306-07 | Preference save definitive failure/retry | Today's order and captured candidate remain; adjacent alert and focused retry are available; Start remains available under existing semantics. |
-| UX-306-08 | Preference save success, override, eviction, or late settlement | Factual success is focusable when still pre-start and otherwise never steals focus; dirty baseline retires; detailed scope/eviction truth remains available inside disclosure or existing post-Start panel. |
+| UX-306-08 | Preference save success, override, eviction, or late settlement | Factual success is focusable when still pre-start and otherwise never steals focus; dirty baseline retires; detailed scope/eviction truth remains adjacent to the pre-start save controls or inside the existing post-Start panel. |
 | UX-307-01 | Full Review through successful save; phone + desktop | Bounded totals and durations make the save decision clear within five seconds; unbounded exercise facts remain in a closed disclosure; primary/secondary order and focus transition are correct. |
 | UX-307-02 | Partial and long Review; phone + reflow, keyboard + touch | Bounded recorded-work totals lead and **Save workout** stays promptly discoverable; omissions and per-exercise facts are closed by default and accessible on demand; long names/counts wrap; no facts disappear on Back and return. |
 | UX-307-03 | Retryable save failure | Frozen candidate and context remain, alert names failure, retry resubmits the identical payload, and Back remains governed by current session semantics. |
