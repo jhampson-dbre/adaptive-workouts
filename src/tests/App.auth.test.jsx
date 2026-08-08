@@ -181,7 +181,7 @@ describe('private access gate', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
     expect(confirm).not.toHaveBeenCalled(); expect(signOut).toHaveBeenCalledOnce();
     const login = await screen.findByRole('heading', { name: 'Nudge' });
-    expect(document.activeElement).toBe(login);
+    await waitFor(() => expect(document.activeElement).toBe(login));
   });
 
   it('confirms before discarding changed Plan inputs', async () => {

@@ -1112,7 +1112,7 @@ test('Finish uses a fresh reducer snapshot after Back and saves coherent v4 timi
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save workout' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Return to plan' })).toBeDefined());
-  expect(screen.getByRole('heading', { level: 2, name: 'Workout saved' })).toBe(document.activeElement);
+  await waitFor(() => expect(screen.getByRole('heading', { level: 2, name: 'Workout saved' })).toBe(document.activeElement));
   expect(screen.getByRole('status').textContent).toBe('Saved to workout history');
   expect(screen.queryByText('Plan another workout')).toBeNull();
   expect(storage.getHistoryPage).not.toHaveBeenCalled();
