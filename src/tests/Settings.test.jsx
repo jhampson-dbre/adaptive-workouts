@@ -16,14 +16,22 @@ const exercise = {
   isActive: true,
 };
 
-function renderSettings(catalog = [], settings = {}, onDirtyChange, preference, onClearPreferences = vi.fn()) {
+function renderSettings(catalog = [], settings = {}, onDirtyChange, preference, onClearPreferences = vi.fn(), openJobs = true) {
   storage.getCatalog.mockResolvedValue(catalog);
   storage.getSettings.mockResolvedValue(settings);
-  return render(
+  const result = render(
     <AuthContext.Provider value={{ uid: 'user-1' }}>
       <Settings onClose={vi.fn()} onDirtyChange={onDirtyChange} preference={preference} onClearPreferences={onClearPreferences} />
     </AuthContext.Provider>,
   );
+  if (openJobs) {
+    const observer = new MutationObserver(() => {
+      const jobs = document.querySelectorAll('details.settings-job');
+      if (jobs.length === 4) { document.querySelectorAll('details').forEach(job => { fireEvent.click(job.querySelector('summary')); job.open = true; }); observer.disconnect(); }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+  return result;
 }
 
 function openSettingsJob(label) {
@@ -32,15 +40,218 @@ function openSettingsJob(label) {
   jobs.forEach(job => { job.open = job === selected; });
   return selected;
 }
+function settingsJob(label) { return [...document.querySelectorAll('details.settings-job')].find(job => job.querySelector('summary')?.textContent.startsWith(label)); }
+
+function openAddExercise() {
+  const catalog = openSettingsJob('Catalog');
+  const add = catalog.querySelector('details.add-exercise');
+  add.open = true;
+  add.querySelector('details').open = true;
+  return add;
+}
 
 function createSuperset(firstMember = 'bench', secondMember = 'row') {
   fireEvent.click(screen.getByRole('button', { name: 'Add superset' }));
   fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: firstMember } });
   fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: secondMember } });
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save superset' }));
 }
 
 describe('Settings tracking configuration', () => {
+  it('starts catalog-first with a linked four-job index and keeps the other mounted jobs closed', async () => {
+    renderSettings([{ ...exercise, name: 'Z Press' }, { ...exercise, id: 'row', name: 'Barbell Row' }], {}, undefined, undefined, undefined, false);
+    await screen.findByRole('heading', { name: '2 exercises' });
+
+    const jobs = [...document.querySelectorAll('details.settings-job')];
+    expect(jobs.map(job => job.querySelector('summary').textContent)).toEqual(expect.arrayContaining(['Catalog', 'Defaults', 'Supersets', 'Saved exercise orders']));
+    expect(jobs[0].open).toBe(true);
+    expect(jobs.slice(1).every(job => !job.open)).toBe(true);
+    expect(screen.getByRole('link', { name: /01 catalog/i }).getAttribute('href')).toBe('#settings-catalog');
+  });
+
+  it('opens, scrolls to, and focuses each job selected from the index', async () => {
+    renderSettings([], {}, undefined, undefined, undefined, false);
+    await screen.findByRole('heading', { name: '0 exercises' });
+
+    [['01 catalog', 'Catalog'], ['02 defaults', 'Defaults'], ['03 supersets', 'Supersets'], ['04 saved orders', 'Saved exercise orders']].forEach(([linkName, jobName]) => {
+      const job = settingsJob(jobName);
+      job.scrollIntoView = vi.fn();
+      fireEvent.click(screen.getByRole('link', { name: new RegExp(linkName, 'i') }));
+
+      expect(job.open).toBe(true);
+      expect(job.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+      expect(document.activeElement).toBe(job.querySelector('summary'));
+    });
+  });
+
+  it('filters a copied alphabetical catalog without changing stored order', async () => {
+    renderSettings([{ ...exercise, name: 'Z Press', muscleGroup: 'Chest' }, { ...exercise, id: 'row', name: 'Barbell Row', muscleGroup: 'Back' }], {}, undefined, undefined, undefined, false);
+    await screen.findByRole('heading', { name: '2 exercises' });
+
+    const names = () => [...document.querySelectorAll('.catalog-item strong')].map(node => node.textContent);
+    expect(names()).toEqual(['Barbell Row', 'Z Press']);
+    fireEvent.change(screen.getByLabelText('Search exercises'), { target: { value: 'ROW' } });
+    fireEvent.change(screen.getByLabelText('Filter muscle group'), { target: { value: 'Back' } });
+    expect(names()).toEqual(['Barbell Row']);
+    expect(screen.getByRole('button', { name: 'Clear filters' })).toBeTruthy();
+  });
+
+  it('explains baseline, filtered, and inactive-only empty catalog results', async () => {
+    renderSettings([], {}, undefined, undefined, undefined, false);
+    expect(await screen.findByText('No exercises yet. Add an exercise to start your catalog.')).toBeTruthy();
+    cleanup();
+
+    renderSettings([{ ...exercise, isActive: false }], {}, undefined, undefined, undefined, false);
+    expect(await screen.findByText('All exercises are inactive. Select Show inactive to review them.')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Search exercises'), { target: { value: 'bench' } });
+    expect(screen.getByText('No exercises match these filters. Clear filters to see your catalog.')).toBeTruthy();
+    cleanup();
+
+    renderSettings([exercise], {}, undefined, undefined, undefined, false);
+    await screen.findAllByText('Bench Press');
+    fireEvent.change(screen.getByLabelText('Search exercises'), { target: { value: 'zzzz' } });
+    expect(screen.getByText('No exercises match these filters. Clear filters to see your catalog.')).toBeTruthy();
+  });
+
+  it('moves focus to the result status when deactivation hides the focused row', async () => {
+    renderSettings([exercise], {}, undefined, undefined, undefined, false);
+    const deactivate = await screen.findByRole('button', { name: 'Deactivate' });
+    deactivate.focus();
+    fireEvent.click(deactivate);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: '0 exercises' })));
+    expect(screen.getByRole('status').textContent).toContain('deactivated and hidden');
+  });
+
+  it('keeps saved-order success visible when Catalog reports a hidden deactivation', async () => {
+    renderSettings([exercise], {}, undefined, { operation: { state: 'success', successMessage: 'Order saved.' } }, undefined, false);
+    const deactivate = await screen.findByRole('button', { name: 'Deactivate' });
+    deactivate.focus();
+    fireEvent.click(deactivate);
+
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: '0 exercises' })));
+    expect(screen.getByRole('status').textContent).toBe('Catalog: Bench Press was deactivated and hidden. Saved orders: Order saved.');
+  });
+
+  it('uses Choose, Arrange, and Review before saving a superset', async () => {
+    renderSettings([{ ...exercise, id: 'bench', name: 'Bench Press' }, { ...exercise, id: 'row', name: 'Row' }], { supersets: [] }, undefined, undefined, undefined, false);
+    await screen.findByRole('heading', { name: '2 exercises' });
+    openSettingsJob('Supersets');
+    fireEvent.click(screen.getByRole('button', { name: 'Add superset' }));
+    expect(screen.getByText('Choose').getAttribute('aria-current')).toBe('step');
+    fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench' } });
+    fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByText('Arrange').getAttribute('aria-current')).toBe('step');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByText('Review').getAttribute('aria-current')).toBe('step');
+    expect(storage.saveSettings).not.toHaveBeenCalled();
+  });
+
+  it('counts only eligible selected members and keeps a paused edit recoverable', async () => {
+    renderSettings([{ ...exercise, isActive: false }, { ...exercise, id: 'row', name: 'Row' }], { supersets: [{ exerciseIds: ['bench-press', 'row'], restPlacement: 'AFTER_ROUND' }] }, undefined, undefined, undefined, false);
+    await screen.findByText('Paused superset');
+    openSettingsJob('Supersets');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit superset' }));
+
+    expect(screen.getByText('1 eligible member selected.')).toBeTruthy();
+    expect(screen.getByText('Bench Press is inactive or invalid and cannot be used in a superset.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Next' }).disabled).toBe(true);
+    expect([...screen.getByLabelText('Superset member 1').options].map(option => option.value)).toContain('bench-press');
+    expect(screen.getByLabelText('Superset member 2').value).toBe('row');
+  });
+
+  it('does not describe an unselected member as inactive or invalid', async () => {
+    renderSettings([{ ...exercise, id: 'row', name: 'Cable Row' }], {}, undefined, undefined, undefined, false);
+    await screen.findByRole('heading', { name: '1 exercises' });
+    openSettingsJob('Supersets');
+    fireEvent.click(screen.getByRole('button', { name: 'Add superset' }));
+    fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'row' } });
+
+    expect(screen.getByText('1 eligible member selected.')).toBeTruthy();
+    expect(screen.queryByText(/inactive or invalid and cannot be used/i)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Next' }).disabled).toBe(true);
+  });
+
+  it('offers only eligible exercises when creating a superset', async () => {
+    renderSettings([{ ...exercise, id: 'bench' }, { ...exercise, id: 'row', name: 'Row' }, { ...exercise, id: 'press', name: 'Press' }, { ...exercise, id: 'squat', name: 'Squat' }, { ...exercise, id: 'invalid', name: 'Invalid', sets: 0 }], { supersets: [{ exerciseIds: ['row', 'press'], restPlacement: 'AFTER_ROUND' }] }, undefined, undefined, undefined, false);
+    await screen.findByRole('heading', { name: '5 exercises' });
+    openSettingsJob('Supersets');
+    fireEvent.click(screen.getByRole('button', { name: 'Add superset' }));
+
+    const optionIds = [...screen.getByLabelText('Superset member 1').options].map(option => option.value);
+    expect(optionIds).toEqual(expect.arrayContaining(['bench', 'squat']));
+    expect(optionIds).not.toEqual(expect.arrayContaining(['row', 'press', 'invalid']));
+  });
+
+  it('keeps an incompatible Arrange draft in place and focuses its invalid member', async () => {
+    renderSettings([{ ...exercise, id: 'bench', sets: 3 }, { ...exercise, id: 'row', name: 'Row', sets: 4 }], { supersets: [] }, undefined, undefined, undefined, false);
+    await screen.findByRole('heading', { name: '2 exercises' });
+    openSettingsJob('Supersets');
+    fireEvent.click(screen.getByRole('button', { name: 'Add superset' }));
+    fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench' } });
+    fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(screen.getByText('Arrange').getAttribute('aria-current')).toBe('step');
+    expect(screen.getByRole('alert').textContent).toMatch(/equal sets/i);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Superset member 1')));
+    expect(storage.saveSettings).not.toHaveBeenCalled();
+  });
+
+  it('clears Arrange validation feedback after corrected members enter Review', async () => {
+    renderSettings([{ ...exercise, id: 'bench', sets: 3 }, { ...exercise, id: 'row', name: 'Row', sets: 4 }, { ...exercise, id: 'press', name: 'Press', sets: 3 }], { supersets: [] }, undefined, undefined, undefined, false);
+    await screen.findByRole('heading', { name: '3 exercises' });
+    openSettingsJob('Supersets');
+    fireEvent.click(screen.getByRole('button', { name: 'Add superset' }));
+    fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench' } });
+    fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('alert').textContent).toMatch(/equal sets/i);
+
+    fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'press' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByText('Review').getAttribute('aria-current')).toBe('step');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('shows Review as read-only superset facts while keeping Back available', async () => {
+    renderSettings([{ ...exercise, id: 'bench', name: 'Bench Press', sets: 3 }, { ...exercise, id: 'row', name: 'Row', sets: 3 }], { supersets: [] }, undefined, undefined, undefined, false);
+    await screen.findByRole('heading', { name: '2 exercises' });
+    openSettingsJob('Supersets');
+    fireEvent.click(screen.getByRole('button', { name: 'Add superset' }));
+    fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench' } });
+    fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(screen.getByText('Review order')).toBeTruthy();
+    expect(screen.getByText('Bench Press (3 sets)')).toBeTruthy();
+    expect(screen.getByText('Row (3 sets)')).toBeTruthy();
+    expect(screen.getByText('Compatibility: all members have 3 sets.')).toBeTruthy();
+    expect(screen.getByText('Rest placement: After round.')).toBeTruthy();
+    expect(screen.queryByLabelText('Superset member 1')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Add member' })).toBeNull();
+    expect(screen.queryByLabelText('Rest placement')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByLabelText('Superset member 1').value).toBe('bench');
+  });
+
+  it('groups Defaults controls into Recovery, Workout timing, and Schedule', async () => {
+    renderSettings([], {}, undefined, undefined, undefined, false);
+    await screen.findByRole('heading', { name: 'General defaults' });
+
+    expect(screen.getByRole('heading', { name: 'Recovery' })).toBeTruthy();
+    expect(screen.getByText('Set the default rest between exercises.')).toBeTruthy();
+    expect(screen.getByText('Changes save when you leave this field.')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Workout timing' })).toBeTruthy();
+    expect(screen.getByText('Choose the warmup and cooldown time for each workout.')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Schedule' })).toBeTruthy();
+    expect(screen.getByText('Choose the day for your leg-focused workout.')).toBeTruthy();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     storage.saveCatalogItem.mockResolvedValue();
@@ -53,20 +264,20 @@ describe('Settings tracking configuration', () => {
     renderSettings([{ ...exercise, trackingMode: 'simple' }]);
 
     await screen.findByRole('heading', { name: 'General defaults' });
-    const [defaults, supersets, catalog] = document.querySelectorAll('details.settings-job');
+    const defaults = settingsJob('Defaults'); const supersets = settingsJob('Supersets'); const catalog = settingsJob('Catalog');
 
     expect(defaults.getAttribute('name')).toBe('settings-job');
     expect(defaults.hasAttribute('open')).toBe(true);
     expect(supersets.getAttribute('name')).toBe('settings-job');
     expect(catalog.getAttribute('name')).toBe('settings-job');
     expect(catalog.querySelector('form')).toBeTruthy();
-    expect(catalog.querySelector('.catalog-list h3').textContent).toBe('Current Catalog');
+    expect(catalog.querySelector('.catalog-list h3').textContent).toBe('1 exercises');
   });
 
   it('leaves the browser-owned job selection unchanged after a Settings rerender', async () => {
     renderSettings();
     await screen.findByRole('heading', { name: 'General defaults' });
-    const [defaults, , catalog] = document.querySelectorAll('details.settings-job');
+    const defaults = settingsJob('Defaults'); const catalog = settingsJob('Catalog');
 
     defaults.open = false;
     catalog.open = true;
@@ -81,7 +292,7 @@ describe('Settings tracking configuration', () => {
     storage.saveSettings.mockReturnValueOnce(new Promise(resolve => { settle = resolve; }));
     renderSettings([{ ...exercise, id: 'bench', name: 'Bench Press' }, { ...exercise, id: 'row', name: 'Row' }], { supersets: [] });
     await screen.findByRole('heading', { name: 'General defaults' });
-    const [, supersets, catalog] = document.querySelectorAll('details.settings-job');
+    const supersets = settingsJob('Supersets'); const catalog = settingsJob('Catalog');
 
     supersets.open = true;
     createSuperset();
@@ -92,7 +303,7 @@ describe('Settings tracking configuration', () => {
     expect(supersets.open).toBe(false);
 
     await act(async () => settle());
-    expect((await screen.findByRole('status')).textContent).toBe('Supersets: Superset saved.');
+    expect((await screen.findByRole('status')).textContent).toBe('Supersets: Saved.');
     expect(document.activeElement).toBe(catalogSummary);
   });
 
@@ -101,7 +312,7 @@ describe('Settings tracking configuration', () => {
     storage.saveSettings.mockReturnValueOnce(new Promise((_, rejectSave) => { reject = rejectSave; }));
     renderSettings([{ ...exercise, id: 'bench', name: 'Bench Press' }, { ...exercise, id: 'row', name: 'Row' }], { supersets: [] });
     await screen.findByRole('heading', { name: 'General defaults' });
-    const [, supersets, catalog] = document.querySelectorAll('details.settings-job');
+    const supersets = settingsJob('Supersets'); const catalog = settingsJob('Catalog');
 
     supersets.open = true;
     createSuperset();
@@ -125,7 +336,7 @@ describe('Settings tracking configuration', () => {
 
     openSettingsJob('Supersets');
     createSuperset();
-    expect((await screen.findByRole('status')).textContent).toBe('Supersets: Superset saved.');
+    expect((await screen.findByRole('status')).textContent).toBe('Supersets: Saved.');
 
     const catalog = openSettingsJob('Catalog');
     fireEvent.submit(catalog.querySelector('form'));
@@ -137,7 +348,7 @@ describe('Settings tracking configuration', () => {
   it('keeps a failed Catalog add actionable after another Settings job opens', async () => {
     renderSettings();
     await screen.findByRole('heading', { name: 'General defaults' });
-    const [, supersets, catalog] = document.querySelectorAll('details.settings-job');
+    const supersets = settingsJob('Supersets'); const catalog = settingsJob('Catalog');
 
     catalog.open = true;
     fireEvent.submit(catalog.querySelector('form'));
@@ -156,7 +367,7 @@ describe('Settings tracking configuration', () => {
     storage.saveSettings.mockReturnValueOnce(new Promise(resolve => { settle = resolve; }));
     renderSettings();
     await screen.findByRole('heading', { name: 'General defaults' });
-    const [, supersets] = document.querySelectorAll('details.settings-job');
+    const supersets = settingsJob('Supersets');
 
     fireEvent.change(screen.getByLabelText('Default rest seconds'), { target: { value: '90' } });
     fireEvent.blur(screen.getByLabelText('Default rest seconds'));
@@ -167,7 +378,7 @@ describe('Settings tracking configuration', () => {
     summary.focus();
     await act(async () => settle());
 
-    expect((await screen.findByRole('status')).textContent).toBe('Defaults: Settings saved.');
+    expect((await screen.findByRole('status')).textContent).toBe('Defaults: Saved.');
     expect(document.activeElement).toBe(summary);
   });
 
@@ -176,7 +387,7 @@ describe('Settings tracking configuration', () => {
     storage.saveCatalogItem.mockReturnValueOnce(new Promise(resolve => { settle = resolve; }));
     renderSettings();
     await screen.findByRole('heading', { name: 'General defaults' });
-    const [, supersets, catalog] = document.querySelectorAll('details.settings-job');
+    const supersets = settingsJob('Supersets'); const catalog = settingsJob('Catalog');
 
     openSettingsJob('Catalog');
     fireEvent.change(screen.getByLabelText('Exercise name'), { target: { value: 'Squat' } });
@@ -188,11 +399,11 @@ describe('Settings tracking configuration', () => {
     summary.focus();
     await act(async () => settle());
 
-    expect((await screen.findByRole('status')).textContent).toBe('Catalog: Catalog saved.');
+    expect((await screen.findByRole('status')).textContent).toBe('Catalog: Saved.');
     expect(document.activeElement).toBe(summary);
   });
 
-  it('replaces Catalog feedback when default rest saves after a Catalog mutation', async () => {
+  it('replaces stale Catalog feedback with Defaults save truth at the rest-field blur boundary', async () => {
     let resolveDefaults;
     storage.saveSettings.mockReturnValueOnce(new Promise(resolve => { resolveDefaults = resolve; }));
     renderSettings([], { defaultRestSeconds: 90 });
@@ -201,15 +412,15 @@ describe('Settings tracking configuration', () => {
     const catalog = openSettingsJob('Catalog');
     fireEvent.change(screen.getByLabelText('Exercise name'), { target: { value: 'Squat' } });
     fireEvent.submit(catalog.querySelector('form'));
-    expect((await screen.findByRole('status')).textContent).toBe('Catalog: Catalog saved.');
+    expect((await screen.findByRole('status')).textContent).toBe('Catalog: Saved.');
 
     const rest = screen.getByLabelText('Default rest seconds');
-    fireEvent.change(rest, { target: { value: '75' } });
+    fireEvent.change(rest, { target: { value: '120' } });
     fireEvent.blur(rest);
     expect(screen.getByRole('status').textContent).toBe('Defaults: Saving settings.');
 
     await act(async () => resolveDefaults());
-    expect((await screen.findByRole('status')).textContent).toBe('Defaults: Settings saved.');
+    expect((await screen.findByRole('status')).textContent).toBe('Defaults: Saved.');
   });
 
   it('replaces a Superset success with current Defaults pending and attention', async () => {
@@ -222,7 +433,7 @@ describe('Settings tracking configuration', () => {
 
     openSettingsJob('Supersets');
     createSuperset();
-    expect((await screen.findByRole('status')).textContent).toBe('Supersets: Superset saved.');
+    expect((await screen.findByRole('status')).textContent).toBe('Supersets: Saved.');
 
     openSettingsJob('Defaults');
     fireEvent.change(screen.getByLabelText('Default rest seconds'), { target: { value: '90' } });
@@ -231,7 +442,7 @@ describe('Settings tracking configuration', () => {
     await act(async () => reject(new Error('offline')));
 
     expect((await screen.findByRole('status')).textContent).toBe('Defaults: Could not save settings. Try again.');
-    expect(document.querySelector('details.settings-job summary').textContent).toContain('Needs attention');
+    expect(settingsJob('Defaults').querySelector('summary').textContent).toContain('Needs attention');
   });
 
   it('always provides saved-order clearing and explains why it is disabled during a save', async () => {
@@ -266,6 +477,48 @@ describe('Settings tracking configuration', () => {
     expect((await screen.findByRole('status')).textContent).toContain(combined);
   });
 
+  it.each([
+    ['pending', 'Saving this exercise order for future workouts.'],
+    ['success', 'Order saved.'],
+    ['failure', "Couldn't save this exercise order. Your saved exercise orders and today's workout order are unchanged."],
+    ['indeterminate', "Saving is taking longer than expected. You can start your workout; we'll confirm when it finishes."],
+    ['clearing', 'Clearing saved exercise orders.'],
+    ['cleared', 'Saved exercise orders cleared.'],
+    ['clear-failure', "Couldn't clear saved exercise orders. Try again."],
+  ])('reports saved-order %s feedback outside its closed disclosure', async (state, message) => {
+    renderSettings([], {}, undefined, { operation: { state } }, undefined, false);
+    await screen.findByRole('heading', { name: '0 exercises' });
+
+    expect(settingsJob('Saved exercise orders').open).toBe(false);
+    expect(screen.getByRole(state.includes('failure') ? 'alert' : 'status').textContent).toBe(message);
+  });
+
+  it('focuses settled saved-order outcomes only while their disclosure is open', async () => {
+    const auth = { uid: 'user-1' };
+    storage.getCatalog.mockResolvedValue([]);
+    storage.getSettings.mockResolvedValue({});
+    const settings = preference => <AuthContext.Provider value={auth}><Settings onClose={vi.fn()} preference={preference} onClearPreferences={vi.fn()} /></AuthContext.Provider>;
+    const view = render(settings({ operation: { state: 'pending' } }));
+    await screen.findByRole('heading', { name: '0 exercises' });
+    const savedOrders = settingsJob('Saved exercise orders');
+    fireEvent.click(savedOrders.querySelector('summary'));
+
+    view.rerender(settings({ operation: { state: 'success' } }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Saved exercise orders' })));
+
+    view.rerender(settings({ operation: { state: 'failure', candidate: {} } }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Try saving this exercise order again' })));
+
+    view.rerender(settings({ operation: { state: 'clear-failure' } }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Try clearing saved exercise orders again' })));
+
+    fireEvent.click(savedOrders.querySelector('summary'));
+    const catalogSummary = settingsJob('Catalog').querySelector('summary');
+    catalogSummary.focus();
+    view.rerender(settings({ operation: { state: 'cleared' } }));
+    expect(document.activeElement).toBe(catalogSummary);
+  });
+
   it('creates an ordered superset with native member selects and saves it with settings', async () => {
     renderSettings([
       { ...exercise, id: 'bench', name: 'Bench Press', sets: 3 },
@@ -297,6 +550,8 @@ describe('Settings tracking configuration', () => {
     fireEvent.click(originalAdd);
     fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench-press' } });
     fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save superset' }));
     await screen.findByRole('alert');
     fireEvent.click(screen.getAllByRole('button', { name: 'Cancel' })[0]);
@@ -341,7 +596,7 @@ describe('Settings tracking configuration', () => {
     await waitFor(() => expect(document.activeElement?.className).toContain('superset-group'));
     expect(document.activeElement?.className).toContain('superset-summary');
     expect(document.activeElement?.getAttribute('tabindex')).toBe('-1');
-    expect(screen.getByText('Superset active.')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('Supersets: Superset active.');
   });
 
   it('returns reactivation failure Cancel focus to the remounted Reactivate button', async () => {
@@ -387,16 +642,21 @@ describe('Settings tracking configuration', () => {
     const edit = await screen.findByRole('button', { name: 'Edit superset' });
     openSettingsJob('Supersets');
     fireEvent.click(edit);
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     fireEvent.click(screen.getAllByRole('button', { name: 'Move down' })[0]);
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Superset member 2')));
-    expect(screen.getByText('Moved Bench Press to position 2 of 2')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('Supersets: Moved Bench Press to position 2 of 2');
+    expect(document.querySelector('.superset-feedback[aria-live]')).toBeNull();
   });
 
   it('keeps focus with an unselected member while it moves', async () => {
-    renderSettings([exercise], { supersets: [] });
+    renderSettings([exercise, { ...exercise, id: 'row', name: 'Row' }], { supersets: [] });
     const add = await screen.findByRole('button', { name: 'Add superset' });
     openSettingsJob('Supersets');
     fireEvent.click(add);
+    fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench-press' } });
+    fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     fireEvent.click(screen.getAllByRole('button', { name: 'Move down' })[0]);
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Superset member 2')));
   });
@@ -408,13 +668,15 @@ describe('Settings tracking configuration', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Add superset' }));
     fireEvent.change(screen.getByLabelText('Superset member 1'), { target: { value: 'bench-press' } });
     fireEvent.change(screen.getByLabelText('Superset member 2'), { target: { value: 'row' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     const save = screen.getByRole('button', { name: 'Save superset' });
     fireEvent.click(save); fireEvent.click(save);
     expect(storage.saveSettings).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('button', { name: 'Saving superset…' }).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: /Saving superset/ }).disabled).toBe(true);
     expect(screen.getByRole('button', { name: 'Cancel' }).disabled).toBe(true);
     resolveSave();
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Saving superset…' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Saving superset/ })).toBeNull());
   });
 
   it('guards atomic pair deactivation and presents the correct pair and three-member choices', async () => {
@@ -429,9 +691,9 @@ describe('Settings tracking configuration', () => {
     expect(screen.getByRole('button', { name: 'Remove and deactivate' })).toBeTruthy();
     fireEvent.click(pause); fireEvent.click(pause);
     expect(storage.saveSettingsAndCatalogItem).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('Deactivating…')).toBeTruthy();
+    expect(screen.getByText(/Deactivating/)).toBeTruthy();
     resolveBatch();
-    await waitFor(() => expect(screen.queryByText('Deactivating…')).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/Deactivating/)).toBeNull());
     cleanup();
 
     renderSettings([exercise, { ...exercise, id: 'row', name: 'Row' }, { ...exercise, id: 'press', name: 'Press' }], { supersets: [{ exerciseIds: ['bench-press', 'row', 'press'], restPlacement: 'AFTER_ROUND' }] });
@@ -478,7 +740,7 @@ describe('Settings tracking configuration', () => {
     const targetReps = screen.getByLabelText('Target reps');
 
     expect(name.validity.valueMissing).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add exercise' }));
     expect((await screen.findByRole('alert')).textContent).toBe('Exercise name is required.');
     expect(name.getAttribute('aria-invalid')).toBe('true');
     expect(name.getAttribute('aria-describedby')).toBe('add-tracking-error');
@@ -529,7 +791,8 @@ describe('Settings tracking configuration', () => {
 
   it('gives every Settings catalog control a visible accessible name', async () => {
     renderSettings([{ ...exercise, trackingMode: 'simple' }]);
-    await screen.findByRole('heading', { name: 'Add exercise' });
+    await screen.findByRole('heading', { name: 'General defaults' });
+    openAddExercise();
 
     expect(screen.getByRole('combobox', { name: 'Leg Day Schedule' })).toBeTruthy();
     expect(screen.getByRole('textbox', { name: 'Exercise name' })).toBeTruthy();
@@ -684,7 +947,7 @@ describe('Settings tracking configuration', () => {
     const rest = await screen.findByLabelText('Default rest seconds');
     fireEvent.change(rest, { target: { value: '90' } });
     fireEvent.blur(rest);
-    const legDay = screen.getAllByRole('combobox')[0];
+    const legDay = screen.getByRole('combobox', { name: 'Leg Day Schedule' });
     fireEvent.change(legDay, { target: { value: 'Tuesday' } });
 
     expect(storage.saveSettings).toHaveBeenNthCalledWith(1, 'user-1', { defaultRestSeconds: 90 });
@@ -788,7 +1051,8 @@ describe('Settings tracking configuration', () => {
       { ...exercise, id: 'row', name: 'Row', tier: 3, isActive: false, restSeconds: 90, trackingMode: 'simple' },
     ]);
 
-    await screen.findByRole('heading', { name: 'Current Catalog' });
+    await screen.findAllByText('Bench Press');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Show inactive' }));
     expect(screen.getByText('Active')).toBeTruthy();
     expect(screen.getByText('Inactive')).toBeTruthy();
     expect(screen.getByText('Default rest')).toBeTruthy();
@@ -797,10 +1061,11 @@ describe('Settings tracking configuration', () => {
 
   it('blocks invalid explicit catalog rest overrides', async () => {
     renderSettings();
-    await screen.findByRole('heading', { name: 'Add exercise' });
+    await screen.findByRole('heading', { name: 'General defaults' });
+    openAddExercise();
     fireEvent.change(screen.getByLabelText('Exercise name'), { target: { value: 'Incline Press' } });
     fireEvent.change(screen.getByLabelText('Rest override seconds'), { target: { value: '600.5' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add exercise' }));
 
     expect((await screen.findByRole('alert')).textContent).toMatch(/rest.*whole number.*5.*600/i);
     expect(storage.saveCatalogItem).not.toHaveBeenCalled();
@@ -808,12 +1073,13 @@ describe('Settings tracking configuration', () => {
 
   it('adds new exercises in explicit simple mode by default', async () => {
     renderSettings();
-    await screen.findByRole('heading', { name: 'Add exercise' });
+    await screen.findByRole('heading', { name: 'General defaults' });
+    openAddExercise();
 
     fireEvent.change(screen.getByLabelText('Exercise name'), { target: { value: 'Incline Press' } });
     expect(screen.getByLabelText('Tracking mode').value).toBe('simple');
     expect(screen.queryByLabelText('Starting weight (pounds)')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add exercise' }));
 
     await waitFor(() => expect(storage.saveCatalogItem).toHaveBeenCalledWith('user-1', expect.objectContaining({
       id: 'incline-press',
@@ -827,7 +1093,8 @@ describe('Settings tracking configuration', () => {
 
   it('coerces valid weighted fields at save time and labels weights in pounds', async () => {
     renderSettings();
-    await screen.findByRole('heading', { name: 'Add exercise' });
+    await screen.findByRole('heading', { name: 'General defaults' });
+    openAddExercise();
 
     fireEvent.change(screen.getByLabelText('Exercise name'), { target: { value: 'Incline Press' } });
     fireEvent.change(screen.getByLabelText('Tracking mode'), { target: { value: 'weighted' } });
@@ -835,7 +1102,7 @@ describe('Settings tracking configuration', () => {
     fireEvent.change(screen.getByLabelText('Target reps'), { target: { value: '8' } });
     fireEvent.change(screen.getByLabelText('Floor reps'), { target: { value: '0' } });
     fireEvent.change(screen.getByLabelText('Weight step (pounds)'), { target: { value: '2.5' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add exercise' }));
 
     await waitFor(() => expect(storage.saveCatalogItem).toHaveBeenCalled());
     expect(storage.saveCatalogItem.mock.calls[0][1]).toMatchObject({
@@ -849,13 +1116,14 @@ describe('Settings tracking configuration', () => {
 
   it('blocks invalid tracked configuration with an accessible inline error', async () => {
     renderSettings();
-    await screen.findByRole('heading', { name: 'Add exercise' });
+    await screen.findByRole('heading', { name: 'General defaults' });
+    openAddExercise();
 
     fireEvent.change(screen.getByLabelText('Exercise name'), { target: { value: 'Incline Press' } });
     fireEvent.change(screen.getByLabelText('Tracking mode'), { target: { value: 'weighted' } });
     fireEvent.change(screen.getByLabelText('Target reps'), { target: { value: '8' } });
     fireEvent.change(screen.getByLabelText('Floor reps'), { target: { value: '8' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add exercise' }));
 
     expect((await screen.findByRole('alert')).textContent).toMatch(/weighted configuration/i);
     expect(storage.saveCatalogItem).not.toHaveBeenCalled();
@@ -932,14 +1200,23 @@ describe('Settings tracking configuration', () => {
     expect(screen.getByLabelText('Edit tracking mode').value).toBe('bodyweight');
   });
 
+  it('keeps Save exercise as the only catalog primary action while editing', async () => {
+    renderSettings([exercise]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+
+    expect(document.querySelector('.add-exercise').classList.contains('is-neutral')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Save' }).classList.contains('save-btn')).toBe(true);
+  });
+
   it('retains add values and active mode after persistence failure', async () => {
     storage.saveCatalogItem.mockRejectedValueOnce(new Error('offline'));
     renderSettings();
-    await screen.findByRole('heading', { name: 'Add exercise' });
+    await screen.findByRole('heading', { name: 'General defaults' });
+    openAddExercise();
     fireEvent.change(screen.getByLabelText('Exercise name'), { target: { value: 'Pull Up' } });
     fireEvent.change(screen.getByLabelText('Tracking mode'), { target: { value: 'bodyweight' } });
     fireEvent.change(screen.getByLabelText('Target reps'), { target: { value: '6' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add exercise' }));
 
     expect((await screen.findByRole('alert')).textContent).toMatch(/could not save/i);
     expect(screen.getByLabelText('Exercise name').value).toBe('Pull Up');
@@ -951,15 +1228,16 @@ describe('Settings tracking configuration', () => {
     let resolveAdd;
     storage.saveCatalogItem.mockReturnValueOnce(new Promise(resolve => { resolveAdd = resolve; }));
     const view = renderSettings();
-    await screen.findByRole('heading', { name: 'Add exercise' });
+    await screen.findByRole('heading', { name: 'General defaults' });
+    openAddExercise();
     fireEvent.change(screen.getByLabelText('Exercise name'), { target: { value: 'Incline Press' } });
-    const add = screen.getByRole('button', { name: 'Add' });
+    const add = screen.getByRole('button', { name: 'Add exercise' });
     fireEvent.click(add);
     fireEvent.click(add);
     expect(storage.saveCatalogItem).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: 'Adding...' }).disabled).toBe(true);
     resolveAdd();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Add' }).disabled).toBe(false));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Add exercise' }).disabled).toBe(false));
     view.unmount();
 
     let resolveEdit;
@@ -973,7 +1251,7 @@ describe('Settings tracking configuration', () => {
     expect(storage.saveCatalogItem).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('button', { name: 'Saving...' }).disabled).toBe(true);
     resolveEdit();
-    await waitFor(() => expect(screen.queryByLabelText('Edit tracking mode')).toBeNull());
+    await waitFor(() => expect(document.querySelector('.edit-form')).toBeNull());
   });
 
   it('locks every catalog mutation while one row save is pending', async () => {
@@ -987,7 +1265,7 @@ describe('Settings tracking configuration', () => {
     fireEvent.click(edits[0]);
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(screen.getByRole('button', { name: 'Add' }).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Add exercise' }).disabled).toBe(true);
     expect(screen.getByRole('button', { name: 'Saving...' }).disabled).toBe(true);
     expect(screen.getByRole('button', { name: 'Cancel' }).disabled).toBe(true);
     expect(screen.getByRole('button', { name: 'Edit' }).disabled).toBe(true);
@@ -995,7 +1273,7 @@ describe('Settings tracking configuration', () => {
     expect(storage.saveCatalogItem).toHaveBeenCalledTimes(1);
 
     resolveSave();
-    await waitFor(() => expect(screen.queryByLabelText('Edit tracking mode')).toBeNull());
+    await waitFor(() => expect(document.querySelector('.edit-form')).toBeNull());
     expect(screen.getAllByRole('button', { name: 'Edit' }).every(button => !button.disabled)).toBe(true);
   });
 });

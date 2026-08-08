@@ -1301,6 +1301,85 @@ input:focus-visible {
 }
 
 /* Settings and catalog — TREK-236 */
+.settings-job-index,
+.catalog-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.superset-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+  padding: 0;
+  list-style-position: inside;
+}
+
+.superset-steps li {
+  min-width: 0;
+  padding: 4px 8px;
+  overflow-wrap: anywhere;
+}
+
+.settings-job-index a,
+.settings-view .add-exercise > summary,
+.settings-view .add-exercise details > summary {
+  align-items: center;
+  box-sizing: border-box;
+  display: inline-flex;
+  min-height: 44px;
+  padding: 10px 12px;
+}
+
+.settings-job-index a {
+  color: var(--border);
+}
+
+.settings-view .add-exercise > summary {
+  border: 1px solid var(--border);
+  background: var(--code-bg);
+  color: var(--text-h);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.settings-view .add-exercise:not([open]):not(.is-neutral) > summary {
+  background: var(--accent);
+}
+
+.superset-steps [aria-current='step'] {
+  background: var(--accent);
+  color: #050505;
+  padding: 4px 8px;
+}
+
+.catalog-filters label {
+  display: grid;
+  gap: 4px;
+  min-width: min(100%, 160px);
+}
+
+.catalog-filters label:has(input[type='checkbox']) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.catalog-filters input[type='checkbox'] {
+  width: 1rem;
+  min-width: 1rem;
+  height: 1rem;
+  min-height: 1rem;
+  margin: 0;
+}
+
+.catalog-draft-summary {
+  margin: 8px 0;
+}
 .settings-view {
   max-width: 760px;
   margin: 0 auto;
@@ -1320,6 +1399,24 @@ input:focus-visible {
 .settings-job-attention { color: var(--error); font-family: 'Barlow Condensed', 'Atkinson Hyperlegible', sans-serif; font-size: .72rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
 .settings-job-body { padding: 0 12px 12px; }
 .settings-job-feedback { min-height: 1.25rem; overflow-wrap: anywhere; }
+
+@media (max-width: 600px) {
+  .settings-job-feedback {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--code-bg);
+  }
+
+  .settings-job-index {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-job-index a { justify-content: center; }
+}
 
 .settings-header {
   display: flex;
@@ -1527,6 +1624,12 @@ input:focus-visible {
   transform: none;
   box-shadow: none;
   background: var(--accent);
+}
+
+.superset-editor .save-btn:disabled {
+  background: var(--social-bg);
+  color: var(--text);
+  cursor: not-allowed;
 }
 
 .catalog-list {
