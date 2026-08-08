@@ -454,6 +454,11 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
 
   useEffect(() => {
     if (document.visibilityState !== 'visible') return;
+    if (activeWorkout.phase === 'review') {
+      restAnnouncementsRef.current.clear();
+      setRestAnnouncement('');
+      return;
+    }
     const activeRestIds = new Set();
     const startedRestAnnouncements = new Map();
     const completedRestAnnouncements = new Map();
@@ -484,7 +489,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       setRecoveryAcknowledgement('');
       setRestAnnouncement(current => refreshRepeatedLiveMessage(current, message));
     }
-  }, [activeWorkout.exercises, now]);
+  }, [activeWorkout.exercises, activeWorkout.phase, now]);
 
   useEffect(() => { if (finishCandidate) summaryRef.current?.focus(); }, [finishCandidate, blockedSaveConflict]);
   useEffect(() => { if (phasePresentation) phaseHeadingRef.current?.focus(); }, [phasePresentation]);

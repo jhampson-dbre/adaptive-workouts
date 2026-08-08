@@ -478,6 +478,20 @@ test('announces a newly started group rest once without repeating the ready-set 
   expect(status.textContent).toBe('Long Row Exercise Name set 1 rest started.');
 });
 
+test('retires active-rest feedback when the workout enters Review', async () => {
+  renderWorkout([timedWorkout[0]]);
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+  await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Plank set 1 rest started.'));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to cooldown' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
+  await screen.findByRole('heading', { level: 2, name: 'Review' });
+  expect(screen.getByRole('status').textContent).toBe('');
+});
+
 test('starting the recommended member retires its rest-start announcement but keeps an unrelated rest announcement', async () => {
   const workout = supersetWorkout('BETWEEN_EXERCISES');
   workout.push({ ...timedWorkout[0], id: 'carry', occurrenceId: 'carry:2', name: 'Carry', setRecords: timedWorkout[0].setRecords.map(record => ({ ...record })) });
