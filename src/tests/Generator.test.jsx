@@ -29,6 +29,29 @@ describe('Generator Component', () => {
         expect(screen.getByText('Any areas need rest?').closest('details').open).toBe(false);
     });
 
+    it('reports a returned order-save outcome without moving focus from the Plan heading', () => {
+        render(
+            <AuthContext.Provider value={{ uid: 'test-user' }}>
+                <Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} preference={{ operation: { state: 'success', successMessage: 'Order saved.' } }} />
+            </AuthContext.Provider>
+        );
+
+        const heading = screen.getByRole('heading', { name: "Plan today's workout" });
+        expect(screen.getByRole('status').textContent).toBe('Order saved.');
+        expect(document.activeElement).not.toBe(screen.getByRole('status'));
+        expect(heading).toBeTruthy();
+    });
+
+    it('keeps a returned order-save failure visible on Plan', () => {
+        render(
+            <AuthContext.Provider value={{ uid: 'test-user' }}>
+                <Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} preference={{ operation: { state: 'failure' } }} />
+            </AuthContext.Provider>
+        );
+
+        expect(screen.getByRole('alert').textContent).toBe("Couldn't save this exercise order. Your saved exercise orders and today's workout order are unchanged.");
+    });
+
     it('offers precise five-minute adjustments alongside the slider', () => {
         const setTimeBudget = vi.fn();
         const view = render(

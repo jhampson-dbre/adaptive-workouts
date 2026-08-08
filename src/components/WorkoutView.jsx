@@ -295,7 +295,7 @@ function exerciseTimingStatus(exercise, exerciseIndex, activeTimer, now) {
   return `${remaining} ${remaining === 1 ? 'set' : 'sets'} remaining`;
 }
 
-export default function WorkoutView({ session, sessionState, onFinish, onComplete, onDiscard, onResume, preference, onSavePreference, onStarted, onDismissPreference }) {
+export default function WorkoutView({ session, sessionState, onFinish, onComplete, onDiscard, onBackToPlan, onResume, preference, onSavePreference, onStarted, onDismissPreference }) {
   const activeWorkout = sessionState?.activeWorkout ?? EMPTY_ACTIVE_WORKOUT;
   const durableEpochFloor = durableDisplayEpoch(activeWorkout, sessionState?.snapshot);
   const initialDisplayEpochMs = Math.max(Date.now(), durableEpochFloor);
@@ -786,6 +786,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       {!started && activeWorkout.phase !== 'cancelled' && <section className="workout-ready" aria-label="Workout ready">
         <div className="workout-ready-summary"><p>{plannedSeconds > 0 ? `${Math.round(plannedSeconds / 60)} min planned · ` : ''}{activeWorkout.exercises.length} {activeWorkout.exercises.length === 1 ? 'exercise' : 'exercises'} · {counts.planned} {counts.planned === 1 ? 'set' : 'sets'}</p>{orderSummary && <p>{orderSummary}</p>}</div>
         <button className="start-btn" disabled={preference?.operation?.state === 'pending'} onClick={async () => { const timestamp = acceptDisplayTime(Date.now()); const successOperationId = preference?.operation?.state === 'success' ? preference.operation.id : null; if (await session.action({ type: 'startWorkout', timestamp })) { setRecoveryAcknowledgement(''); onStarted?.(activeWorkout.exercises, successOperationId); } }}>Start workout</button>
+        <button className="recovery-secondary workout-ready-back" type="button" onClick={async () => { await session.discard(); onBackToPlan?.(); }}>Back to Plan</button>
       </section>}
       {activeWorkout.phase === 'cooldown' && <div className="summary-actions"><button ref={finishRef} className="finish-btn" aria-describedby={finishError ? 'finish-feedback' : undefined} onClick={handleFinish}>Finish workout</button><button type="button" onClick={() => dispatch({ type: 'resumeWorkout', timestamp: acceptDisplayTime(Date.now()) })}>{hasUnfinishedSets ? 'Continue workout' : 'Edit completed sets'}</button>{finishError && <p id="finish-feedback" className="error-message" role="alert">{finishError}</p>}</div>}
       {activeWorkout.phase !== 'cooldown' && exerciseList}

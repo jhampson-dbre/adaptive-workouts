@@ -26,6 +26,7 @@ export default function Generator({
   unrecoveredGroups, 
   setUnrecoveredGroups, 
   onGenerate,
+  preference,
   headingRef,
   baselineFocus = false,
 }) {
@@ -148,6 +149,11 @@ export default function Generator({
         <h2 ref={headingRef} tabIndex={baselineFocus ? '-1' : undefined}>Plan today&apos;s workout</h2>
         <p>Nudge uses your recent workouts and available time to plan today&apos;s workout.</p>
       </div>
+      {preference?.operation && <section className="order-preference-panel" aria-label="Saved exercise orders">
+        {['pending', 'indeterminate'].includes(preference.operation.state) && <p role="status">{preference.operation.state === 'pending' ? 'Saving this exercise order for future workouts.' : 'Saving is taking longer than expected. We’ll confirm when it finishes.'}</p>}
+        {preference.operation.state === 'success' && <p role="status">{preference.operation.successMessage ?? 'Order saved.'}</p>}
+        {preference.operation.state === 'failure' && <p role="alert">Couldn't save this exercise order. Your saved exercise orders and today's workout order are unchanged.</p>}
+      </section>}
       
       {error && <div className="error-message" role="alert">{error}</div>}
       {canRetryHistory && (

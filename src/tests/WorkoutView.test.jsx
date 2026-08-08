@@ -315,6 +315,19 @@ test('keeps the Workout-ready summary bounded and embeds order controls in each 
   expect(within(rows[0]).getByRole('button', { name: 'Move Plank later; position 1 of 4; available' })).toBeTruthy();
 });
 
+test('puts Back to Plan below Start workout, discards the unstarted session, and hides it after start', async () => {
+  const discard = vi.fn().mockResolvedValue(undefined); const onBackToPlan = vi.fn();
+  const generated = initializeActiveWorkout(timedWorkout, { phaseTimingEnabled: true });
+  const props = activeWorkout => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn().mockResolvedValue(true), discard }} sessionState={{ status: 'owned', activeWorkout, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, blocked: false }} onBackToPlan={onBackToPlan} /></AuthContext.Provider>;
+  const view = render(props(generated));
+  const start = screen.getByRole('button', { name: 'Start workout' }); const back = screen.getByRole('button', { name: 'Back to Plan' });
+  expect(start.compareDocumentPosition(back) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(back.compareDocumentPosition(screen.getByRole('heading', { name: 'Exercises' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  fireEvent.click(back); await waitFor(() => expect(discard).toHaveBeenCalledOnce()); expect(onBackToPlan).toHaveBeenCalledOnce();
+  view.rerender(props(activeWorkoutReducer(generated, { type: 'startWorkout', timestamp: 1 })));
+  expect(screen.queryByRole('button', { name: 'Back to Plan' })).toBeNull();
+});
+
 test('places the compact future-save action after the reordered exercise rows', () => {
   const baseline = { blocks: [{ exerciseIds: ['plank'] }, { exerciseIds: ['squat'] }] };
   const view = renderWorkout(timedWorkout, () => {}, { uid: 'test-user-id' }, undefined, {}, { baseline });
