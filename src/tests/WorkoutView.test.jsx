@@ -212,6 +212,66 @@ test('keeps move focus and gives each order control its position, availability, 
   expect(document.activeElement).toBe(screen.getByText('Moves with Long Press Exercise Name as one superset.').closest('.order-block'));
 });
 
+test('renders a superset as one ordered Plan block with shared controls and nested exercise rows', () => {
+  renderWorkout(mixedSupersetWorkout(), () => {}, { uid: 'test-user-id' }, undefined, {}, {
+    baseline: { blocks: [{ exerciseIds: ['carry'] }, { exerciseIds: ['row', 'press'] }] },
+  });
+
+  const supersetBlock = screen.getByRole('button', { name: 'Move Long Row Exercise Name with its superset earlier; position 2 of 2; available' }).closest('.order-block');
+  expect(within(supersetBlock).getAllByRole('button', { name: /Move .* later/ })).toHaveLength(1);
+  expect(within(supersetBlock).getAllByRole('button', { name: /Move .* earlier/ })).toHaveLength(1);
+  expect(within(supersetBlock).getAllByRole('listitem')).toHaveLength(2);
+  expect(within(supersetBlock).getByRole('button', { name: /Long Press Exercise Name.*expand/i })).toBeTruthy();
+});
+
+test('keeps standalone movement across a superset atomic and returns focus to its shared block controls', async () => {
+  renderWorkout(mixedSupersetWorkout(), () => {}, { uid: 'test-user-id' }, undefined, {}, {
+    baseline: { blocks: [{ exerciseIds: ['carry'] }, { exerciseIds: ['row', 'press'] }] },
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Move Carry later; position 1 of 2; available' }));
+  const movedLater = await screen.findByRole('button', { name: 'Move Carry earlier; position 2 of 2; available' });
+  expect(document.activeElement).toBe(movedLater.closest('.order-block'));
+
+  fireEvent.click(movedLater);
+  const movedEarlier = await screen.findByRole('button', { name: 'Move Carry later; position 1 of 2; available' });
+  expect(document.activeElement).toBe(movedEarlier.closest('.order-block'));
+  expect(screen.getAllByRole('button', { name: /Move Long Row Exercise Name with its superset/ })).toHaveLength(2);
+});
+
+test('keeps an expanded superset member with its occurrence across standalone moves in both directions', async () => {
+  renderWorkout(mixedSupersetWorkout(), () => {}, { uid: 'test-user-id' }, undefined, {}, {
+    baseline: { blocks: [{ exerciseIds: ['carry'] }, { exerciseIds: ['row', 'press'] }] },
+  });
+
+  const row = screen.getByRole('button', { name: /Long Row Exercise Name.*expand/i });
+  fireEvent.click(row);
+  expect(row.getAttribute('aria-expanded')).toBe('true');
+  expect(screen.getByRole('button', { name: /Long Press Exercise Name.*expand/i }).getAttribute('aria-expanded')).toBe('false');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Move Carry later; position 1 of 2; available' }));
+  await screen.findByRole('button', { name: 'Move Carry earlier; position 2 of 2; available' });
+  expect(screen.getByRole('button', { name: /Long Row Exercise Name.*collapse/i }).getAttribute('aria-expanded')).toBe('true');
+  expect(screen.getByRole('button', { name: /Long Press Exercise Name.*expand/i }).getAttribute('aria-expanded')).toBe('false');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Move Carry earlier; position 2 of 2; available' }));
+  await screen.findByRole('button', { name: 'Move Carry later; position 1 of 2; available' });
+  expect(screen.getByRole('button', { name: /Long Row Exercise Name.*collapse/i }).getAttribute('aria-expanded')).toBe('true');
+  expect(screen.getByRole('button', { name: /Long Press Exercise Name.*expand/i }).getAttribute('aria-expanded')).toBe('false');
+});
+
+test('keeps started exercises as direct checklist children without ordering controls', () => {
+  const generated = initializeActiveWorkout(mixedSupersetWorkout());
+  const started = activeWorkoutReducer(generated, { type: 'startWorkout', timestamp: 1 });
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'owned', activeWorkout: started, blocked: false }} /></AuthContext.Provider>);
+
+  const checklist = document.querySelector('.workout-checklist');
+  expect([...checklist.children]).toHaveLength(3);
+  expect([...checklist.children].every(row => row.classList.contains('exercise-order-row'))).toBe(false);
+  expect([...checklist.children].every(row => row.querySelector(':scope > .exercise-row'))).toBe(true);
+  expect(within(checklist).queryByRole('button', { name: /Move .* (earlier|later)/ })).toBeNull();
+});
+
 test('retires the temporary order-move announcement after saving that order', async () => {
   const baseline = { blocks: [{ exerciseIds: ['plank'] }, { exerciseIds: ['squat'] }] };
   const candidate = { blocks: [{ exerciseIds: ['squat'] }, { exerciseIds: ['plank'] }] };
@@ -306,12 +366,12 @@ test('keeps the Workout-ready summary bounded and embeds order controls in each 
   const start = screen.getByRole('button', { name: 'Start workout' });
   const exercisesHeading = screen.getByRole('heading', { name: 'Exercises' });
   const checklist = document.querySelector('.workout-checklist');
-  const rows = within(checklist).getAllByRole('listitem');
+  const rows = [...checklist.children];
   expect(screen.queryByText(/Review or change order/)).toBeNull();
   expect(start.compareDocumentPosition(exercisesHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(exercisesHeading.compareDocumentPosition(checklist) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(rows).toHaveLength(4);
-  expect(rows.every(row => row.querySelector(':scope > .exercise-row > .exercise-order-actions'))).toBe(true);
+  expect(rows.every(row => row.querySelector(':scope > .exercise-order-actions'))).toBe(true);
   expect(within(rows[0]).getByRole('button', { name: 'Move Plank later; position 1 of 4; available' })).toBeTruthy();
 });
 

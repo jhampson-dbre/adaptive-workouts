@@ -47,7 +47,7 @@ const classifyBaselineError = error => {
   }
   if (error?.code === 'baseline/revision-mismatch') return {
     title: 'Baseline data mismatch',
-    detail: `Expected revision emulator-baseline-v1. Observed revision ${error.observedRevision ?? 'none'}.`,
+    detail: `Expected revision emulator-baseline-v2. Observed revision ${error.observedRevision ?? 'none'}.`,
     restartRequired: true,
   }
   const authPhase = error?.phase === 'auth' || error?.code?.startsWith('auth/')

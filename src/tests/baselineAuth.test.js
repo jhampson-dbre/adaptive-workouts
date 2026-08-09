@@ -24,7 +24,7 @@ describe('baseline auth contract', () => {
     }).toEqual({
       BASELINE_AUTH_MARKER: 'emulator-baseline-auth-v2',
       BASELINE_EMAIL: 'peach.otter.880@example.com',
-      BASELINE_FIXTURE_REVISION: 'emulator-baseline-v1',
+      BASELINE_FIXTURE_REVISION: 'emulator-baseline-v2',
       BASELINE_PROVIDER_UID: 'google-peach-otter-880',
       BASELINE_USER_ID: 'emulator-baseline-user',
     });

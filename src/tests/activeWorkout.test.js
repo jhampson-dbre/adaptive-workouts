@@ -22,6 +22,38 @@ it('moves a generated superset as one block', () => {
   expect(activeWorkoutReducer(state, { type: 'moveGeneratedBlock', occurrenceId: 'b:1', direction: 'earlier' }).exercises.map(exercise => exercise.id)).toEqual(['b', 'c', 'a']);
 });
 
+it('moves a standalone earlier across an adjacent superset without splitting it', () => {
+  const state = initializeActiveWorkout(Object.assign([
+    { id: 'a', occurrenceId: 'a:0', trackingMode: 'simple', sets: 1 },
+    { id: 'b', occurrenceId: 'b:1', trackingMode: 'simple', sets: 1 },
+    { id: 'c', occurrenceId: 'c:2', trackingMode: 'simple', sets: 1 },
+  ], { supersets: [{ occurrenceIds: ['a:0', 'b:1'], restPlacement: 'AFTER_ROUND' }] }));
+
+  expect(activeWorkoutReducer(state, { type: 'moveGeneratedBlock', occurrenceId: 'c:2', direction: 'earlier' }).exercises.map(exercise => exercise.id)).toEqual(['c', 'a', 'b']);
+});
+
+it('moves a standalone later across an adjacent superset without splitting it', () => {
+  const state = initializeActiveWorkout(Object.assign([
+    { id: 'a', occurrenceId: 'a:0', trackingMode: 'simple', sets: 1 },
+    { id: 'b', occurrenceId: 'b:1', trackingMode: 'simple', sets: 1 },
+    { id: 'c', occurrenceId: 'c:2', trackingMode: 'simple', sets: 1 },
+  ], { supersets: [{ occurrenceIds: ['b:1', 'c:2'], restPlacement: 'AFTER_ROUND' }] }));
+
+  expect(activeWorkoutReducer(state, { type: 'moveGeneratedBlock', occurrenceId: 'a:0', direction: 'later' }).exercises.map(exercise => exercise.id)).toEqual(['b', 'c', 'a']);
+});
+
+it('rejects a split source superset and every move after the workout starts', () => {
+  const split = initializeActiveWorkout(Object.assign([
+    { id: 'a', occurrenceId: 'a:0', trackingMode: 'simple', sets: 1 },
+    { id: 'c', occurrenceId: 'c:1', trackingMode: 'simple', sets: 1 },
+    { id: 'b', occurrenceId: 'b:2', trackingMode: 'simple', sets: 1 },
+  ], { supersets: [{ occurrenceIds: ['a:0', 'b:2'], restPlacement: 'AFTER_ROUND' }] }));
+  expect(activeWorkoutReducer(split, { type: 'moveGeneratedBlock', occurrenceId: 'a:0', direction: 'later' })).toBe(split);
+
+  const started = activeWorkoutReducer(initializeActiveWorkout([{ id: 'a', occurrenceId: 'a:0', trackingMode: 'simple', sets: 1 }]), { type: 'startWorkout', timestamp: 1 });
+  expect(activeWorkoutReducer(started, { type: 'moveGeneratedBlock', occurrenceId: 'a:0', direction: 'later' })).toBe(started);
+});
+
 function weighted(id = 'bench', sets = 3) {
   return {
     id, name: 'Bench Press', muscleGroup: 'Chest', tier: 1, trackingMode: 'weighted',

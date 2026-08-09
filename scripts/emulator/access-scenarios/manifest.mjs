@@ -1,5 +1,5 @@
 export const accessScenarioManifest = {
-  revision: 'private-access-ux-scenarios-v1', artifactRevision: 'private-owner-approved-access@v2', fixtureRevision: 'emulator-baseline-v1', authRevision: 'emulator-baseline-auth-v2',
+  revision: 'private-access-ux-scenarios-v1', artifactRevision: 'private-owner-approved-access@v2', fixtureRevision: 'emulator-baseline-v2', authRevision: 'emulator-baseline-auth-v2',
   command: 'npm run ux:private-access -- start --slot 1|2 --scenario UX-10-XX --viewport WIDTHxHEIGHT',
   scenarios: {
     'UX-10-01': { id: 'UX-10-01', startState: 'approved', actions: ['pass'] },

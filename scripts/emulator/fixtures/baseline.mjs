@@ -1,5 +1,5 @@
 export const BASELINE_PROJECT_ID = 'demo-project';
-export const BASELINE_FIXTURE_REVISION = 'emulator-baseline-v1';
+export const BASELINE_FIXTURE_REVISION = 'emulator-baseline-v2';
 export const BASELINE_AUTH_MARKER = 'emulator-baseline-auth-v2';
 export const BASELINE_PROFILE = 'canonical';
 export const BASELINE_USER_ID = 'emulator-baseline-user';
@@ -74,6 +74,7 @@ const baselineFixture = {
       staleThreshold: 5,
       legDayOfWeek: 'None',
       defaultRestSeconds: 90,
+      supersets: [{ exerciseIds: ['bench-press', 'pull-up'], restPlacement: 'AFTER_ROUND' }],
       emulatorFixtureRevision: BASELINE_FIXTURE_REVISION,
       emulatorProfile: BASELINE_PROFILE,
     },

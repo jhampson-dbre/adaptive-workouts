@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import baselineFixture from '../../scripts/emulator/fixtures/baseline.mjs';
 import { validateBaselineFixture } from '../../scripts/emulator/validate-fixture.mjs';
+import { generateWorkout } from '../utils/engine';
 
 const cloneFixture = () => structuredClone(baselineFixture);
 
@@ -72,5 +73,12 @@ describe('canonical emulator fixture', () => {
 
   it('requires empty canonical history', () => {
     expectInvalid(fixture => { fixture.firestore.history.push({ id: 'workout-1' }); }, 'history');
+  });
+
+  it('requires the canonical superset and exercises it in an ordinary generated Plan', () => {
+    expect(baselineFixture.firestore.user.supersets).toEqual([{ exerciseIds: ['bench-press', 'pull-up'], restPlacement: 'AFTER_ROUND' }]);
+    const generated = generateWorkout(60, [], false, baselineFixture.firestore.catalog, baselineFixture.firestore.history, baselineFixture.firestore.user);
+    const memberIds = generated.filter(exercise => ['bench-press', 'pull-up'].includes(exercise.id)).map(exercise => exercise.occurrenceId);
+    expect(generated.supersets).toEqual([{ occurrenceIds: memberIds, restPlacement: 'AFTER_ROUND' }]);
   });
 });

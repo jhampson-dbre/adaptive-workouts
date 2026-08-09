@@ -7,6 +7,7 @@ const markers = [
   'emulator-baseline-user',
   'google-peach-otter-880',
   'emulator-baseline-v1',
+  'emulator-baseline-v2',
   'emulator-baseline-auth-v1',
   'emulator-baseline-auth-v2',
   'private-access-scenario-control-v1',

@@ -290,16 +290,24 @@ export function initializeActiveWorkout(exercises, { phaseTimingEnabled = false 
 export function activeWorkoutReducer(state, action) {
   if (action.type === 'moveGeneratedBlock') {
     if (state.phase !== 'generated' || state.workoutStartedAt !== null || !['earlier', 'later'].includes(action.direction)) return state;
-    const index = state.exercises.findIndex(exercise => exercise.occurrenceId === action.occurrenceId);
-    if (index < 0) return state;
-    const group = supersetFor(state, state.exercises[index]);
-    const memberIds = group?.occurrenceIds ?? [action.occurrenceId];
-    const positions = memberIds.map(id => state.exercises.findIndex(exercise => exercise.occurrenceId === id));
-    if (positions.some(position => position < 0) || Math.max(...positions) - Math.min(...positions) + 1 !== positions.length) return state;
-    const first = Math.min(...positions); const last = Math.max(...positions); const target = action.direction === 'earlier' ? first - 1 : last + 1;
-    if (target < 0 || target >= state.exercises.length) return state;
-    const exercises = [...state.exercises]; const block = exercises.splice(first, last - first + 1);
-    exercises.splice(action.direction === 'earlier' ? target : target - block.length + 1, 0, ...block);
+    const blockFor = occurrenceId => {
+      const index = state.exercises.findIndex(exercise => exercise.occurrenceId === occurrenceId);
+      if (index < 0) return null;
+      const ids = supersetFor(state, state.exercises[index])?.occurrenceIds ?? [occurrenceId];
+      const first = state.exercises.findIndex(exercise => exercise.occurrenceId === ids[0]);
+      if (first < 0 || !ids.every((id, offset) => state.exercises[first + offset]?.occurrenceId === id)) return null;
+      return { first, last: first + ids.length - 1 };
+    };
+    const source = blockFor(action.occurrenceId);
+    if (!source) return state;
+    const targetIndex = action.direction === 'earlier' ? source.first - 1 : source.last + 1;
+    const target = targetIndex < 0 || targetIndex >= state.exercises.length ? null : blockFor(state.exercises[targetIndex].occurrenceId);
+    if (!target) return state;
+    const sourceBlock = state.exercises.slice(source.first, source.last + 1);
+    const targetBlock = state.exercises.slice(target.first, target.last + 1);
+    const exercises = action.direction === 'earlier'
+      ? [...state.exercises.slice(0, target.first), ...sourceBlock, ...targetBlock, ...state.exercises.slice(source.last + 1)]
+      : [...state.exercises.slice(0, source.first), ...targetBlock, ...sourceBlock, ...state.exercises.slice(target.last + 1)];
     return { ...state, exercises };
   }
   if (action.type === 'startWorkout') {

@@ -296,6 +296,9 @@ function exerciseTimingStatus(exercise, exerciseIndex, activeTimer, now) {
   return `${remaining} ${remaining === 1 ? 'set' : 'sets'} remaining`;
 }
 
+const expansionKey = (exercise, exerciseIndex) => exercise?.occurrenceId || `${exercise?.id || 'exercise'}-${exerciseIndex}`;
+const expansionKeyAt = (workout, exerciseIndex) => expansionKey(workout.exercises[exerciseIndex], exerciseIndex);
+
 export default function WorkoutView({ session, sessionState, onFinish, onComplete, onDiscard, onBackToPlan, onResume, preference, onSavePreference, onStarted, onDismissPreference }) {
   const activeWorkout = sessionState?.activeWorkout ?? EMPTY_ACTIVE_WORKOUT;
   const durableEpochFloor = durableDisplayEpoch(activeWorkout, sessionState?.snapshot);
@@ -303,9 +306,9 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
   const [now, setNow] = useState(initialDisplayEpochMs);
   const [expanded, setExpanded] = useState(() => {
     const guided = nextGuidedSet(activeWorkout);
-    if (guided) return { [guided.exerciseIndex]: true };
+    if (guided) return { [expansionKeyAt(activeWorkout, guided.exerciseIndex)]: true };
     const firstIncomplete = findFirstIncompleteExercise(activeWorkout.exercises);
-    return firstIncomplete >= 0 ? { [firstIncomplete]: true } : {};
+    return firstIncomplete >= 0 ? { [expansionKeyAt(activeWorkout, firstIncomplete)]: true } : {};
   });
   const [restAnnouncement, setRestAnnouncement] = useState('');
   const [recoveryAcknowledgement, setRecoveryAcknowledgement] = useState('');
@@ -411,7 +414,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
     if (wasShowingRecoveryRef.current && !showingRecovery) {
       const guided = nextGuidedSet(activeWorkout);
       const exerciseIndex = guided?.exerciseIndex ?? findFirstIncompleteExercise(activeWorkout.exercises);
-      if (exerciseIndex >= 0) setExpanded({ [exerciseIndex]: true });
+      if (exerciseIndex >= 0) setExpanded({ [expansionKeyAt(activeWorkout, exerciseIndex)]: true });
     }
     wasShowingRecoveryRef.current = showingRecovery;
   }, [activeWorkout, showingRecovery]);
@@ -536,7 +539,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       ));
     }
     clearExerciseError(exerciseIndex);
-    setExpanded(current => ({ ...current, [exerciseIndex]: true }));
+    setExpanded(current => ({ ...current, [expansionKeyAt(activeWorkout, exerciseIndex)]: true }));
     dispatch({ type: 'startSet', exerciseIndex, setIndex, timestamp: acceptDisplayTime(Date.now()) });
   };
 
@@ -560,7 +563,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       ? nextIncompleteSet(activeWorkout, exerciseIndex)
       : null;
     if (superset || setIndex === exercise.setRecords.length - 1) {
-      setExpanded(current => ({ ...current, [exerciseIndex]: false, ...(next ? { [next.exerciseIndex]: true } : {}) }));
+      setExpanded(current => ({ ...current, [expansionKeyAt(activeWorkout, exerciseIndex)]: false, ...(next ? { [expansionKeyAt(activeWorkout, next.exerciseIndex)]: true } : {}) }));
       if (next) focusNext({ exerciseIndex, setIndex }, next);
     }
   };
@@ -570,7 +573,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
     clearExerciseError(exerciseIndex);
     setFinishError('');
     setEarlyFinishPrompt(null);
-    if (setIndex === activeWorkout.exercises[exerciseIndex].setRecords.length - 1) setExpanded(current => ({ ...current, [exerciseIndex]: true }));
+    if (setIndex === activeWorkout.exercises[exerciseIndex].setRecords.length - 1) setExpanded(current => ({ ...current, [expansionKeyAt(activeWorkout, exerciseIndex)]: true }));
   };
 
   const handleFinish = () => {
@@ -659,7 +662,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
   };
 
   const detailedRestIds = new Set(activeWorkout.exercises.flatMap((exercise, exerciseIndex) => {
-    if (!expanded[exerciseIndex]) return [];
+    if (!expanded[expansionKeyAt(activeWorkout, exerciseIndex)]) return [];
     const setIndex = focusedSetIndex(exercise, exerciseIndex);
     const rest = setIndex >= 0 && restRecordFor(exercise, exerciseIndex, setIndex);
     return rest?._activeRest ? [rest._activeRest.id] : [];
@@ -678,7 +681,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
     error={exerciseErrors[exerciseIndex]?.setIndex === setIndex ? exerciseErrors[exerciseIndex].message : ''}
     onError={(message, blockedBy) => {
       setExerciseErrors(current => ({ ...current, [exerciseIndex]: { setIndex, message, blockedBy } }));
-      setExpanded(current => ({ ...current, [exerciseIndex]: true }));
+      setExpanded(current => ({ ...current, [expansionKeyAt(activeWorkout, exerciseIndex)]: true }));
     }}
     onClearError={() => clearSetError(exerciseIndex, setIndex)}
     onStart={handleStartSet}
@@ -701,12 +704,9 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
     </details>;
   };
 
-  const exerciseList = <>
-    <h2 className="exercise-list-heading">Exercises</h2>
-    {!started && preference?.resolution?.accepted?.length > 0 && <p className="order-applied">Saved exercise order applied.</p>}
-    <ul className="workout-checklist">{activeWorkout.exercises.map((exercise, exerciseIndex) => {
+  const exerciseRow = (exercise, exerciseIndex) => {
       const confirmed = exercise.setRecords.filter(record => record.completed).length;
-      const isExpanded = Boolean(expanded[exerciseIndex]);
+      const isExpanded = Boolean(expanded[expansionKey(exercise, exerciseIndex)]);
       const liveRest = exercise.setRecords.find(record => record._activeRest);
       const timing = detailedRestIds.has(liveRest?._activeRest?.id) || (isExpanded && activeWorkout.activeWorkTimer?.exerciseIndex === exerciseIndex)
         ? `${exercise.setRecords.filter(record => !record.completed).length} ${exercise.setRecords.filter(record => !record.completed).length === 1 ? 'set' : 'sets'} remaining`
@@ -715,25 +715,33 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       const superset = supersetFor(activeWorkout, exercise);
       const next = superset && nextSupersetSet(activeWorkout, superset);
       const supersetContext = superset && `Superset ${superset.occurrenceIds.indexOf(exercise.occurrenceId) + 1} of ${superset.occurrenceIds.length}${next?.exerciseIndex === exerciseIndex ? ' · Next' : ''}`;
-      const orderBlock = started ? null : orderBlocks.find(block => block.ids.includes(exercise.occurrenceId));
-      const orderIndex = orderBlock && orderBlocks.indexOf(orderBlock);
-      const orderFocusKey = orderBlock && `${orderBlock.ids.join('|')}:${exercise.occurrenceId}`;
-      const isSupersetOrder = orderBlock?.exercises.length > 1;
-      const orderLabel = isSupersetOrder ? `${exercise.name} with its superset` : exercise.name;
-      const supersetPartners = isSupersetOrder && orderBlock.exercises.filter(item => item.occurrenceId !== exercise.occurrenceId).map(item => item.name).join(' and ');
       return <li key={exercise.occurrenceId || `${exercise.id}-${exerciseIndex}`} className={`${confirmed === exercise.setRecords.length ? 'completed ' : ''}${isExpanded ? 'selected' : ''}`}>
         <div className="exercise-row">
-          <button type="button" className="exercise-toggle" ref={element => { headerRefs.current[exerciseIndex] = element; }} aria-expanded={isExpanded} aria-controls={`exercise-${exerciseIndex}-sets`} aria-label={`${exercise.name}, ${supersetContext ? `${supersetContext}, ` : ''}${confirmed} of ${exercise.setRecords.length} confirmed, ${timing}, ${isExpanded ? 'collapse' : 'expand'}`} onClick={() => setExpanded(current => ({ ...current, [exerciseIndex]: !isExpanded }))}>
+          <button type="button" className="exercise-toggle" ref={element => { headerRefs.current[exerciseIndex] = element; }} aria-expanded={isExpanded} aria-controls={`exercise-${exerciseIndex}-sets`} aria-label={`${exercise.name}, ${supersetContext ? `${supersetContext}, ` : ''}${confirmed} of ${exercise.setRecords.length} confirmed, ${timing}, ${isExpanded ? 'collapse' : 'expand'}`} onClick={() => setExpanded(current => ({ ...current, [expansionKey(exercise, exerciseIndex)]: !isExpanded }))}>
             <span className="exercise-number" aria-hidden="true">{String(exerciseIndex + 1).padStart(2, '0')}</span><span className="exercise-name"><strong>{exercise.name}</strong> <small>{exercise.muscleGroup}</small></span><span className="exercise-status">{confirmed}/{exercise.setRecords.length} · {timing} · {isExpanded ? 'Collapse' : 'Expand'}</span>
           </button>
-          {orderBlock && <div className="exercise-order-actions order-block" ref={node => { orderBlockRefs.current[orderFocusKey] = node; }} tabIndex="-1">
-            {supersetPartners && <span className="visually-hidden">Moves with {supersetPartners} as one superset.</span>}
-            <button type="button" data-order-direction="earlier" aria-label={`Move ${orderLabel} earlier; position ${orderIndex + 1} of ${orderBlocks.length}; ${orderIndex === 0 ? 'unavailable' : 'available'}`} disabled={orderBusy || orderIndex === 0} onClick={() => moveBlock(orderBlock, 'earlier', orderFocusKey)}>Earlier</button>
-            <button type="button" data-order-direction="later" aria-label={`Move ${orderLabel} later; position ${orderIndex + 1} of ${orderBlocks.length}; ${orderIndex === orderBlocks.length - 1 ? 'unavailable' : 'available'}`} disabled={orderBusy || orderIndex === orderBlocks.length - 1} onClick={() => moveBlock(orderBlock, 'later', orderFocusKey)}>Later</button>
-          </div>}
         </div>
         {supersetContext && <span className="superset-context">{supersetContext}</span>}
         {isExpanded && <div id={`exercise-${exerciseIndex}-sets`} className="set-list">{focusedSet >= 0 && renderSetRow(exercise, exerciseIndex, focusedSet)}{focusedSet < 0 && renderOptionalSetDetails(exercise, exerciseIndex, focusedSet)}</div>}
+      </li>;
+  };
+
+  const exerciseList = <>
+    <h2 className="exercise-list-heading">Exercises</h2>
+    {!started && preference?.resolution?.accepted?.length > 0 && <p className="order-applied">Saved exercise order applied.</p>}
+    <ul className="workout-checklist">{started ? activeWorkout.exercises.map(exerciseRow) : orderBlocks.map((orderBlock, orderIndex) => {
+      const orderFocusKey = orderBlock.ids.join('|');
+      const isSupersetOrder = orderBlock.exercises.length > 1;
+      const leadExercise = orderBlock.exercises[0];
+      const orderLabel = isSupersetOrder ? `${leadExercise.name} with its superset` : leadExercise.name;
+      const supersetPartners = isSupersetOrder && orderBlock.exercises.slice(1).map(item => item.name).join(' and ');
+      return <li key={orderFocusKey} className="workout-order-block order-block" ref={node => { orderBlockRefs.current[orderFocusKey] = node; }} tabIndex="-1">
+        <div className="exercise-order-actions">
+          {supersetPartners && <span className="visually-hidden">Moves with {supersetPartners} as one superset.</span>}
+          <button type="button" data-order-direction="earlier" aria-label={`Move ${orderLabel} earlier; position ${orderIndex + 1} of ${orderBlocks.length}; ${orderIndex === 0 ? 'unavailable' : 'available'}`} disabled={orderBusy || orderIndex === 0} onClick={() => moveBlock(orderBlock, 'earlier', orderFocusKey)}>Earlier</button>
+          <button type="button" data-order-direction="later" aria-label={`Move ${orderLabel} later; position ${orderIndex + 1} of ${orderBlocks.length}; ${orderIndex === orderBlocks.length - 1 ? 'unavailable' : 'available'}`} disabled={orderBusy || orderIndex === orderBlocks.length - 1} onClick={() => moveBlock(orderBlock, 'later', orderFocusKey)}>Later</button>
+        </div>
+        <ul className={isSupersetOrder ? 'superset-exercise-rows' : 'exercise-order-row'}>{orderBlock.exercises.map(exercise => exerciseRow(exercise, activeWorkout.exercises.indexOf(exercise)))}</ul>
       </li>;
     })}</ul>
     {!started && <section className="order-save-controls" aria-label="Exercise order saving">
@@ -741,7 +749,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       {preference?.operation?.state === 'pending' && <p role="status">Saving this exercise order for future workouts.</p>}{preference?.operation?.state === 'indeterminate' && <p role="status">Saving is taking longer than expected. You can start your workout; we'll confirm when it finishes.</p>}{preference?.operation?.state === 'failure' && <p role="alert">Couldn't save this exercise order. Your saved exercise orders and today's workout order are unchanged.</p>}{preference?.operation?.state === 'success' && <p ref={saveOutcomeRef} role="status" tabIndex="-1">{preference.operation.successMessage ?? 'Order saved.'}</p>}
     </section>}
     <div className="deferred-set-details">{activeWorkout.exercises.map((exercise, exerciseIndex) => {
-      if (!expanded[exerciseIndex]) return null;
+      if (!expanded[expansionKeyAt(activeWorkout, exerciseIndex)]) return null;
       const focusedSet = focusedSetIndex(exercise, exerciseIndex);
       return focusedSet >= 0 && renderOptionalSetDetails(exercise, exerciseIndex, focusedSet, exercise.occurrenceId || `${exercise.id}-${exerciseIndex}`);
     })}</div>

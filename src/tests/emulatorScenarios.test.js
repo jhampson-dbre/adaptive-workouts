@@ -169,6 +169,6 @@ describe('emulator history scenarios', () => {
   });
 
   it('exposes stable scenario metadata', () => {
-    expect(scenarioManifest.fixtureRevision).toBe('emulator-baseline-v1');
+    expect(scenarioManifest.fixtureRevision).toBe('emulator-baseline-v2');
   });
 });
