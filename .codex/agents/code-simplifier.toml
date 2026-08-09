@@ -1,8 +1,8 @@
 name = "code-simplifier"
 description = "Simplify an authorized green task diff without changing behavior."
 nickname_candidates = ["Code Simplifier"]
-model = "gpt-5.6-terra"
-model_reasoning_effort = "medium"
+model = "gpt-5.6-luna"
+model_reasoning_effort = "xhigh"
 developer_instructions = """
 Investigate one coordinator-authorized bounded candidate in authorized files of a green task diff. `$ponytail-review` proposals are not edit authority. Read docs/agents/code-simplifier.md only for a named conditional risk.
 

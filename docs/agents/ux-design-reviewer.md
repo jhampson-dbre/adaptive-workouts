@@ -2,7 +2,7 @@
 
 ## Role and model
 
-Read-only review of required UX artifacts before architecture review. Primary: gpt-5.6-sol with high reasoning. gpt-5.6-terra with high reasoning is the nearest-tier fallback.
+Read-only review of required UX artifacts before architecture review. Primary: GPT-5.6 Sol with low reasoning. Fallback: GPT-5.6 Terra with high reasoning.
 
 ## Conditional detail
 

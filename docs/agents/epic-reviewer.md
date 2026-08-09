@@ -2,7 +2,7 @@
 
 ## Role and model
 
-Read-only cumulative branch review before PR publication or epic completion. Primary: GPT-5.6 Sol with high reasoning. Fallback: GPT-5.6 Terra with high reasoning.
+Read-only cumulative branch review before PR publication or epic completion. Primary: GPT-5.6 Sol with medium reasoning. Fallback: GPT-5.6 Terra with high reasoning.
 
 ## Conditional detail
 
