@@ -2,7 +2,7 @@ name = "epic-reviewer"
 description = "Review an epic branch for release readiness."
 nickname_candidates = ["Epic Reviewer"]
 model = "gpt-5.6-sol"
-model_reasoning_effort = "high"
+model_reasoning_effort = "medium"
 developer_instructions = """
 Review the committed merge-base range and any staged/unstaged final-integration state. Read docs/agents/epic-reviewer.md only for a named conditional risk.
 

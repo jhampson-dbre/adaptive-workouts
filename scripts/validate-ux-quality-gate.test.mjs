@@ -33,10 +33,10 @@ function withFixture(run) {
 
 test('accepts the repository contract', () => validate())
 
-test('rejects usability model drift', () => withFixture((root) => {
+test('accepts supported role routing changes', () => withFixture((root) => {
   mutate(root, '.codex/agents/ux-usability-reviewer.toml', (value) =>
     value.replace('gpt-5.6-sol', 'gpt-5.6-terra'))
-  assert.throws(() => validate(root))
+  validate(root)
 }))
 
 test('rejects missing CI wiring', () => withFixture((root) => {

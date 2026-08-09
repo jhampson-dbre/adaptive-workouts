@@ -2,7 +2,7 @@
 
 ## Role and model
 
-Read-only design review before user approval. Primary: GPT-5.6 Sol with high reasoning. Fallback: GPT-5.6 Terra with medium reasoning.
+Read-only design review before user approval. Primary: GPT-5.6 Sol with medium reasoning. Fallback: GPT-5.6 Terra with medium reasoning.
 
 ## Conditional detail
 
