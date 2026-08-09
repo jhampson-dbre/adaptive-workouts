@@ -480,6 +480,7 @@ test('keeps embedded order actions usable without insetting Start workout', () =
   expect(styles).toMatch(/\.exercise-row\s*\{\s*display: grid;\s*grid-template-columns: minmax\(0, 1fr\) auto;/);
   expect(styles).toMatch(/\.exercise-order-actions button\s*\{\s*min-height: 44px;/);
   expect(styles).toMatch(/@media \(max-width: 360px\)\s*\{\s*\.superset-order-header\s*\{\s*grid-template-columns: minmax\(0, 1fr\);/);
+  expect(styles).toMatch(/@media \(max-width: 520px\)\s*\{[\s\S]*?\.exercise-toggle,\s*\.superset-order-disclosure\s*\{\s*grid-template-columns: 52px minmax\(0, 1fr\);/);
   expect(styles).toMatch(/\.start-btn\s*\{\s*width: 100%;/);
 });
 

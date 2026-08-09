@@ -1389,7 +1389,8 @@ input:focus-visible {
     font-size: var(--type-timer-mobile);
   }
 
-  .exercise-toggle {
+  .exercise-toggle,
+  .superset-order-disclosure {
     grid-template-columns: 52px minmax(0, 1fr);
   }
 
