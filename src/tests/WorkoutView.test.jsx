@@ -490,6 +490,17 @@ test('places the compact future-save action after the reordered exercise rows', 
   expect(screen.queryByText(/To reorder exercises within a superset, go to Settings > Supersets/)).toBeNull();
 });
 
+test('clears a Plan reorder announcement when an accepted Start enters Warmup', async () => {
+  renderWorkout(timedWorkout, () => {}, { uid: 'test-user-id' }, { warmupSeconds: 60, performanceSeconds: 0, cooldownSeconds: 0 });
+  fireEvent.click(screen.getByRole('button', { name: 'Move Squat earlier; position 2 of 2; available' }));
+  await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Squat moved to position 1 of 2. This change is for this workout only.'));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+
+  expect(screen.getByRole('heading', { level: 2, name: 'Warmup' })).toBeTruthy();
+  await waitFor(() => expect(screen.getByRole('status').textContent).toBe(''));
+});
+
 test('keeps embedded order actions usable without insetting Start workout', () => {
   expect(styles).toMatch(/\.exercise-row\s*\{\s*display: grid;\s*grid-template-columns: minmax\(0, 1fr\) auto;/);
   expect(styles).toMatch(/\.exercise-order-actions button\s*\{\s*min-height: 44px;/);
