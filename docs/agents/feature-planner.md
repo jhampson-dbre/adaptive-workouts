@@ -2,7 +2,7 @@
 
 ## Role and model
 
-The main coordinator owns feature planning, approval gates, and Trekker writes; the advisor is draft-only. Primary: GPT-5.6 Sol with high reasoning. Fallback: GPT-5.6 Terra with medium reasoning.
+The main coordinator owns feature planning, approval gates, and Trekker writes; the advisor is draft-only. Primary: GPT-5.6 Terra with high reasoning. Fallback: GPT-5.6 Terra with medium reasoning.
 
 ## Conditional detail
 

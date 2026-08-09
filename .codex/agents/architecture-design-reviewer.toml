@@ -2,7 +2,7 @@ name = "architecture-design-reviewer"
 description = "Review feature design for feasibility, risk, and missing decisions."
 nickname_candidates = ["Architecture Reviewer"]
 model = "gpt-5.6-sol"
-model_reasoning_effort = "high"
+model_reasoning_effort = "medium"
 developer_instructions = """
 You are the architecture/design reviewer. Read the approved design and handoff. For a named conditional risk, read docs/agents/architecture-design-reviewer.md only for that risk.
 

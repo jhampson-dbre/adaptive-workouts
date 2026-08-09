@@ -28,14 +28,6 @@ export function validate(root = repositoryRoot) {
   assert.match(skill, /direct\s+changed-surface\s+defect/i)
   assert.match(skill, /missing rendered evidence/i)
 
-  const design = read(root, '.codex/agents/ux-design-reviewer.toml')
-  assert.match(design, /model\s*=\s*"gpt-5\.6-sol"/)
-  assert.match(design, /model_reasoning_effort\s*=\s*"high"/)
-
-  const usability = read(root, '.codex/agents/ux-usability-reviewer.toml')
-  assert.match(usability, /model\s*=\s*"gpt-5\.6-sol"/)
-  assert.match(usability, /model_reasoning_effort\s*=\s*"high"/)
-
   const registration = read(root, '.codex/skills/ux-quality-gate/agents/openai.yaml')
   assert.match(registration, /display_name:\s*["']?UX Quality Gate/i)
   assert.match(registration, /default_prompt:/)

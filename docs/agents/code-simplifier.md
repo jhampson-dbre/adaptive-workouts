@@ -6,7 +6,7 @@ Remove a coordinator-identified complexity signal from authorized files in a gre
 
 ## Preferred Model Tier
 
-Primary: GPT-5.6 Terra with medium reasoning.
+Primary: GPT-5.6 Luna with xhigh reasoning.
 
 Fallback: GPT-5.6 Sol with high reasoning.
 
