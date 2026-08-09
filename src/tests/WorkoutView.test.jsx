@@ -241,12 +241,18 @@ test('renders a pre-start superset as a collapsed summary with separate shared o
   const supersetBlock = screen.getByRole('button', { name: 'Move Long Row Exercise Name with its superset earlier; position 2 of 2; available' }).closest('.order-block');
   const disclosure = within(supersetBlock).getByRole('button', { name: /Superset: Long Row Exercise Name and Long Press Exercise Name.*positions 02 through 03.*2 exercises.*2 planned sets.*expand/i });
   expect(disclosure.getAttribute('aria-expanded')).toBe('false');
+  expect(disclosure.getAttribute('aria-controls')).toBeNull();
   expect(screen.getByRole('group', { name: /positions 02 through 03/i })).toBe(supersetBlock);
   expect(within(supersetBlock).getByText('02')).toBeTruthy();
   expect(within(supersetBlock).getByText('03')).toBeTruthy();
   expect(supersetBlock.querySelector('.superset-order-range-rule').getAttribute('aria-hidden')).toBe('true');
   expect(disclosure.textContent).toContain('Long Row Exercise Name');
   expect(disclosure.textContent).toContain('Long Press Exercise Name');
+  expect(disclosure.textContent).toContain('2 exercises');
+  expect(disclosure.textContent).toContain('2 planned sets');
+  expect(disclosure.textContent).not.toMatch(/0\/2/);
+  expect(supersetBlock.querySelector('.superset-order-disclosure > .exercise-status').textContent).toBe('2 planned sets ·Expand');
+  expect(supersetBlock.querySelector('.superset-order-copy').textContent).not.toContain('Expand');
   expect(within(supersetBlock).getAllByRole('button', { name: /Move .* later/ })).toHaveLength(1);
   expect(within(supersetBlock).getAllByRole('button', { name: /Move .* earlier/ })).toHaveLength(1);
   expect(supersetBlock.querySelector('.exercise-order-actions').contains(disclosure)).toBe(false);
@@ -254,10 +260,16 @@ test('renders a pre-start superset as a collapsed summary with separate shared o
 
   fireEvent.click(disclosure);
   expect(disclosure.getAttribute('aria-expanded')).toBe('true');
+  expect(disclosure.getAttribute('aria-controls')).toBe('superset-row:0|press:1-members');
   expect(within(supersetBlock).getByText('SUPERSET · 02–03')).toBeTruthy();
-  expect(supersetBlock.querySelector('.superset-order-range')).toBeNull();
+  expect(supersetBlock.querySelector('.superset-order-range').textContent).toBe('');
+  expect(supersetBlock.querySelector('.superset-order-disclosure > .exercise-status').textContent).toBe('2 planned sets ·Collapse');
   expect(within(supersetBlock).getAllByRole('listitem')).toHaveLength(2);
+  const memberSpacers = supersetBlock.querySelectorAll('.exercise-order-spacer');
+  expect(memberSpacers).toHaveLength(2);
+  expect([...memberSpacers].every(spacer => spacer.classList.contains('exercise-order-actions') && spacer.getAttribute('aria-hidden') === 'true' && !spacer.querySelector('button'))).toBe(true);
   expect(within(supersetBlock).getAllByText(/^(02|03)$/)).toHaveLength(2);
+  expect(within(supersetBlock).queryByText(/Superset [12] of 2/)).toBeNull();
   expect(within(supersetBlock).getByRole('button', { name: /Long Row Exercise Name.*expand/i })).toBeTruthy();
   expect(within(supersetBlock).getByRole('button', { name: /Long Press Exercise Name.*expand/i })).toBeTruthy();
 });
@@ -280,10 +292,11 @@ test('uses truthful endpoints for a collapsed three-member Plan superset', () =>
   expect(screen.getByText('04')).toBeTruthy();
 });
 
-test('omits Next from Plan superset member context', () => {
+test('omits member context from Plan supersets', () => {
   renderWorkout(supersetWorkout());
   fireEvent.click(screen.getByRole('button', { name: /Superset: Long Row Exercise Name and Long Press Exercise Name.*expand/i }));
-  expect(screen.getByText('Superset 1 of 2')).toBeTruthy();
+  expect(screen.queryByText(/Superset [12] of 2/)).toBeNull();
+  expect(screen.getByRole('button', { name: /Long Row Exercise Name, 0 of 2 confirmed/i })).toBeTruthy();
   expect(screen.queryByText(/Superset 1 of 2 · Next/)).toBeNull();
 });
 
@@ -334,6 +347,7 @@ test('discards Plan superset disclosure when starting while retaining an active 
   const activeSuperset = await screen.findByRole('group', { name: /Superset: Long Row Exercise Name and Long Press Exercise Name, 2 exercises/i });
   expect(within(activeSuperset).queryByRole('button', { name: /Superset: .*collapse/i })).toBeNull();
   expect(within(activeSuperset).queryByRole('button', { name: /Move .* (earlier|later)/ })).toBeNull();
+  expect(activeSuperset.querySelector('.exercise-order-spacer')).toBeNull();
   expect(within(activeSuperset).getByRole('button', { name: /Long Row Exercise Name.*collapse/i })).toBeTruthy();
   expect(within(activeSuperset).getByRole('button', { name: /Long Press Exercise Name.*expand/i })).toBeTruthy();
   expect(view.api.action).toHaveBeenCalledWith(expect.objectContaining({ type: 'startWorkout' }));
@@ -479,7 +493,13 @@ test('places the compact future-save action after the reordered exercise rows', 
 test('keeps embedded order actions usable without insetting Start workout', () => {
   expect(styles).toMatch(/\.exercise-row\s*\{\s*display: grid;\s*grid-template-columns: minmax\(0, 1fr\) auto;/);
   expect(styles).toMatch(/\.exercise-order-actions button\s*\{\s*min-height: 44px;/);
+  expect(styles).toMatch(/\.exercise-toggle\s*\{\s*display: grid;\s*grid-template-columns: 62px minmax\(0, 1fr\) 130px;/);
+  expect(styles).toMatch(/\.superset-order-disclosure\s*\{\s*display: grid;\s*grid-template-columns: 62px minmax\(0, 1fr\) 130px;/);
+  expect(styles).toMatch(/\.superset-order-copy\s*\{\s*display: grid;\s*text-align: center;/);
+  expect(styles).toMatch(/\.superset-order-range\s*\{[\s\S]*?justify-items: center;/);
   expect(styles).toMatch(/@media \(max-width: 360px\)\s*\{\s*\.superset-order-header\s*\{\s*grid-template-columns: minmax\(0, 1fr\);/);
+  expect(styles).toMatch(/@media \(max-width: 360px\)\s*\{[\s\S]*?\.superset-order-header > \.superset-order-disclosure\s*\{\s*grid-template-columns: 52px minmax\(0, 1fr\) auto;/);
+  expect(styles).toMatch(/@media \(max-width: 360px\)\s*\{[\s\S]*?\.superset-order-header \.superset-order-disclosure > \.exercise-status\s*\{\s*grid-column: 3;/);
   expect(styles).toMatch(/@media \(max-width: 520px\)\s*\{[\s\S]*?\.exercise-toggle,\s*\.superset-order-disclosure\s*\{\s*grid-template-columns: 52px minmax\(0, 1fr\);/);
   expect(styles).toMatch(/\.start-btn\s*\{\s*width: 100%;/);
 });

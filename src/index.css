@@ -593,7 +593,7 @@ input:focus-visible {
 
 .exercise-toggle {
   display: grid;
-  grid-template-columns: 62px minmax(0, 1fr) auto;
+  grid-template-columns: 62px minmax(0, 1fr) 130px;
   min-height: 78px;
   gap: 14px;
   align-items: center;
@@ -654,12 +654,12 @@ input:focus-visible {
 
 .superset-order-disclosure {
   display: grid;
-  grid-template-columns: 62px minmax(0, 1fr);
+  grid-template-columns: 62px minmax(0, 1fr) 130px;
   min-width: 0;
   min-height: 78px;
   gap: 14px;
   align-items: center;
-  padding: 12px clamp(16px, 5vw, 32px);
+  padding: 4px clamp(16px, 5vw, 32px);
   border: 0;
   border-radius: 0;
   background: var(--code-bg);
@@ -672,12 +672,9 @@ input:focus-visible {
   background: var(--accent-bg);
 }
 
-.superset-order-disclosure.expanded {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 .superset-order-copy {
   display: grid;
+  text-align: center;
   gap: 4px;
 }
 
@@ -694,27 +691,26 @@ input:focus-visible {
   text-transform: uppercase;
 }
 
-.superset-order-copy span:last-child,
 .superset-block-label {
   color: var(--text);
   font-size: var(--type-metadata);
+}
+
+.superset-order-disclosure > .exercise-status {
+  display: grid;
+  gap: 4px;
 }
 
 .superset-order-range {
   display: grid;
   align-self: stretch;
   align-content: space-between;
-  justify-items: start;
-  padding: 4px 0;
+  justify-items: center;
 }
 
 .superset-order-range-rule {
   width: 24px;
   border-top: 1px solid currentColor;
-}
-
-.superset-order-header > .exercise-order-actions {
-  padding-left: clamp(12px, 3vw, 20px);
 }
 
 .active-superset-block > .superset-block-label {
@@ -735,6 +731,14 @@ input:focus-visible {
 @media (max-width: 360px) {
   .superset-order-header {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .superset-order-header > .superset-order-disclosure {
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+  }
+
+  .superset-order-header .superset-order-disclosure > .exercise-status {
+    grid-column: 3;
   }
 
   .superset-order-header > .exercise-order-actions {

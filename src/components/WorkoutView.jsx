@@ -721,7 +721,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
     </div>;
   };
 
-  const exerciseRow = (exercise, exerciseIndex, orderBlock, orderIndex) => {
+  const exerciseRow = (exercise, exerciseIndex, orderBlock, orderIndex, reserveOrderRail = false) => {
       const confirmed = exercise.setRecords.filter(record => record.completed).length;
       const isExpanded = Boolean(expanded[expansionKey(exercise, exerciseIndex)]);
       const liveRest = exercise.setRecords.find(record => record._activeRest);
@@ -731,14 +731,14 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       const focusedSet = focusedSetIndex(exercise, exerciseIndex);
       const superset = supersetFor(activeWorkout, exercise);
       const next = superset && nextSupersetSet(activeWorkout, superset);
-      const supersetContext = superset && `Superset ${superset.occurrenceIds.indexOf(exercise.occurrenceId) + 1} of ${superset.occurrenceIds.length}${started && next?.exerciseIndex === exerciseIndex ? ' · Next' : ''}`;
+      const supersetContext = started && superset && `Superset ${superset.occurrenceIds.indexOf(exercise.occurrenceId) + 1} of ${superset.occurrenceIds.length}${next?.exerciseIndex === exerciseIndex ? ' · Next' : ''}`;
       const orderFocusKey = orderBlock?.ids.join('|');
       return <li key={exercise.occurrenceId || `${exercise.id}-${exerciseIndex}`} className={`${confirmed === exercise.setRecords.length ? 'completed ' : ''}${isExpanded ? 'selected' : ''}`} ref={orderBlock ? node => { orderBlockRefs.current[orderFocusKey] = node; } : undefined} tabIndex={orderBlock ? '-1' : undefined}>
         <div className="exercise-row">
           <button type="button" className="exercise-toggle" ref={element => { headerRefs.current[exerciseIndex] = element; }} aria-expanded={isExpanded} aria-controls={`exercise-${exerciseIndex}-sets`} aria-label={`${exercise.name}, ${supersetContext ? `${supersetContext}, ` : ''}${confirmed} of ${exercise.setRecords.length} confirmed, ${timing}, ${isExpanded ? 'collapse' : 'expand'}`} onClick={() => setExpanded(current => ({ ...current, [expansionKey(exercise, exerciseIndex)]: !isExpanded }))}>
             <span className="exercise-number" aria-hidden="true">{String(exerciseIndex + 1).padStart(2, '0')}</span><span className="exercise-name"><strong>{exercise.name}</strong> <small>{exercise.muscleGroup}</small></span><span className="exercise-status">{confirmed}/{exercise.setRecords.length} · {timing} · {isExpanded ? 'Collapse' : 'Expand'}</span>
           </button>
-          {orderBlock && renderOrderActions(orderBlock, orderIndex, orderFocusKey)}
+          {orderBlock ? renderOrderActions(orderBlock, orderIndex, orderFocusKey) : reserveOrderRail && <span className="exercise-order-actions exercise-order-spacer" aria-hidden="true" />}
         </div>
         {supersetContext && <span className="superset-context">{supersetContext}</span>}
         {isExpanded && <div id={`exercise-${exerciseIndex}-sets`} className="set-list">{focusedSet >= 0 && renderSetRow(exercise, exerciseIndex, focusedSet)}{focusedSet < 0 && renderOptionalSetDetails(exercise, exerciseIndex, focusedSet)}</div>}
@@ -767,15 +767,16 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       const lastPosition = activeWorkout.exercises.indexOf(orderBlock.exercises[orderBlock.exercises.length - 1]) + 1;
       const positionRange = `${String(firstPosition).padStart(2, '0')}–${String(lastPosition).padStart(2, '0')}`;
       const positions = `positions ${String(firstPosition).padStart(2, '0')} through ${String(lastPosition).padStart(2, '0')}`;
+      const memberListId = `superset-${orderFocusKey}-members`;
       return <li key={orderFocusKey} className="workout-order-block superset-order-block order-block" role="group" aria-label={`Superset: ${names}, ${positions}, ${orderBlock.exercises.length} exercises, ${plannedSets} planned sets`} ref={node => { orderBlockRefs.current[orderFocusKey] = node; }} tabIndex="-1">
         <div className="superset-order-header exercise-row">
-          <button type="button" className={`superset-order-disclosure${isExpanded ? ' expanded' : ''}`} aria-expanded={isExpanded} aria-controls={`superset-${orderFocusKey}-members`} aria-label={`Superset: ${names}, ${positions}, ${orderBlock.exercises.length} exercises, ${plannedSets} planned sets, ${isExpanded ? 'collapse' : 'expand'}`} onClick={() => setExpandedSupersets(current => ({ ...current, [orderFocusKey]: !isExpanded }))}>
-            {!isExpanded && <span className="superset-order-range" aria-hidden="true"><span className="exercise-number">{String(firstPosition).padStart(2, '0')}</span><span className="superset-order-range-rule" aria-hidden="true" /><span className="exercise-number">{String(lastPosition).padStart(2, '0')}</span></span>}
-            <span className="superset-order-copy"><span>{isExpanded ? `SUPERSET · ${positionRange}` : 'Superset'}</span><span>{names}</span><span>{orderBlock.exercises.length} exercises · {plannedSets} planned sets · {isExpanded ? 'Collapse' : 'Expand'}</span></span>
+          <button type="button" className="superset-order-disclosure" aria-expanded={isExpanded} aria-controls={isExpanded ? memberListId : undefined} aria-label={`Superset: ${names}, ${positions}, ${orderBlock.exercises.length} exercises, ${plannedSets} planned sets, ${isExpanded ? 'collapse' : 'expand'}`} onClick={() => setExpandedSupersets(current => ({ ...current, [orderFocusKey]: !isExpanded }))}>
+            <span className="superset-order-range" aria-hidden="true">{!isExpanded && <><span className="exercise-number">{String(firstPosition).padStart(2, '0')}</span><span className="superset-order-range-rule" aria-hidden="true" /><span className="exercise-number">{String(lastPosition).padStart(2, '0')}</span></>}</span>
+            <span className="superset-order-copy"><span>{isExpanded ? `SUPERSET · ${positionRange}` : 'Superset'}</span><span className="exercise-name"><strong>{names}</strong> <small>{orderBlock.exercises.length} exercises</small></span></span><span className="exercise-status"><span>{plannedSets} planned sets ·</span><span>{isExpanded ? 'Collapse' : 'Expand'}</span></span>
           </button>
           {renderOrderActions(orderBlock, orderIndex, orderFocusKey)}
         </div>
-        {isExpanded && <ul id={`superset-${orderFocusKey}-members`} className="superset-exercise-rows">{orderBlock.exercises.map(exercise => exerciseRow(exercise, activeWorkout.exercises.indexOf(exercise)))}</ul>}
+        {isExpanded && <ul id={memberListId} className="superset-exercise-rows">{orderBlock.exercises.map(exercise => exerciseRow(exercise, activeWorkout.exercises.indexOf(exercise), undefined, undefined, true))}</ul>}
       </li>;
     })}</ul>
     {!started && <section className="order-save-controls" aria-label="Exercise order saving">
