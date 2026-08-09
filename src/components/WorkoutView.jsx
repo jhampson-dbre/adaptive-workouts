@@ -310,6 +310,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
     const firstIncomplete = findFirstIncompleteExercise(activeWorkout.exercises);
     return firstIncomplete >= 0 ? { [expansionKeyAt(activeWorkout, firstIncomplete)]: true } : {};
   });
+  const [expandedSupersets, setExpandedSupersets] = useState({});
   const [restAnnouncement, setRestAnnouncement] = useState('');
   const [recoveryAcknowledgement, setRecoveryAcknowledgement] = useState('');
   const [orderAnnouncement, setOrderAnnouncement] = useState('');
@@ -409,6 +410,10 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
     setOrderAnnouncement('');
     if (!started) saveOutcomeRef.current?.focus();
   }, [started, preference?.operation?.state]);
+
+  useEffect(() => {
+    if (started) setExpandedSupersets({});
+  }, [started]);
 
   useEffect(() => {
     if (wasShowingRecoveryRef.current && !showingRecovery) {
@@ -704,7 +709,19 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
     </details>;
   };
 
-  const exerciseRow = (exercise, exerciseIndex) => {
+  const renderOrderActions = (orderBlock, orderIndex, orderFocusKey) => {
+    const isSupersetOrder = orderBlock.exercises.length > 1;
+    const leadExercise = orderBlock.exercises[0];
+    const orderLabel = isSupersetOrder ? `${leadExercise.name} with its superset` : leadExercise.name;
+    const supersetPartners = isSupersetOrder && orderBlock.exercises.slice(1).map(item => item.name).join(' and ');
+    return <div className="exercise-order-actions">
+      {supersetPartners && <span className="visually-hidden">Moves with {supersetPartners} as one superset.</span>}
+      <button type="button" data-order-direction="earlier" aria-label={`Move ${orderLabel} earlier; position ${orderIndex + 1} of ${orderBlocks.length}; ${orderIndex === 0 ? 'unavailable' : 'available'}`} disabled={orderBusy || orderIndex === 0} onClick={() => moveBlock(orderBlock, 'earlier', orderFocusKey)}>Earlier</button>
+      <button type="button" data-order-direction="later" aria-label={`Move ${orderLabel} later; position ${orderIndex + 1} of ${orderBlocks.length}; ${orderIndex === orderBlocks.length - 1 ? 'unavailable' : 'available'}`} disabled={orderBusy || orderIndex === orderBlocks.length - 1} onClick={() => moveBlock(orderBlock, 'later', orderFocusKey)}>Later</button>
+    </div>;
+  };
+
+  const exerciseRow = (exercise, exerciseIndex, orderBlock, orderIndex) => {
       const confirmed = exercise.setRecords.filter(record => record.completed).length;
       const isExpanded = Boolean(expanded[expansionKey(exercise, exerciseIndex)]);
       const liveRest = exercise.setRecords.find(record => record._activeRest);
@@ -715,11 +732,13 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       const superset = supersetFor(activeWorkout, exercise);
       const next = superset && nextSupersetSet(activeWorkout, superset);
       const supersetContext = superset && `Superset ${superset.occurrenceIds.indexOf(exercise.occurrenceId) + 1} of ${superset.occurrenceIds.length}${next?.exerciseIndex === exerciseIndex ? ' · Next' : ''}`;
-      return <li key={exercise.occurrenceId || `${exercise.id}-${exerciseIndex}`} className={`${confirmed === exercise.setRecords.length ? 'completed ' : ''}${isExpanded ? 'selected' : ''}`}>
+      const orderFocusKey = orderBlock?.ids.join('|');
+      return <li key={exercise.occurrenceId || `${exercise.id}-${exerciseIndex}`} className={`${confirmed === exercise.setRecords.length ? 'completed ' : ''}${isExpanded ? 'selected' : ''}`} ref={orderBlock ? node => { orderBlockRefs.current[orderFocusKey] = node; } : undefined} tabIndex={orderBlock ? '-1' : undefined}>
         <div className="exercise-row">
           <button type="button" className="exercise-toggle" ref={element => { headerRefs.current[exerciseIndex] = element; }} aria-expanded={isExpanded} aria-controls={`exercise-${exerciseIndex}-sets`} aria-label={`${exercise.name}, ${supersetContext ? `${supersetContext}, ` : ''}${confirmed} of ${exercise.setRecords.length} confirmed, ${timing}, ${isExpanded ? 'collapse' : 'expand'}`} onClick={() => setExpanded(current => ({ ...current, [expansionKey(exercise, exerciseIndex)]: !isExpanded }))}>
             <span className="exercise-number" aria-hidden="true">{String(exerciseIndex + 1).padStart(2, '0')}</span><span className="exercise-name"><strong>{exercise.name}</strong> <small>{exercise.muscleGroup}</small></span><span className="exercise-status">{confirmed}/{exercise.setRecords.length} · {timing} · {isExpanded ? 'Collapse' : 'Expand'}</span>
           </button>
+          {orderBlock && renderOrderActions(orderBlock, orderIndex, orderFocusKey)}
         </div>
         {supersetContext && <span className="superset-context">{supersetContext}</span>}
         {isExpanded && <div id={`exercise-${exerciseIndex}-sets`} className="set-list">{focusedSet >= 0 && renderSetRow(exercise, exerciseIndex, focusedSet)}{focusedSet < 0 && renderOptionalSetDetails(exercise, exerciseIndex, focusedSet)}</div>}
@@ -729,19 +748,29 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
   const exerciseList = <>
     <h2 className="exercise-list-heading">Exercises</h2>
     {!started && preference?.resolution?.accepted?.length > 0 && <p className="order-applied">Saved exercise order applied.</p>}
-    <ul className="workout-checklist">{started ? activeWorkout.exercises.map(exerciseRow) : orderBlocks.map((orderBlock, orderIndex) => {
+    <ul className="workout-checklist">{started ? orderBlocks.map(orderBlock => {
+      if (orderBlock.exercises.length === 1) return exerciseRow(orderBlock.exercises[0], activeWorkout.exercises.indexOf(orderBlock.exercises[0]));
+      const names = orderBlock.exercises.map(exercise => exercise.name).join(' and ');
+      const plannedSets = orderBlock.exercises.reduce((total, exercise) => total + exercise.setRecords.length, 0);
+      return <li key={orderBlock.ids.join('|')} className="active-superset-block" role="group" aria-label={`Superset: ${names}, ${orderBlock.exercises.length} exercises, ${plannedSets} planned sets`}>
+        <p className="superset-block-label">Superset · {names} · {orderBlock.exercises.length} exercises · {plannedSets} planned sets</p>
+        <ul className="superset-exercise-rows">{orderBlock.exercises.map(exercise => exerciseRow(exercise, activeWorkout.exercises.indexOf(exercise)))}</ul>
+      </li>;
+    }) : orderBlocks.map((orderBlock, orderIndex) => {
       const orderFocusKey = orderBlock.ids.join('|');
       const isSupersetOrder = orderBlock.exercises.length > 1;
-      const leadExercise = orderBlock.exercises[0];
-      const orderLabel = isSupersetOrder ? `${leadExercise.name} with its superset` : leadExercise.name;
-      const supersetPartners = isSupersetOrder && orderBlock.exercises.slice(1).map(item => item.name).join(' and ');
-      return <li key={orderFocusKey} className="workout-order-block order-block" ref={node => { orderBlockRefs.current[orderFocusKey] = node; }} tabIndex="-1">
-        <div className="exercise-order-actions">
-          {supersetPartners && <span className="visually-hidden">Moves with {supersetPartners} as one superset.</span>}
-          <button type="button" data-order-direction="earlier" aria-label={`Move ${orderLabel} earlier; position ${orderIndex + 1} of ${orderBlocks.length}; ${orderIndex === 0 ? 'unavailable' : 'available'}`} disabled={orderBusy || orderIndex === 0} onClick={() => moveBlock(orderBlock, 'earlier', orderFocusKey)}>Earlier</button>
-          <button type="button" data-order-direction="later" aria-label={`Move ${orderLabel} later; position ${orderIndex + 1} of ${orderBlocks.length}; ${orderIndex === orderBlocks.length - 1 ? 'unavailable' : 'available'}`} disabled={orderBusy || orderIndex === orderBlocks.length - 1} onClick={() => moveBlock(orderBlock, 'later', orderFocusKey)}>Later</button>
+      if (!isSupersetOrder) return exerciseRow(orderBlock.exercises[0], activeWorkout.exercises.indexOf(orderBlock.exercises[0]), orderBlock, orderIndex);
+      const names = orderBlock.exercises.map(exercise => exercise.name).join(' and ');
+      const plannedSets = orderBlock.exercises.reduce((total, exercise) => total + exercise.setRecords.length, 0);
+      const isExpanded = Boolean(expandedSupersets[orderFocusKey]);
+      return <li key={orderFocusKey} className="workout-order-block superset-order-block order-block" role="group" aria-label={`Superset: ${names}, ${orderBlock.exercises.length} exercises, ${plannedSets} planned sets`} ref={node => { orderBlockRefs.current[orderFocusKey] = node; }} tabIndex="-1">
+        <div className="superset-order-header">
+          <button type="button" className="superset-order-disclosure" aria-expanded={isExpanded} aria-controls={`superset-${orderFocusKey}-members`} aria-label={`Superset: ${names}, ${orderBlock.exercises.length} exercises, ${plannedSets} planned sets, ${isExpanded ? 'collapse' : 'expand'}`} onClick={() => setExpandedSupersets(current => ({ ...current, [orderFocusKey]: !isExpanded }))}>
+            <span>Superset</span><span>{names}</span><span>{orderBlock.exercises.length} exercises · {plannedSets} planned sets · {isExpanded ? 'Collapse' : 'Expand'}</span>
+          </button>
+          {renderOrderActions(orderBlock, orderIndex, orderFocusKey)}
         </div>
-        <ul className={isSupersetOrder ? 'superset-exercise-rows' : 'exercise-order-row'}>{orderBlock.exercises.map(exercise => exerciseRow(exercise, activeWorkout.exercises.indexOf(exercise)))}</ul>
+        {isExpanded && <ul id={`superset-${orderFocusKey}-members`} className="superset-exercise-rows">{orderBlock.exercises.map(exercise => exerciseRow(exercise, activeWorkout.exercises.indexOf(exercise)))}</ul>}
       </li>;
     })}</ul>
     {!started && <section className="order-save-controls" aria-label="Exercise order saving">
