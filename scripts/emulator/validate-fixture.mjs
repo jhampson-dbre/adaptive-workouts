@@ -1,5 +1,6 @@
 import {
   isValidCatalogExercise,
+  isValidCatalogSupersetSettings,
 } from '../../src/utils/workoutSchema.js';
 import {
   BASELINE_AUTH_MARKER,
@@ -18,6 +19,7 @@ const CANONICAL_SETTINGS = {
   legDayOfWeek: 'None',
   defaultRestSeconds: 90,
 };
+const CANONICAL_SUPERSETS = [{ exerciseIds: ['bench-press', 'pull-up'], restPlacement: 'AFTER_ROUND' }];
 const SUPPORTED_PROFILES = new Set(['canonical', 'scratch', 'test']);
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -72,6 +74,9 @@ export function validateBaselineFixture(fixture, { expectedProfile = BASELINE_PR
     }
     addExactError(errors, user.emulatorFixtureRevision, BASELINE_FIXTURE_REVISION, 'firestore.user.emulatorFixtureRevision');
     addExactError(errors, user.emulatorProfile, expectedProfile, 'firestore.user.emulatorProfile');
+    if (JSON.stringify(user.supersets) !== JSON.stringify(CANONICAL_SUPERSETS)) {
+      errors.push(`firestore.user.supersets must equal ${JSON.stringify(CANONICAL_SUPERSETS)}; received ${JSON.stringify(user.supersets)}`);
+    }
   }
 
   const catalog = fixture.firestore?.catalog;
@@ -90,6 +95,9 @@ export function validateBaselineFixture(fixture, { expectedProfile = BASELINE_PR
     if (ids.has(exercise?.id)) errors.push(`${path}.id duplicates ${JSON.stringify(exercise?.id)}`);
     ids.add(exercise?.id);
   });
+  if (!isValidCatalogSupersetSettings(user?.supersets, catalog)) {
+    errors.push('firestore.user.supersets must contain valid active, equal-set catalog exercises');
+  }
   catalog.forEach((exercise, index) => {
     if (exercise?.linkedTo === undefined || exercise.linkedTo === null) return;
     const path = `firestore.catalog[${index}].linkedTo`;

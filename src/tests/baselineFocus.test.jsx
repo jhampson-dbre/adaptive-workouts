@@ -61,7 +61,7 @@ describe('baseline shared access gate', () => {
     vi.doMock('../utils/baselineAuth', () => ({ signInToBaseline: async () => ({ user: baselineUser }), validateBaselineIdentity: vi.fn(), verifyBaselineData: vi.fn().mockRejectedValue(mismatch) }));
     vi.doMock('../utils/auth', accessAuth); vi.doMock('../utils/storage', () => ({ migrateLocalData: vi.fn() }));
     const { default: App } = await import('../App'); render(<App />);
-    expect(await screen.findByText('Baseline data mismatch')).toBeTruthy(); expect(screen.getByText(/Expected revision emulator-baseline-v1. Observed revision stale-v0/)).toBeTruthy(); expect(screen.getByText(/Browser Retry cannot repair seeded baseline data/)).toBeTruthy(); import.meta.env.MODE = priorMode;
+    expect(await screen.findByText('Baseline data mismatch')).toBeTruthy(); expect(screen.getByText(/Expected revision emulator-baseline-v2. Observed revision stale-v0/)).toBeTruthy(); expect(screen.getByText(/Browser Retry cannot repair seeded baseline data/)).toBeTruthy(); import.meta.env.MODE = priorMode;
   });
   it('keeps fixture verification inside the App access deadline and ignores its late completion', async () => {
     vi.useFakeTimers(); const priorMode = import.meta.env.MODE; import.meta.env.MODE = 'baseline'; let completeVerification;

@@ -633,6 +633,18 @@ input:focus-visible {
   font-size: var(--type-metadata);
 }
 
+.superset-exercise-rows,
+.exercise-order-row {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workout-order-block > .exercise-order-actions {
+  border-bottom: 1px solid var(--border);
+  padding-left: clamp(12px, 3vw, 20px);
+}
+
 .exercise-number {
   color: var(--border);
   font-size: var(--type-exercise-number);

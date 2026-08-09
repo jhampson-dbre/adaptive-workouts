@@ -1,6 +1,7 @@
 import { deleteApp, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { isDeepStrictEqual } from 'node:util';
 
 import baselineFixture, {
   BASELINE_FIXTURE_REVISION,
@@ -79,9 +80,9 @@ export async function seedBaseline({ projectId = BASELINE_PROJECT_ID, hosts, pro
   });
 }
 
-const assertExactFields = (actual, expected, label) => {
+export const assertExactFields = (actual, expected, label) => {
   for (const [key, value] of Object.entries(expected)) {
-    if (actual?.[key] !== value) {
+    if (actual?.[key] !== value && !isDeepStrictEqual(actual?.[key], value)) {
       throw new Error(`${label}.${key} mismatch: expected ${JSON.stringify(value)}, received ${JSON.stringify(actual?.[key])}`);
     }
   }
