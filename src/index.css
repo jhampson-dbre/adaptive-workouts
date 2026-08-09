@@ -654,9 +654,11 @@ input:focus-visible {
 
 .superset-order-disclosure {
   display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
   min-width: 0;
   min-height: 78px;
-  gap: 4px;
+  gap: 14px;
+  align-items: center;
   padding: 12px clamp(16px, 5vw, 32px);
   border: 0;
   border-radius: 0;
@@ -670,11 +672,20 @@ input:focus-visible {
   background: var(--accent-bg);
 }
 
-.superset-order-disclosure span {
+.superset-order-disclosure.expanded {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.superset-order-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.superset-order-copy span {
   overflow-wrap: anywhere;
 }
 
-.superset-order-disclosure span:first-child {
+.superset-order-copy span:first-child {
   color: var(--accent);
   font-family: var(--heading);
   font-size: var(--type-label);
@@ -683,10 +694,23 @@ input:focus-visible {
   text-transform: uppercase;
 }
 
-.superset-order-disclosure span:last-child,
+.superset-order-copy span:last-child,
 .superset-block-label {
   color: var(--text);
   font-size: var(--type-metadata);
+}
+
+.superset-order-range {
+  display: grid;
+  align-self: stretch;
+  align-content: space-between;
+  justify-items: start;
+  padding: 4px 0;
+}
+
+.superset-order-range-rule {
+  width: 24px;
+  border-top: 1px solid currentColor;
 }
 
 .superset-order-header > .exercise-order-actions {

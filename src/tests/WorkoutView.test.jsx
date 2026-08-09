@@ -195,6 +195,16 @@ const mixedSupersetWorkout = () => {
   return exercises;
 };
 
+const threeMemberSupersetWorkout = () => {
+  const exercises = [
+    { ...timedWorkout[1], id: 'carry', occurrenceId: 'carry:0', name: 'Carry', setRecords: timedWorkout[1].setRecords.map(record => ({ ...record })) },
+    ...supersetWorkout().map(exercise => ({ ...exercise, sets: 1, prescribedSetCount: 1, setRecords: [exercise.setRecords[0]] })),
+    { ...timedWorkout[0], id: 'plank', occurrenceId: 'plank:2', name: 'Plank', sets: 1, prescribedSetCount: 1, setRecords: [timedWorkout[0].setRecords[0]] },
+  ];
+  exercises.supersets = [{ occurrenceIds: ['row:0', 'press:1', 'plank:2'], restPlacement: 'AFTER_ROUND' }];
+  return exercises;
+};
+
 test('keeps move focus and gives each order control its position, availability, and superset context', async () => {
   const workout = mixedSupersetWorkout();
   renderWorkout(workout, () => {}, { uid: 'test-user-id' }, undefined, {}, {
@@ -229,8 +239,12 @@ test('renders a pre-start superset as a collapsed summary with separate shared o
   });
 
   const supersetBlock = screen.getByRole('button', { name: 'Move Long Row Exercise Name with its superset earlier; position 2 of 2; available' }).closest('.order-block');
-  const disclosure = within(supersetBlock).getByRole('button', { name: /Superset: Long Row Exercise Name and Long Press Exercise Name.*2 exercises.*2 planned sets.*expand/i });
+  const disclosure = within(supersetBlock).getByRole('button', { name: /Superset: Long Row Exercise Name and Long Press Exercise Name.*positions 02 through 03.*2 exercises.*2 planned sets.*expand/i });
   expect(disclosure.getAttribute('aria-expanded')).toBe('false');
+  expect(screen.getByRole('group', { name: /positions 02 through 03/i })).toBe(supersetBlock);
+  expect(within(supersetBlock).getByText('02')).toBeTruthy();
+  expect(within(supersetBlock).getByText('03')).toBeTruthy();
+  expect(supersetBlock.querySelector('.superset-order-range-rule').getAttribute('aria-hidden')).toBe('true');
   expect(disclosure.textContent).toContain('Long Row Exercise Name');
   expect(disclosure.textContent).toContain('Long Press Exercise Name');
   expect(within(supersetBlock).getAllByRole('button', { name: /Move .* later/ })).toHaveLength(1);
@@ -240,9 +254,37 @@ test('renders a pre-start superset as a collapsed summary with separate shared o
 
   fireEvent.click(disclosure);
   expect(disclosure.getAttribute('aria-expanded')).toBe('true');
+  expect(within(supersetBlock).getByText('SUPERSET · 02–03')).toBeTruthy();
+  expect(supersetBlock.querySelector('.superset-order-range')).toBeNull();
   expect(within(supersetBlock).getAllByRole('listitem')).toHaveLength(2);
+  expect(within(supersetBlock).getAllByText(/^(02|03)$/)).toHaveLength(2);
   expect(within(supersetBlock).getByRole('button', { name: /Long Row Exercise Name.*expand/i })).toBeTruthy();
   expect(within(supersetBlock).getByRole('button', { name: /Long Press Exercise Name.*expand/i })).toBeTruthy();
+});
+
+test('recomputes collapsed superset endpoints for both atomic move directions', async () => {
+  renderWorkout(mixedSupersetWorkout(), () => {}, { uid: 'test-user-id' }, undefined, {}, {
+    baseline: { blocks: [{ exerciseIds: ['carry'] }, { exerciseIds: ['row', 'press'] }] },
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Move Long Row Exercise Name with its superset earlier; position 2 of 2; available' }));
+  await screen.findByRole('group', { name: /positions 01 through 02/i });
+  fireEvent.click(screen.getByRole('button', { name: 'Move Long Row Exercise Name with its superset later; position 1 of 2; available' }));
+  await screen.findByRole('group', { name: /positions 02 through 03/i });
+});
+
+test('uses truthful endpoints for a collapsed three-member Plan superset', () => {
+  renderWorkout(threeMemberSupersetWorkout());
+  expect(screen.getByRole('group', { name: /Superset: Long Row Exercise Name and Long Press Exercise Name and Plank, positions 02 through 04/i })).toBeTruthy();
+  expect(screen.getByText('02')).toBeTruthy();
+  expect(screen.getByText('04')).toBeTruthy();
+});
+
+test('omits Next from Plan superset member context', () => {
+  renderWorkout(supersetWorkout());
+  fireEvent.click(screen.getByRole('button', { name: /Superset: Long Row Exercise Name and Long Press Exercise Name.*expand/i }));
+  expect(screen.getByText('Superset 1 of 2')).toBeTruthy();
+  expect(screen.queryByText(/Superset 1 of 2 · Next/)).toBeNull();
 });
 
 test('keeps standalone movement across a superset atomic and returns focus to its shared block controls', async () => {
@@ -595,6 +637,7 @@ test('expands the guided superset member when recovery hydrates in place', async
   const view = render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'checking', activeWorkout: null, blocked: true }} /></AuthContext.Provider>);
   view.rerender(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={{ status: 'owned', activeWorkout: hydrated, blocked: false }} /></AuthContext.Provider>);
   expect(await screen.findByRole('button', { name: /Long Press Exercise Name exercise 2 set 1 start/i })).toBeDefined();
+  expect(screen.getByText('Superset 2 of 2 · Next')).toBeDefined();
 });
 
 test('keeps a same-exercise rest beside the next Start control while completed sets stay compact', () => {
