@@ -43,5 +43,13 @@
 .exercise-trend-list span { font-weight: 400; }
 .trend-scrubber { display: grid; gap: 8px; }
 .trend-scrubber input { min-height: 44px; }
+.trend-plot { display: grid; gap: 8px; margin: 0; padding: 12px; border: 1px solid var(--border); background: var(--code-bg); overflow: hidden; }
+.trend-plot-key, .trend-plot-dates { display: flex; justify-content: space-between; gap: 8px; font-family: 'Barlow Condensed', 'Atkinson Hyperlegible', sans-serif; font-size: .72rem; font-weight: 700; text-transform: uppercase; }
+.trend-plot-bounds { font-weight: 700; }
+.trend-plot svg { display: block; width: 100%; height: auto; aspect-ratio: 320 / 152; }
+.trend-line { fill: none; stroke: var(--text-h); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.trend-selected-rail { stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.trend-marker { fill: var(--code-bg); stroke: var(--text-h); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.trend-marker.is-selected { fill: var(--accent); }
 .exercise-trends :is(button, input):focus-visible { outline: 4px solid var(--focus); outline-offset: 3px; }
 @media (max-width: 360px) { .trend-ranges button { flex: 1 0 calc(50% - 8px); } }

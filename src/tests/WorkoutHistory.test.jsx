@@ -209,6 +209,11 @@ test('shows separate bodyweight facts and keeps the native scrubber operable by 
   expect(await screen.findByText(/Latest totals: Full 4.*Assisted 1.*Eccentric 1/)).toBeDefined();
   expect(screen.getByText(/Previous session changes: Full increased by 2.*Assisted decreased by 2.*Eccentric no change by 0/)).toBeDefined();
   expect(screen.getByRole('heading', { name: 'Confirmed sets' }).parentElement.textContent).toMatch(/Full 4.*Assisted 1.*Eccentric 1/);
+  const plot = screen.getByTestId('trend-plot');
+  expect(plot.parentElement.textContent).toMatch(/Full: solid.*Assisted: dashed.*Eccentric: dotted/);
+  expect(new Set([...plot.querySelectorAll('[data-series]')].map(item => item.getAttribute('data-series')))).toEqual(new Set(['fullReps', 'assistedReps', 'eccentricReps']));
+  fireEvent.pointerDown(plot, { clientX: 20 });
+  expect(screen.getByText(/Selected June 1, 2026: Full 2/)).toBeDefined();
   const scrubber = screen.getByRole('slider', { name: 'Recorded workout' });
   scrubber.focus();
   fireEvent.change(scrubber, { target: { value: '0' } });
@@ -220,6 +225,55 @@ test('shows separate bodyweight facts and keeps the native scrubber operable by 
   fireEvent.keyDown(scrubber, { key: 'Home' });
   expect(screen.getByText(/Selected June 1, 2026: Full 2/)).toBeDefined();
   expect(document.activeElement).toBe(scrubber);
+});
+
+test('renders a calendar-scaled supplemental plot that stays synchronized with the evidence scrubber', async () => {
+  const workouts = [
+    workout({ id: 'first', date: '2026-06-01', exercises: [weighted()] }),
+    workout({ id: 'middle', date: '2026-06-02', exercises: [weighted()] }),
+    workout({ id: 'latest', date: '2026-06-30', exercises: [weighted()] }),
+  ];
+  render(<WorkoutHistory historyKey="u1" loadRange={vi.fn().mockResolvedValue(workouts)} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Bench Press.*Weighted/i }));
+
+  const plot = await screen.findByTestId('trend-plot');
+  expect(plot.getAttribute('aria-hidden')).toBe('true');
+  const x = [...plot.querySelectorAll('[data-point-index]')].map(point => Number(point.getAttribute('data-point-x')));
+  expect(x[1] - x[0]).toBeLessThan(x[2] - x[1]);
+  fireEvent.pointerDown(plot, { clientX: 20 });
+  expect(screen.getByText(/Selected June 1, 2026: 1600 lb volume/)).toBeDefined();
+  expect(screen.getByRole('slider', { name: 'Recorded workout' }).value).toBe('0');
+});
+
+test('scales sparse points and labels from the exact requested calendar window', async () => {
+  const today = new Date(); const start = new Date(today.getFullYear(), today.getMonth() - 3, today.getDate());
+  const date = value => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+  const point = new Date(start); point.setDate(point.getDate() + 1); const latest = new Date(start); latest.setDate(latest.getDate() + 2);
+  const display = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+  const workouts = [
+    workout({ id: 'first', date: date(point), exercises: [weighted()] }),
+    workout({ id: 'latest', date: date(latest), exercises: [weighted()] }),
+  ];
+  render(<WorkoutHistory historyKey="u1" loadRange={vi.fn().mockResolvedValue(workouts)} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Bench Press.*Weighted/i }));
+
+  const plot = await screen.findByTestId('trend-plot');
+  expect(plot.parentElement.textContent).toContain(`${display.format(start)}${display.format(today)}`);
+  expect(Number(plot.querySelector('[data-point-index="1"]').getAttribute('data-point-x'))).toBeLessThan(30);
+});
+
+test('uses a labelled padded value domain instead of an implied zero baseline', async () => {
+  const workouts = [
+    workout({ id: 'first', date: '2026-06-01', exercises: [weighted({ setRecords: [weightedRecord(0, { actualWeight: 285, actualReps: 4 }), weightedRecord(1, { actualWeight: 285, actualReps: 4 })] })] }),
+    workout({ id: 'latest', date: '2026-06-30', exercises: [weighted({ setRecords: [weightedRecord(0, { actualWeight: 315, actualReps: 5 }), weightedRecord(1, { actualWeight: 315, actualReps: 5 })] })] }),
+  ];
+  render(<WorkoutHistory historyKey="u1" loadRange={vi.fn().mockResolvedValue(workouts)} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Bench Press.*Weighted/i }));
+
+  expect(await screen.findByText('Plot scale: 2193 to 3237 lb')).toBeDefined();
 });
 
 test('keeps detail Retry focused while pending and focuses the one-record summary on recovery', async () => {

@@ -115,7 +115,7 @@ and move focus to that message after a user-initiated range change or Retry.
 
 ## Plot and evidence scrubber
 
-Use semantic HTML plus a minimal inline SVG only if it improves the calendar shape.
+Use the approved Signal Trace: semantic HTML plus a minimal inline SVG when it improves the calendar shape.
 No chart dependency is introduced. The horizontal axis represents actual dates across
 the selected calendar window; irregular gaps remain visible. Every plotted value also
 exists in an ordinary labelled numeric/date control and evidence region, so the SVG is
