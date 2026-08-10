@@ -1,7 +1,9 @@
 # TREK-312 rendered UX evidence
 
-Date: 2026-08-10  
-Build: `codex/epic-17-workout-trends` working tree after TREK-311 commits `bef4f5c` and `c9ac580`  
+Date: 2026-08-10
+
+Build: `codex/epic-17-workout-trends` working tree after TREK-311 commits `bef4f5c` and `c9ac580`
+
 Surface: authenticated private-access lease with the synthetic `workout-trends` scenario, reference date 2026-08-10
 
 ## Rendered journeys

@@ -74,4 +74,14 @@ describe('projectExerciseTrends', () => {
     expect(trend.points.map(point => point.workoutId)).toEqual(['iso', 'literal']);
     expect(trend.summary.latest).toBe(600);
   });
+
+  it('excludes a valid v2 simple occurrence without set records while preserving eligible trends', () => {
+    const eligible = weighted({ id: 'eligible', date: '2026-07-10T12:00:00.000Z' });
+    const simple = {
+      id: 'mixed-v2', schemaVersion: 2, status: 'completed', date: '2026-07-11T12:00:00.000Z', actualDuration: 0,
+      exercises: [{ id: 'plank', name: 'Plank', muscleGroup: 'Core', tier: 1, trackingMode: 'simple', sets: 1, prescribedSetCount: 1, completed: true }, ...eligible.exercises.map(({ occurrenceId: _occurrenceId, ...occurrence }) => occurrence)],
+    };
+
+    expect(projectExerciseTrends([simple])).toMatchObject([{ id: 'bench', trackingMode: 'weighted', summary: { latest: 500, sessionCount: 1 } }]);
+  });
 });
