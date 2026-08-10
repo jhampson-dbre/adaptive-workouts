@@ -4,6 +4,7 @@ const firestore = vi.hoisted(() => ({
     collection: vi.fn(),
     getDocs: vi.fn(),
     query: vi.fn(),
+    where: vi.fn(),
     orderBy: vi.fn(),
     limit: vi.fn(),
     startAfter: vi.fn(),
@@ -19,7 +20,7 @@ const firestore = vi.hoisted(() => ({
 vi.mock('../utils/firestoreClient', () => ({
     loadFirestoreClient: async () => ({ ...firestore, db: { name: 'test-db' } }),
 }));
-import { getGenerationHistory, getHistoryPage, saveWorkout, saveImmutableWorkout, readImmutableWorkoutFromServer, getSettings, getCatalog, migrateLocalData, saveSettingsAndCatalogItem, savePreferredOrderRule, clearPreferredOrderRules, touchPreferredOrderRuleUsage } from '../utils/storage';
+import { getGenerationHistory, getHistoryPage, getCompleteHistoryRange, saveWorkout, saveImmutableWorkout, readImmutableWorkoutFromServer, getSettings, getCatalog, migrateLocalData, saveSettingsAndCatalogItem, savePreferredOrderRule, clearPreferredOrderRules, touchPreferredOrderRuleUsage } from '../utils/storage';
 import { runTransaction } from '../utils/firestoreOperations';
 
 describe('Storage Layer (Async)', () => {
@@ -115,6 +116,38 @@ describe('Storage Layer (Async)', () => {
         expect(firestore.orderBy).toHaveBeenCalledWith('date', 'desc');
         expect(firestore.query).toHaveBeenCalledWith(historyCollection, { field: 'date', direction: 'desc' }, { count: 100 });
         expect(firestore.getDocs).toHaveBeenCalledWith(orderedQuery);
+    });
+
+    it('reads every workout in an inclusive calendar range with deterministic ordering and rejects whole-query failures', async () => {
+        const historyCollection = { path: 'users/test-user/history' };
+        const completeQuery = { complete: true };
+        firestore.collection.mockReturnValue(historyCollection);
+        firestore.where.mockImplementation((field, operator, value) => ({ field, operator, value }));
+        firestore.orderBy.mockImplementation((field, direction) => ({ field, direction }));
+        firestore.documentId.mockReturnValue('DOCUMENT_ID');
+        firestore.query.mockReturnValue(completeQuery);
+        firestore.getDocs.mockResolvedValue({ docs: [{ id: 'start', data: () => ({ date: '2026-06-10T00:00:00.000Z' }) }, { id: 'end', data: () => ({ date: '2026-07-10T23:59:59.999Z' }) }] });
+
+        await expect(getCompleteHistoryRange('test-user', { range: '1M', endDate: '2026-07-10' })).resolves.toEqual([
+            { id: 'start', date: '2026-06-10T00:00:00.000Z' }, { id: 'end', date: '2026-07-10T23:59:59.999Z' },
+        ]);
+        expect(firestore.query).toHaveBeenCalledWith(historyCollection,
+            { field: 'date', operator: '>=', value: '2026-06-10T00:00:00.000Z' },
+            { field: 'date', operator: '<=', value: '2026-07-10T23:59:59.999Z' },
+            { field: 'date', direction: 'asc' }, { field: 'DOCUMENT_ID', direction: 'asc' },
+        );
+        firestore.where.mockClear();
+        firestore.getDocs.mockResolvedValue({ docs: [] });
+        await getCompleteHistoryRange('test-user', { range: '1M', endDate: '2024-03-31' });
+        await getCompleteHistoryRange('test-user', { range: '1M', endDate: '2025-03-31' });
+        await getCompleteHistoryRange('test-user', { range: '3M', endDate: '2026-07-10' });
+        await getCompleteHistoryRange('test-user', { range: '6M', endDate: '2026-07-10' });
+        await getCompleteHistoryRange('test-user', { range: '1Y', endDate: '2024-02-29' });
+        expect(firestore.where.mock.calls.filter(([field, operator]) => field === 'date' && operator === '>=').map(([, , value]) => value)).toEqual([
+            '2024-02-29T00:00:00.000Z', '2025-02-28T00:00:00.000Z', '2026-04-10T00:00:00.000Z', '2026-01-10T00:00:00.000Z', '2023-02-28T00:00:00.000Z',
+        ]);
+        firestore.getDocs.mockRejectedValueOnce(new Error('unavailable'));
+        await expect(getCompleteHistoryRange('test-user', { range: '1M', endDate: '2026-07-10' })).rejects.toThrow('unavailable');
     });
 
     it('keeps Firestore document IDs authoritative over payload IDs in both history readers', async () => {

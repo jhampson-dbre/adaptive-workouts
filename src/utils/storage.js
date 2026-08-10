@@ -145,6 +145,28 @@ export async function getHistoryPage(userId, { cursor = null, pageSize = 20 } = 
   };
 }
 
+const RANGE_MONTHS = Object.freeze({ '1M': 1, '3M': 3, '6M': 6, '1Y': 12 });
+
+function completeCalendarRange({ range, endDate }) {
+  const months = RANGE_MONTHS[range];
+  if (!months || !/^\d{4}-\d{2}-\d{2}$/.test(endDate ?? '')) throw new RangeError('Range must be 1M, 3M, 6M, or 1Y with a calendar end date.');
+  const end = new Date(`${endDate}T00:00:00.000Z`);
+  if (!Number.isFinite(end.getTime()) || end.toISOString().slice(0, 10) !== endDate) throw new RangeError('End date must be a valid calendar date.');
+  const start = new Date(end); const day = start.getUTCDate(); start.setUTCDate(1); start.setUTCMonth(start.getUTCMonth() - months);
+  start.setUTCDate(Math.min(day, new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)).getUTCDate()));
+  return { start: start.toISOString(), end: `${endDate}T23:59:59.999Z` };
+}
+
+export async function getCompleteHistoryRange(userId, options) {
+  const { start, end } = completeCalendarRange(options ?? {});
+  const { db, collection, getDocs, query, where, orderBy, documentId } = await loadFirestore();
+  const colRef = collection(db, 'users', userId, 'history');
+  const snapshot = await getDocs(query(colRef,
+    where('date', '>=', start), where('date', '<=', end), orderBy('date', 'asc'), orderBy(documentId(), 'asc'),
+  ));
+  return snapshot.docs.map(historyDocumentToEntry);
+}
+
 export async function saveWorkout(userId, workout) {
   const { db, collection, addDoc } = await loadFirestore();
   const colRef = collection(db, 'users', userId, 'history');
