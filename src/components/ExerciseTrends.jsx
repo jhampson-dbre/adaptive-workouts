@@ -38,7 +38,7 @@ export default function ExerciseTrends({ loadRange }) {
   useEffect(() => { exercisesRef.current?.focus(); }, []);
   useEffect(() => { if (discovery.phase === 'loaded') filterRef.current?.focus(); }, [discovery.phase]);
   useEffect(() => { if (selected) headingRef.current?.focus(); }, [selected]);
-  useEffect(() => { if (detail.phase === 'loaded' && detail.focusResult) (detail.trend ? summaryRef.current : emptyRef.current)?.focus(); }, [detail]);
+  useEffect(() => { if (detail.phase === 'loaded' && detail.focusResult) (detail.trend ? summaryRef.current : emptyRef.current)?.focus(); }, [detail.focusResult, detail.phase, detail.trend]);
 
   const choose = item => { setSelected(item); setRange('3M'); requestDetail(item, '3M'); };
   const matching = discovery.trends.filter(item => item.name.toLocaleLowerCase().includes(filter.toLocaleLowerCase()));

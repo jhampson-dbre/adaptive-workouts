@@ -227,6 +227,26 @@ test('shows separate bodyweight facts and keeps the native scrubber operable by 
   expect(document.activeElement).toBe(scrubber);
 });
 
+test('keeps the evidence scrubber focused after range-result focus and keyboard selection', async () => {
+  const workouts = [
+    workout({ id: 'first', date: '2026-06-01', exercises: [weighted()] }),
+    workout({ id: 'latest', date: '2026-07-01', exercises: [weighted()] }),
+  ];
+  render(<WorkoutHistory historyKey="u1" loadRange={vi.fn().mockResolvedValue(workouts)} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Bench Press.*Weighted/i }));
+  await screen.findByText(/Latest volume:/);
+  fireEvent.click(screen.getByRole('button', { name: '1M' }));
+  const summary = await screen.findByRole('heading', { name: 'Recorded facts' });
+  await waitFor(() => expect(document.activeElement).toBe(summary));
+
+  const scrubber = screen.getByRole('slider', { name: 'Recorded workout' });
+  scrubber.focus();
+  fireEvent.keyDown(scrubber, { key: 'ArrowLeft' });
+  expect(screen.getByText(/Selected June 1, 2026: 1600 lb volume/)).toBeDefined();
+  expect(document.activeElement).toBe(scrubber);
+});
+
 test('renders a calendar-scaled supplemental plot that stays synchronized with the evidence scrubber', async () => {
   const workouts = [
     workout({ id: 'first', date: '2026-06-01', exercises: [weighted()] }),
