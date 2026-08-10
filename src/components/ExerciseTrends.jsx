@@ -1,0 +1,62 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { projectExerciseTrends } from '../utils/trendProjection';
+import { visibleCalendarDate } from '../utils/historyDate';
+
+const ranges = ['1M', '3M', '6M', '1Y'];
+const localFormatter = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+const utcFormatter = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+const endDate = () => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; };
+const formatDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value ?? '') ? utcFormatter.format(new Date(`${value}T00:00:00Z`)) : localFormatter.format(new Date(value));
+const modeLabel = mode => mode === 'weighted' ? 'Weighted' : 'Bodyweight';
+const pointLabel = point => point.value === undefined ? `Full ${point.fullReps} · Assisted ${point.assistedReps} · Eccentric ${point.eccentricReps}` : `${point.value} lb volume`;
+const identityKey = item => `${item.id}\0${item.trackingMode}`;
+
+export default function ExerciseTrends({ loadRange }) {
+  const [discovery, setDiscovery] = useState({ phase: 'loading', trends: [], retrying: false });
+  const [filter, setFilter] = useState(''); const [selected, setSelected] = useState(null); const [range, setRange] = useState('3M');
+  const [detail, setDetail] = useState({ phase: 'idle', trend: null, point: 0, focusResult: false, retrying: false });
+  const discoveryId = useRef(0); const detailId = useRef(0); const filterRef = useRef(null); const exercisesRef = useRef(null); const headingRef = useRef(null); const summaryRef = useRef(null); const emptyRef = useRef(null); const rows = useRef(new Map());
+  const requestDiscovery = useCallback((retrying = false) => {
+    const id = ++discoveryId.current; detailId.current += 1;
+    setSelected(null); setDetail({ phase: 'idle', trend: null, point: 0, focusResult: false, retrying: false }); setDiscovery({ phase: retrying ? 'error' : 'loading', trends: [], retrying });
+    Promise.resolve(loadRange({ range: '1Y', endDate: endDate() })).then(workouts => {
+      if (id !== discoveryId.current) return;
+      const trends = projectExerciseTrends(workouts).sort((a, b) => visibleCalendarDate(b.points.at(-1)?.date).localeCompare(visibleCalendarDate(a.points.at(-1)?.date)) || String(a.name).localeCompare(String(b.name)) || String(a.id).localeCompare(String(b.id)) || a.trackingMode.localeCompare(b.trackingMode));
+      setDiscovery({ phase: 'loaded', trends, retrying: false });
+    }, () => { if (id === discoveryId.current) setDiscovery({ phase: 'error', trends: [], retrying: false }); });
+  }, [loadRange]);
+  const requestDetail = useCallback((identity, nextRange, { focusResult = false, retrying = false } = {}) => {
+    const id = ++detailId.current;
+    setDetail({ phase: retrying ? 'error' : 'loading', trend: null, point: 0, focusResult, retrying });
+    Promise.resolve(loadRange({ range: nextRange, endDate: endDate() })).then(workouts => {
+      if (id !== detailId.current) return;
+      const trend = projectExerciseTrends(workouts).find(item => item.id === identity.id && item.trackingMode === identity.trackingMode) ?? null;
+      setDetail({ phase: 'loaded', trend, point: Math.max(0, (trend?.points.length ?? 1) - 1), focusResult, retrying: false });
+    }, () => { if (id === detailId.current) setDetail({ phase: 'error', trend: null, point: 0, focusResult, retrying: false }); });
+  }, [loadRange]);
+  useEffect(() => { requestDiscovery(); return () => { discoveryId.current += 1; detailId.current += 1; }; }, [requestDiscovery]);
+  useEffect(() => { exercisesRef.current?.focus(); }, []);
+  useEffect(() => { if (discovery.phase === 'loaded') filterRef.current?.focus(); }, [discovery.phase]);
+  useEffect(() => { if (selected) headingRef.current?.focus(); }, [selected]);
+  useEffect(() => { if (detail.phase === 'loaded' && detail.focusResult) (detail.trend ? summaryRef.current : emptyRef.current)?.focus(); }, [detail]);
+
+  const choose = item => { setSelected(item); setRange('3M'); requestDetail(item, '3M'); };
+  const matching = discovery.trends.filter(item => item.name.toLocaleLowerCase().includes(filter.toLocaleLowerCase()));
+  if (!selected) return <section className="exercise-trends" aria-labelledby="exercises-heading">
+    <h3 ref={exercisesRef} id="exercises-heading" tabIndex="-1">Exercises</h3>
+    {discovery.phase === 'loading' && <p aria-live="polite">Loading exercises…</p>}
+    {discovery.phase === 'error' && <div role="alert"><p>{discovery.retrying ? 'Retrying exercises…' : 'Couldn’t load exercises.'}</p><button type="button" disabled={discovery.retrying} aria-busy={discovery.retrying} onClick={() => requestDiscovery(true)}>Retry</button></div>}
+    {discovery.phase === 'loaded' && <><label className="exercise-filter">Filter exercises by name<input ref={filterRef} value={filter} onChange={event => setFilter(event.target.value)} /></label>{discovery.trends.length === 0 ? <p>No eligible exercises in the last year.</p> : matching.length === 0 ? <p>No exercises match this filter.</p> : <ul className="exercise-trend-list">{matching.map(item => <li key={identityKey(item)}><button ref={element => { if (element) rows.current.set(identityKey(item), element); }} type="button" onClick={() => choose(item)}><strong>{item.name}</strong><span>{modeLabel(item.trackingMode)} · Last trained {formatDate(item.points.at(-1).date)}</span></button></li>)}</ul>}</>}</section>;
+
+  const point = detail.trend?.points[detail.point];
+  const setPoint = next => setDetail(current => ({ ...current, point: Math.max(0, Math.min(next, (current.trend?.points.length ?? 1) - 1)) }));
+  const back = () => { const key = identityKey(selected); setSelected(null); setDetail({ phase: 'idle', trend: null, point: 0, focusResult: false, retrying: false }); setTimeout(() => { const target = rows.current.get(key); (target?.isConnected ? target : filterRef.current)?.focus(); }); };
+  return <section className="exercise-trends" aria-labelledby="exercise-trend-heading"><button type="button" className="history-action" onClick={back}>Back to exercises</button><h3 ref={headingRef} id="exercise-trend-heading" tabIndex="-1">{selected.name}</h3><p>{modeLabel(selected.trackingMode)}</p><div className="trend-ranges" aria-label="Range">{ranges.map(item => <button type="button" aria-pressed={range === item} key={item} onClick={() => { setRange(item); requestDetail(selected, item, { focusResult: true }); }}>{item}</button>)}</div>{detail.phase === 'loading' && <p aria-live="polite">Loading {range} exercise history…</p>}{detail.phase === 'error' && <div role="alert"><p>{detail.retrying ? `Retrying ${range} exercise history…` : 'Couldn’t load exercise history.'}</p><button type="button" disabled={detail.retrying} aria-busy={detail.retrying} onClick={() => requestDetail(selected, range, { focusResult: true, retrying: true })}>Retry</button></div>}{detail.phase === 'loaded' && !detail.trend && <p ref={emptyRef} role="status" tabIndex="-1">No recorded workouts in this range.</p>}{detail.phase === 'loaded' && detail.trend && <TrendDetail summaryRef={summaryRef} trend={detail.trend} point={point} index={detail.point} onPoint={setPoint} />}</section>;
+}
+
+function TrendDetail({ summaryRef, trend, point, index, onPoint }) {
+  const points = trend.points; const latest = points.at(-1); const previous = points.at(-2); const one = points.length === 1;
+  const changeWord = (current, prior) => current > prior ? 'increased' : current < prior ? 'decreased' : 'no change';
+  const move = event => { const keys = { ArrowLeft: index - 1, ArrowRight: index + 1, Home: 0, End: points.length - 1 }; if (keys[event.key] !== undefined) { event.preventDefault(); onPoint(keys[event.key]); } };
+  return <><section aria-labelledby="trend-summary-heading"><h4 ref={summaryRef} id="trend-summary-heading" tabIndex="-1">Recorded facts</h4>{trend.trackingMode === 'weighted' ? <><p>Latest volume: {latest.value} lb</p><p>Range high: {Math.max(...points.map(item => item.value))} lb</p>{!one && <p>Previous session change: {changeWord(latest.value, previous.value)} by {Math.abs(latest.value - previous.value)} lb</p>}</> : <><p>Latest totals: {pointLabel(latest)}</p><p>Range high: Full {Math.max(...points.map(item => item.fullReps))} · Assisted {Math.max(...points.map(item => item.assistedReps))} · Eccentric {Math.max(...points.map(item => item.eccentricReps))}</p>{!one && <p>Previous session changes: Full {changeWord(latest.fullReps, previous.fullReps)} by {Math.abs(latest.fullReps - previous.fullReps)} · Assisted {changeWord(latest.assistedReps, previous.assistedReps)} by {Math.abs(latest.assistedReps - previous.assistedReps)} · Eccentric {changeWord(latest.eccentricReps, previous.eccentricReps)} by {Math.abs(latest.eccentricReps - previous.eccentricReps)}</p>}</>}{one ? <p>One recorded workout in this range.</p> : <p>Sessions: {points.length}</p>}</section><label className="trend-scrubber">Recorded workout {index + 1} of {points.length}: {formatDate(point.date)} · {pointLabel(point)}<input aria-label="Recorded workout" type="range" min="0" max={points.length - 1} value={index} onChange={event => onPoint(Number(event.target.value))} onKeyDown={move} /></label><p aria-live="polite">Selected {formatDate(point.date)}: {pointLabel(point)}</p><section aria-labelledby="confirmed-set-heading"><h4 id="confirmed-set-heading">Confirmed sets</h4><ul>{point.confirmedSets.map((set, setIndex) => <li key={setIndex}>{trend.trackingMode === 'weighted' ? `${set.actualWeight} lb × ${set.actualReps} reps` : `Full ${set.fullReps} · Assisted ${set.assistedReps} · Eccentric ${set.eccentricReps}`}</li>)}</ul></section></>;
+}

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import WorkoutHistory from '../components/WorkoutHistory';
 
@@ -58,6 +58,13 @@ function workout(overrides = {}) {
   };
 }
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((nextResolve, nextReject) => { resolve = nextResolve; reject = nextReject; });
+  return { promise, resolve, reject };
+}
+
 function v3Workout(overrides = {}) {
   return {
     id: 'workout-v3', schemaVersion: 3, status: 'completed', date: '2026-07-16T12:00:00.000Z',
@@ -83,6 +90,159 @@ test('renders Workouts directly as the scan-first History destination', () => {
   expect(screen.getByRole('alert').textContent).toMatch(/failed to load/i);
 });
 
+test('opens Exercises with a fresh complete discovery read and replaces stale results before detail reads', async () => {
+  const discovery = deferred();
+  const detail = deferred();
+  const loadRange = vi.fn()
+    .mockImplementationOnce(() => discovery.promise)
+    .mockImplementationOnce(() => detail.promise);
+  render(<WorkoutHistory historyKey="u1" loadRange={loadRange} />);
+
+  const exercises = screen.getByRole('button', { name: 'Exercises' });
+  fireEvent.click(exercises);
+  expect(exercises.getAttribute('aria-pressed')).toBe('true');
+  expect(screen.getByRole('heading', { level: 3, name: 'Exercises' })).toBeDefined();
+  await waitFor(() => expect(loadRange).toHaveBeenCalledWith({ range: '1Y', endDate: expect.any(String) }));
+  expect(screen.queryByRole('textbox', { name: 'Filter exercises by name' })).toBeNull();
+
+  await act(async () => discovery.resolve([workout({ date: '2026-07-12', exercises: [weighted()] })]));
+  const filter = await screen.findByRole('textbox', { name: 'Filter exercises by name' });
+  expect(document.activeElement).toBe(filter);
+  fireEvent.click(screen.getByRole('button', { name: /Bench Press.*weighted/i }));
+  await waitFor(() => expect(loadRange).toHaveBeenLastCalledWith({ range: '3M', endDate: expect.any(String) }));
+  expect(screen.queryByText(/Latest volume/)).toBeNull();
+  await act(async () => detail.resolve([workout({ date: '2026-07-12', exercises: [weighted()] })]));
+  expect(await screen.findByText(/Latest volume: 1600 lb/)).toBeDefined();
+});
+
+test('keeps Exercises retry focused while pending, ignores stale discovery, and focuses recovery targets', async () => {
+  const stale = deferred(); const retry = deferred();
+  const loadRange = vi.fn().mockImplementationOnce(() => stale.promise).mockImplementationOnce(() => Promise.reject(new Error('offline'))).mockImplementationOnce(() => retry.promise);
+  const { unmount } = render(<WorkoutHistory historyKey="u1" loadRange={loadRange} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  await waitFor(() => expect(loadRange).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole('button', { name: 'Workouts' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  expect(await screen.findByRole('button', { name: 'Retry' })).toBeDefined();
+  const retryButton = screen.getByRole('button', { name: 'Retry' }); retryButton.focus(); fireEvent.click(retryButton);
+  expect(document.activeElement).toBe(retryButton);
+  expect(retryButton.disabled).toBe(true);
+  await act(async () => stale.resolve([workout()]));
+  expect(screen.queryByRole('button', { name: /Bench Press.*weighted/i })).toBeNull();
+  await act(async () => retry.resolve([workout()]));
+  expect(await screen.findByRole('textbox', { name: 'Filter exercises by name' })).toBe(document.activeElement);
+  unmount();
+});
+
+test('restores Back focus to the newly mounted selected row or the filter when it no longer matches', async () => {
+  const loadRange = vi.fn().mockResolvedValue([workout()]);
+  render(<WorkoutHistory historyKey="u1" loadRange={loadRange} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  const row = await screen.findByRole('button', { name: /Bench Press.*weighted/i });
+  fireEvent.click(row);
+  await screen.findByText(/Latest volume:/);
+  fireEvent.click(screen.getByRole('button', { name: 'Back to exercises' }));
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: /Bench Press.*weighted/i })));
+});
+
+test('replaces detail range results, ignores stale resolutions, and focuses no-data recovery', async () => {
+  const first = deferred(); const second = deferred();
+  const loadRange = vi.fn().mockResolvedValueOnce([workout()]).mockResolvedValueOnce([workout()]).mockImplementationOnce(() => first.promise).mockImplementationOnce(() => second.promise);
+  render(<WorkoutHistory historyKey="u1" loadRange={loadRange} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Bench Press.*weighted/i }));
+  expect(await screen.findByText(/Latest volume:/)).toBeDefined();
+  fireEvent.click(screen.getByRole('button', { name: '1M' }));
+  expect(screen.queryByText(/Latest volume:/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '6M' }));
+  await act(async () => first.resolve([workout()]));
+  expect(screen.queryByText(/Latest volume:/)).toBeNull();
+  await act(async () => second.resolve([]));
+  const empty = await screen.findByRole('status');
+  expect(empty.textContent).toBe('No recorded workouts in this range.');
+  await waitFor(() => expect(document.activeElement).toBe(empty));
+  expect(loadRange).toHaveBeenNthCalledWith(3, { range: '1M', endDate: expect.any(String) });
+  expect(loadRange).toHaveBeenNthCalledWith(4, { range: '6M', endDate: expect.any(String) });
+});
+
+test('filters deterministic mode identities and reports distinct empty states', async () => {
+  const earlier = workout({ id: 'earlier', date: '2026-06-01', exercises: [weighted({ id: 'shared', name: 'Shared press' })] });
+  const later = workout({ id: 'later', date: '2026-07-01', exercises: [
+    bodyweight({ id: 'shared', name: 'Shared press' }),
+    weighted({ id: 'alpha', name: 'Alpha press' }),
+  ] });
+  const loadRange = vi.fn().mockResolvedValue([earlier, later]);
+  render(<WorkoutHistory historyKey="u1" loadRange={loadRange} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+
+  const filter = await screen.findByRole('textbox', { name: 'Filter exercises by name' });
+  const rows = screen.getAllByRole('button').filter(button => /Last trained/.test(button.textContent));
+  expect(rows.map(row => row.textContent)).toEqual([
+    expect.stringMatching(/^Alpha pressWeighted/),
+    expect.stringMatching(/^Shared pressBodyweight/),
+    expect.stringMatching(/^Shared pressWeighted/),
+  ]);
+  fireEvent.change(filter, { target: { value: 'shared' } });
+  expect(screen.getAllByRole('button').filter(button => /Last trained/.test(button.textContent))).toHaveLength(2);
+  fireEvent.change(filter, { target: { value: 'missing' } });
+  expect(screen.getByText('No exercises match this filter.')).toBeDefined();
+});
+
+test('distinguishes a complete discovery with no eligible exercises', async () => {
+  render(<WorkoutHistory historyKey="u1" loadRange={vi.fn().mockResolvedValue([])} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  expect(await screen.findByText('No eligible exercises in the last year.')).toBeDefined();
+});
+
+test('shows separate bodyweight facts and keeps the native scrubber operable by range and keyboard', async () => {
+  const first = workout({ id: 'first', date: '2026-06-01', exercises: [bodyweight({ setRecords: [
+    { index: 0, targetReps: 8, fullReps: 2, assistedReps: 3, eccentricReps: 1, completed: true },
+  ] })] });
+  const latest = workout({ id: 'latest', date: '2026-07-01', exercises: [bodyweight({ setRecords: [
+    { index: 0, targetReps: 8, fullReps: 4, assistedReps: 1, eccentricReps: 1, completed: true },
+  ] })] });
+  const loadRange = vi.fn().mockResolvedValue([first, latest]);
+  render(<WorkoutHistory historyKey="u1" loadRange={loadRange} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Pull Up.*Bodyweight/i }));
+
+  expect(await screen.findByText(/Latest totals: Full 4.*Assisted 1.*Eccentric 1/)).toBeDefined();
+  expect(screen.getByText(/Previous session changes: Full increased by 2.*Assisted decreased by 2.*Eccentric no change by 0/)).toBeDefined();
+  expect(screen.getByRole('heading', { name: 'Confirmed sets' }).parentElement.textContent).toMatch(/Full 4.*Assisted 1.*Eccentric 1/);
+  const scrubber = screen.getByRole('slider', { name: 'Recorded workout' });
+  scrubber.focus();
+  fireEvent.change(scrubber, { target: { value: '0' } });
+  expect(screen.getByText(/Selected June 1, 2026: Full 2/)).toBeDefined();
+  fireEvent.keyDown(scrubber, { key: 'End' });
+  expect(screen.getByText(/Selected July 1, 2026: Full 4/)).toBeDefined();
+  fireEvent.keyDown(scrubber, { key: 'ArrowRight' });
+  expect(screen.getByText(/Selected July 1, 2026: Full 4/)).toBeDefined();
+  fireEvent.keyDown(scrubber, { key: 'Home' });
+  expect(screen.getByText(/Selected June 1, 2026: Full 2/)).toBeDefined();
+  expect(document.activeElement).toBe(scrubber);
+});
+
+test('keeps detail Retry focused while pending and focuses the one-record summary on recovery', async () => {
+  const retry = deferred();
+  const loadRange = vi.fn()
+    .mockResolvedValueOnce([workout({ exercises: [weighted()] })])
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockImplementationOnce(() => retry.promise);
+  render(<WorkoutHistory historyKey="u1" loadRange={loadRange} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Bench Press.*Weighted/i }));
+  const retryButton = await screen.findByRole('button', { name: 'Retry' });
+  retryButton.focus();
+  fireEvent.click(retryButton);
+  expect(retryButton.disabled).toBe(true);
+  expect(document.activeElement).toBe(retryButton);
+  await act(async () => retry.resolve([workout({ exercises: [weighted()] })]));
+  const summary = await screen.findByRole('heading', { name: 'Recorded facts' });
+  await waitFor(() => expect(document.activeElement).toBe(summary));
+  expect(screen.getByText('One recorded workout in this range.')).toBeDefined();
+  expect(screen.queryByText(/Previous session change:/)).toBeNull();
+});
+
 test('renders loading, error, empty, and a semantic read-only history section after opening', () => {
   const { rerender } = render(<WorkoutHistory loading history={[]} />);
   expect(screen.getByRole('region', { name: 'History' })).toBeDefined();
@@ -92,7 +252,7 @@ test('renders loading, error, empty, and a semantic read-only history section af
   expect(screen.getByRole('alert').textContent).toMatch(/failed to load/i);
   rerender(<WorkoutHistory history={[]} />);
   expect(screen.getByText('No workouts logged yet.')).toBeDefined();
-  expect(screen.queryAllByRole('button')).toHaveLength(0);
+  expect(screen.getAllByRole('button')).toHaveLength(2);
   expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
 });
 

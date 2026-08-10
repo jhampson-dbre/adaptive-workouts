@@ -64,4 +64,14 @@ describe('projectExerciseTrends', () => {
       { id: 'pull-up', trackingMode: 'bodyweight', dates: ['2026-07-03T12:00:00.000Z'] },
     ]);
   });
+
+  it('orders mixed literal and ISO dates by the viewer-visible calendar date before choosing the latest point', () => {
+    const localJulyTenth = weighted({ id: 'literal', date: '2026-07-10', records: [{ completed: true, actualWeight: 100, actualReps: 6 }] });
+    const priorLocalDay = weighted({ id: 'iso', date: '2026-07-10T01:00:00.000Z', records: [{ completed: true, actualWeight: 100, actualReps: 5 }] });
+
+    const [trend] = projectExerciseTrends([localJulyTenth, priorLocalDay]);
+
+    expect(trend.points.map(point => point.workoutId)).toEqual(['iso', 'literal']);
+    expect(trend.summary.latest).toBe(600);
+  });
 });

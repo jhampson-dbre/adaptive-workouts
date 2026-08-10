@@ -31,3 +31,17 @@
 .access-actions button { min-inline-size: 44px; min-block-size: 44px; max-inline-size: 100%; overflow-wrap: anywhere; padding: .6rem 1rem; }
 .access-action-primary { background: var(--accent); border: 1px solid var(--accent); color: #000000; font-weight: 600; }
 .access-action-secondary { background: transparent; border: 1px solid var(--accent-border); color: var(--text-h); }
+
+.history-views, .trend-ranges { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.history-views button, .trend-ranges button, .exercise-trend-list button { min-height: 44px; border: 1px solid var(--border); border-radius: 0; background: var(--code-bg); color: var(--text-h); font-weight: 700; }
+.history-views button[aria-pressed='true'], .trend-ranges button[aria-pressed='true'] { background: var(--accent); color: var(--text-h); }
+.exercise-trends { display: grid; gap: 12px; overflow-wrap: anywhere; }
+.exercise-filter { display: grid; gap: 4px; max-width: 100%; }
+.exercise-filter input { min-height: 44px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 0; background: var(--code-bg); color: var(--text-h); padding: 10px 12px; }
+.exercise-trend-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.exercise-trend-list button { display: grid; width: 100%; gap: 4px; padding: 10px 12px; text-align: left; }
+.exercise-trend-list span { font-weight: 400; }
+.trend-scrubber { display: grid; gap: 8px; }
+.trend-scrubber input { min-height: 44px; }
+.exercise-trends :is(button, input):focus-visible { outline: 4px solid var(--focus); outline-offset: 3px; }
+@media (max-width: 360px) { .trend-ranges button { flex: 1 0 calc(50% - 8px); } }

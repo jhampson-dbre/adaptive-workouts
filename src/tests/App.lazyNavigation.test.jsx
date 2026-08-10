@@ -63,6 +63,23 @@ describe('lazy authorized navigation', () => {
     expect(await screen.findByText('Budget 60; groups')).toBeTruthy()
   })
 
+  it('passes History an account-scoped complete-range loader', async () => {
+    let historyProps
+    const getCompleteHistoryRange = vi.fn().mockResolvedValue([])
+    const app = await mount({
+      storage: { getCompleteHistoryRange },
+      historyFactory: () => ({ default: props => { historyProps = props; return <section><h2>History</h2></section> } }),
+    })
+    await app.emit(approved('u1'))
+    fireEvent.click(await screen.findByRole('button', { name: 'History' }))
+    await screen.findByRole('heading', { name: 'History' })
+    await historyProps.loadRange({ range: '3M', endDate: '2026-08-10' })
+    expect(getCompleteHistoryRange).toHaveBeenCalledWith('u1', { range: '3M', endDate: '2026-08-10' })
+    const stableLoader = historyProps.loadRange
+    app.setSessionState({ status: 'owned', blocked: false, activeWorkout: { exercises: [{ id: 'ordinary-workout' }] } })
+    await waitFor(() => expect(historyProps.loadRange).toBe(stableLoader))
+  })
+
   it('retries a failed History lazy import from its generated entry URL', async () => {
     const app = await mount({ historyFactory: () => Promise.reject(new Error('offline')) })
     await app.emit(approved('u1'))

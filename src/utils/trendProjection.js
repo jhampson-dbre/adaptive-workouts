@@ -1,4 +1,5 @@
 import { isValidV2WorkoutDocument, isValidV3WorkoutDocument, isValidV4WorkoutDocument, isValidV5WorkoutDocument } from './workoutSchema';
+import { visibleCalendarDate } from './historyDate';
 
 const isEligibleWorkout = workout => isValidV2WorkoutDocument(workout)
   || isValidV3WorkoutDocument(workout) || isValidV4WorkoutDocument(workout) || isValidV5WorkoutDocument(workout);
@@ -17,7 +18,7 @@ const bodyweightChange = (current, previous) => ({
 
 export function projectExerciseTrends(workouts) {
   const trends = new Map();
-  for (const workout of [...(workouts ?? [])].filter(isEligibleWorkout).sort((a, b) => a.date.localeCompare(b.date) || String(a.id).localeCompare(String(b.id)))) {
+  for (const workout of [...(workouts ?? [])].filter(isEligibleWorkout).sort((a, b) => visibleCalendarDate(a.date).localeCompare(visibleCalendarDate(b.date)) || String(a.id).localeCompare(String(b.id)))) {
     for (const occurrence of workout.exercises) {
       if (occurrence.trackingMode !== 'weighted' && occurrence.trackingMode !== 'bodyweight') continue;
       const confirmedSets = occurrence.setRecords.filter(record => record.completed);

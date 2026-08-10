@@ -1,4 +1,5 @@
 import { normalizeCatalogExercise, normalizeWorkoutSettings, normalizePreferredOrderRules, preferredOrderContextKey, preferredOrderRuleFingerprint } from './workoutSchema';
+import { visibleCalendarDate } from './historyDate';
 
 const loadFirestore = () => import('./firestoreClient').then(({ loadFirestoreClient }) => loadFirestoreClient());
 
@@ -160,13 +161,6 @@ function completeCalendarRange({ range, endDate }) {
   return { startDate, start: startDate < startOfDay ? startDate : startOfDay, end: endOfDay.toISOString(), endDate };
 }
 
-function displayedCalendarDate(value) {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value ?? '')) return value;
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return null;
-  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
-}
-
 export async function getCompleteHistoryRange(userId, options) {
   const { startDate, start, end, endDate } = completeCalendarRange(options ?? {});
   const { db, collection, getDocs, query, where, orderBy, documentId } = await loadFirestore();
@@ -175,7 +169,7 @@ export async function getCompleteHistoryRange(userId, options) {
     where('date', '>=', start), where('date', '<=', end), orderBy('date', 'asc'), orderBy(documentId(), 'asc'),
   ));
   return snapshot.docs.map(historyDocumentToEntry).filter(entry => {
-    const date = displayedCalendarDate(entry.date);
+    const date = visibleCalendarDate(entry.date);
     return date !== null && date >= startDate && date <= endDate;
   });
 }

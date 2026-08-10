@@ -63,6 +63,7 @@ Available stable scenarios are:
 - `pivot-rotation-staleness`
 - `recent-primary-leg-suppresses-tier4`
 - `tier4-quota-closed-open`
+- `workout-trends`
 
 The reference date means noon on that calendar date in the invoking machine's
 system timezone. Repeating a scenario and reference date is idempotent. Changing the

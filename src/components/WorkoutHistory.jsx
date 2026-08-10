@@ -4,6 +4,7 @@ import {
   isValidV2WorkoutEnvelope,
 } from '../utils/workoutSchema';
 import { useEffect, useRef, useState } from 'react';
+import ExerciseTrends from './ExerciseTrends';
 
 const localDateFormatter = new Intl.DateTimeFormat(undefined, {
   year: 'numeric', month: 'long', day: 'numeric',
@@ -308,7 +309,7 @@ function HistoryEntry({ entry, ...headingProps }) {
 
 const pageMessage = (count, older = false) => `${count} ${older ? 'older ' : ''}workout${count === 1 ? '' : 's'} loaded.`;
 
-export default function WorkoutHistory({ history, historyKey, loading = false, error = null, loadPage, refreshKey }) {
+export default function WorkoutHistory({ history, historyKey, loading = false, error = null, loadPage, loadRange, refreshKey }) {
   const staticHistory = Array.isArray(history);
   const [entries, setEntries] = useState(() => staticHistory ? history : []);
   const [phase, setPhase] = useState(staticHistory ? 'loaded' : 'idle');
@@ -318,6 +319,8 @@ export default function WorkoutHistory({ history, historyKey, loading = false, e
   const [focusIndex, setFocusIndex] = useState(null);
   const [isRequestPending, setIsRequestPending] = useState(false);
   const [retryingOlder, setRetryingOlder] = useState(false);
+  const [view, setView] = useState('workouts');
+  const workoutsHeadingRef = useRef(null);
   const requestId = useRef(0);
   const inFlightRef = useRef(false);
   const headingRef = useRef(null);
@@ -425,7 +428,9 @@ export default function WorkoutHistory({ history, historyKey, loading = false, e
   return (
     <section className="workout-history-section" aria-labelledby="history-heading">
       <h2 id="history-heading" tabIndex="-1">History</h2>
-      <h3>Workouts</h3>
+      <div className="history-views"><button type="button" aria-pressed={view === 'workouts'} onClick={() => { setView('workouts'); setTimeout(() => workoutsHeadingRef.current?.focus()); }}>Workouts</button><button type="button" aria-pressed={view === 'exercises'} onClick={() => setView('exercises')}>Exercises</button></div>
+      {view === 'exercises' ? <ExerciseTrends loadRange={loadRange} /> : <>
+      <h3 ref={workoutsHeadingRef} tabIndex="-1">Workouts</h3>
       {isLoading ? <p aria-live="polite">Loading workout history…</p> : initialError ? (
             <div className="error-message" role="alert">
               <p>{initialError}</p>
@@ -455,7 +460,7 @@ export default function WorkoutHistory({ history, historyKey, loading = false, e
               ) : <p ref={endRef} tabIndex={focusIndex === entries.length ? '-1' : undefined} onBlur={focusIndex === entries.length ? () => setFocusIndex(null) : undefined} aria-live="polite">All available workouts are shown.</p>)}
               {feedback && <p aria-live="polite">{feedback}</p>}
             </>
-      )}
+      )}</>}
     </section>
   );
 }
