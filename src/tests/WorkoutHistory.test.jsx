@@ -207,10 +207,17 @@ test('shows separate bodyweight facts and keeps the native scrubber operable by 
   fireEvent.click(await screen.findByRole('button', { name: /Pull Up.*Bodyweight/i }));
 
   expect(await screen.findByText(/Latest totals: Full 4.*Assisted 1.*Eccentric 1/)).toBeDefined();
+  expect(screen.getByText('Highest full reps in one workout: 4')).toBeDefined();
+  expect(screen.getByText('Highest assisted reps in one workout: 3')).toBeDefined();
+  expect(screen.getByText('Highest eccentric reps in one workout: 1')).toBeDefined();
+  expect(screen.queryByText(/Range high: Full/)).toBeNull();
   expect(screen.getByText(/Previous session changes: Full increased by 2.*Assisted decreased by 2.*Eccentric no change by 0/)).toBeDefined();
   expect(screen.getByRole('heading', { name: 'Confirmed sets' }).parentElement.textContent).toMatch(/Full 4.*Assisted 1.*Eccentric 1/);
   const plot = screen.getByTestId('trend-plot');
-  expect(plot.parentElement.textContent).toMatch(/Full: solid.*Assisted: dashed.*Eccentric: dotted/);
+  expect(screen.getByRole('heading', { name: 'Reps by type' })).toBeDefined();
+  expect(plot.parentElement.textContent).toMatch(/Full.*Assisted.*Eccentric/);
+  expect(plot.parentElement.textContent).not.toMatch(/solid|dashed|dotted|circle|square|diamond/i);
+  expect(plot.parentElement.querySelector('.trend-key-swatch.is-assisted')).not.toBeNull();
   expect(new Set([...plot.querySelectorAll('[data-series]')].map(item => item.getAttribute('data-series')))).toEqual(new Set(['fullReps', 'assistedReps', 'eccentricReps']));
   fireEvent.pointerDown(plot, { clientX: 20 });
   expect(screen.getByText(/Selected June 1, 2026: Full 2/)).toBeDefined();
@@ -281,10 +288,11 @@ test('scales sparse points and labels from the exact requested calendar window',
 
   const plot = await screen.findByTestId('trend-plot');
   expect(plot.parentElement.textContent).toContain(`${display.format(start)}${display.format(today)}`);
-  expect(Number(plot.querySelector('[data-point-index="1"]').getAttribute('data-point-x'))).toBeLessThan(30);
+  expect(Number(plot.querySelector('[data-point-index="1"]').getAttribute('data-point-x'))).toBeGreaterThan(54);
+  expect(Number(plot.querySelector('[data-point-index="1"]').getAttribute('data-point-x'))).toBeLessThan(70);
 });
 
-test('uses a labelled padded value domain instead of an implied zero baseline', async () => {
+test('labels workout volume with rounded unit ticks and an explicit selected workout', async () => {
   const workouts = [
     workout({ id: 'first', date: '2026-06-01', exercises: [weighted({ setRecords: [weightedRecord(0, { actualWeight: 285, actualReps: 4 }), weightedRecord(1, { actualWeight: 285, actualReps: 4 })] })] }),
     workout({ id: 'latest', date: '2026-06-30', exercises: [weighted({ setRecords: [weightedRecord(0, { actualWeight: 315, actualReps: 5 }), weightedRecord(1, { actualWeight: 315, actualReps: 5 })] })] }),
@@ -293,7 +301,28 @@ test('uses a labelled padded value domain instead of an implied zero baseline', 
   fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
   fireEvent.click(await screen.findByRole('button', { name: /Bench Press.*Weighted/i }));
 
-  expect(await screen.findByText('Plot scale: 2193 to 3237 lb')).toBeDefined();
+  const plot = await screen.findByTestId('trend-plot');
+  expect(screen.getByRole('heading', { name: 'Workout volume (lb)' })).toBeDefined();
+  expect(plot.querySelectorAll('[data-y-tick]')).toHaveLength(4);
+  expect([...plot.querySelectorAll('[data-y-tick]')].map(tick => tick.textContent)).toEqual(['2000 lb', '2500 lb', '3000 lb', '3500 lb']);
+  expect(plot.parentElement.textContent).not.toContain('Plot scale');
+  expect(screen.getByText('Selected workout: June 30, 2026')).toBeDefined();
+  expect(plot.querySelector('.trend-selected-rail')).toBeNull();
+});
+
+test('uses whole-rep ticks for bodyweight trends', async () => {
+  const first = workout({ id: 'first', date: '2026-06-01', exercises: [bodyweight({ setRecords: [
+    { index: 0, targetReps: 8, fullReps: 0, assistedReps: 0, eccentricReps: 0, completed: true },
+  ] })] });
+  const latest = workout({ id: 'latest', date: '2026-07-01', exercises: [bodyweight({ setRecords: [
+    { index: 0, targetReps: 8, fullReps: 1, assistedReps: 0, eccentricReps: 0, completed: true },
+  ] })] });
+  render(<WorkoutHistory historyKey="u1" loadRange={vi.fn().mockResolvedValue([first, latest])} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Pull Up.*Bodyweight/i }));
+
+  const plot = await screen.findByTestId('trend-plot');
+  expect([...plot.querySelectorAll('[data-y-tick]')].map(tick => tick.textContent)).toEqual(['0 reps', '1 rep']);
 });
 
 test('keeps detail Retry focused while pending and focuses the one-record summary on recovery', async () => {
@@ -315,6 +344,7 @@ test('keeps detail Retry focused while pending and focuses the one-record summar
   await waitFor(() => expect(document.activeElement).toBe(summary));
   expect(screen.getByText('One recorded workout in this range.')).toBeDefined();
   expect(screen.queryByText(/Previous session change:/)).toBeNull();
+  expect((await screen.findByTestId('trend-plot')).innerHTML).not.toContain('NaN');
 });
 
 test('renders loading, error, empty, and a semantic read-only history section after opening', () => {

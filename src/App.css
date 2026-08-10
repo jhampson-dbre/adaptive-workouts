@@ -44,12 +44,21 @@
 .trend-scrubber { display: grid; gap: 8px; }
 .trend-scrubber input { min-height: 44px; }
 .trend-plot { display: grid; gap: 8px; margin: 0; padding: 12px; border: 1px solid var(--border); background: var(--code-bg); overflow: hidden; }
-.trend-plot-key, .trend-plot-dates { display: flex; justify-content: space-between; gap: 8px; font-family: 'Barlow Condensed', 'Atkinson Hyperlegible', sans-serif; font-size: .72rem; font-weight: 700; text-transform: uppercase; }
-.trend-plot-bounds { font-weight: 700; }
+.trend-plot-title { margin: 0; }
+.trend-plot-key, .trend-plot-dates { display: flex; justify-content: space-between; gap: 8px; font-family: 'Barlow Condensed', 'Atkinson Hyperlegible', sans-serif; font-size: .875rem; font-weight: 700; text-transform: uppercase; }
+.trend-key-item { display: inline-flex; align-items: center; gap: 4px; }
+.trend-key-swatch { position: relative; display: inline-block; width: 24px; border-block-end: 2px solid var(--text-h); }
+.trend-key-swatch::after { position: absolute; content: ''; width: 5px; height: 5px; inset: -4px 0 auto 9px; border: 2px solid var(--text-h); border-radius: 50%; background: var(--code-bg); }
+.trend-key-swatch.is-assisted { border-block-end-style: dashed; }
+.trend-key-swatch.is-assisted::after { border-radius: 0; }
+.trend-key-swatch.is-eccentric { border-block-end-style: dotted; }
+.trend-key-swatch.is-eccentric::after { border-radius: 0; transform: rotate(45deg); }
+.trend-selected-workout { margin: 0; font-weight: 700; }
 .trend-plot svg { display: block; width: 100%; height: auto; aspect-ratio: 320 / 152; }
 .trend-line { fill: none; stroke: var(--text-h); stroke-width: 2; vector-effect: non-scaling-stroke; }
-.trend-selected-rail { stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.trend-gridline { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.trend-y-tick { fill: var(--text-h); font: 700 11px 'Barlow Condensed', 'Atkinson Hyperlegible', sans-serif; }
 .trend-marker { fill: var(--code-bg); stroke: var(--text-h); stroke-width: 2; vector-effect: non-scaling-stroke; }
-.trend-marker.is-selected { fill: var(--accent); }
+.trend-marker.is-selected { fill: var(--accent); stroke-width: 3; }
 .exercise-trends :is(button, input):focus-visible { outline: 4px solid var(--focus); outline-offset: 3px; }
 @media (max-width: 360px) { .trend-ranges button { flex: 1 0 calc(50% - 8px); } }
