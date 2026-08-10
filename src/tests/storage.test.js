@@ -1,4 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { spawnSync } from 'node:child_process';
+
+const isLocalRangeChild = process.env.STORAGE_LOCAL_RANGE_CHILD === '1';
+
+const runLocalRangeChild = (timeZone, testName) => {
+    const child = spawnSync(process.execPath, ['node_modules/vitest/vitest.mjs', 'run', 'src/tests/storage.test.js', '-t', testName, '--fileParallelism=false'], {
+        cwd: process.cwd(), env: { ...process.env, STORAGE_LOCAL_RANGE_CHILD: '1', TZ: timeZone }, encoding: 'utf8', timeout: 30_000,
+    });
+    expect(child.status, child.stderr).toBe(0);
+};
 
 const firestore = vi.hoisted(() => ({
     collection: vi.fn(),
@@ -126,14 +136,14 @@ describe('Storage Layer (Async)', () => {
         firestore.orderBy.mockImplementation((field, direction) => ({ field, direction }));
         firestore.documentId.mockReturnValue('DOCUMENT_ID');
         firestore.query.mockReturnValue(completeQuery);
-        firestore.getDocs.mockResolvedValue({ docs: [{ id: 'start', data: () => ({ date: '2026-06-10T00:00:00.000Z' }) }, { id: 'end', data: () => ({ date: '2026-07-10T23:59:59.999Z' }) }] });
+        firestore.getDocs.mockResolvedValue({ docs: [{ id: 'start', data: () => ({ date: '2026-06-10' }) }, { id: 'end', data: () => ({ date: '2026-07-10' }) }] });
 
         await expect(getCompleteHistoryRange('test-user', { range: '1M', endDate: '2026-07-10' })).resolves.toEqual([
-            { id: 'start', date: '2026-06-10T00:00:00.000Z' }, { id: 'end', date: '2026-07-10T23:59:59.999Z' },
+            { id: 'start', date: '2026-06-10' }, { id: 'end', date: '2026-07-10' },
         ]);
         expect(firestore.query).toHaveBeenCalledWith(historyCollection,
-            { field: 'date', operator: '>=', value: '2026-06-10T00:00:00.000Z' },
-            { field: 'date', operator: '<=', value: '2026-07-10T23:59:59.999Z' },
+            { field: 'date', operator: '>=', value: '2026-06-10' },
+            expect.objectContaining({ field: 'date', operator: '<=', value: expect.any(String) }),
             { field: 'date', direction: 'asc' }, { field: 'DOCUMENT_ID', direction: 'asc' },
         );
         firestore.where.mockClear();
@@ -144,10 +154,56 @@ describe('Storage Layer (Async)', () => {
         await getCompleteHistoryRange('test-user', { range: '6M', endDate: '2026-07-10' });
         await getCompleteHistoryRange('test-user', { range: '1Y', endDate: '2024-02-29' });
         expect(firestore.where.mock.calls.filter(([field, operator]) => field === 'date' && operator === '>=').map(([, , value]) => value)).toEqual([
-            '2024-02-29T00:00:00.000Z', '2025-02-28T00:00:00.000Z', '2026-04-10T00:00:00.000Z', '2026-01-10T00:00:00.000Z', '2023-02-28T00:00:00.000Z',
+            '2024-02-29', '2025-02-28', '2026-04-10', '2026-01-10', '2023-02-28',
         ]);
         firestore.getDocs.mockRejectedValueOnce(new Error('unavailable'));
         await expect(getCompleteHistoryRange('test-user', { range: '1M', endDate: '2026-07-10' })).rejects.toThrow('unavailable');
+    });
+
+    it('matches viewer-local History dates across DST, date-only values, and month-end clamping', async () => {
+        if (!isLocalRangeChild) return runLocalRangeChild('America/Chicago', 'matches viewer-local History dates');
+        expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe('America/Chicago');
+        firestore.collection.mockReturnValue({ path: 'history' });
+        firestore.where.mockImplementation((field, operator, value) => ({ field, operator, value }));
+        firestore.orderBy.mockImplementation((field, direction) => ({ field, direction }));
+        firestore.documentId.mockReturnValue('DOCUMENT_ID');
+        firestore.query.mockReturnValue({ complete: true });
+        firestore.getDocs.mockResolvedValue({ docs: [
+            { id: 'before-start', data: () => ({ date: '2026-07-10T04:59:59.999Z' }) },
+            { id: 'literal-start', data: () => ({ date: '2026-07-10' }) },
+            { id: 'local-start', data: () => ({ date: '2026-07-10T05:00:00.000Z' }) },
+            { id: 'literal-end', data: () => ({ date: '2026-08-10' }) },
+            { id: 'local-end', data: () => ({ date: '2026-08-11T04:59:59.999Z' }) },
+            { id: 'after-end', data: () => ({ date: '2026-08-11T05:00:00.000Z' }) },
+        ] });
+
+        await expect(getCompleteHistoryRange('test-user', { range: '1M', endDate: '2026-08-10' })).resolves.toMatchObject([
+            { id: 'literal-start' }, { id: 'local-start' }, { id: 'literal-end' }, { id: 'local-end' },
+        ]);
+        expect(firestore.where).toHaveBeenNthCalledWith(1, 'date', '>=', '2026-07-10');
+        expect(firestore.where).toHaveBeenNthCalledWith(2, 'date', '<=', '2026-08-11T04:59:59.999Z');
+        firestore.where.mockClear(); firestore.getDocs.mockResolvedValue({ docs: [] });
+        await getCompleteHistoryRange('test-user', { range: '1M', endDate: '2024-03-31' });
+        expect(firestore.where).toHaveBeenCalledWith('date', '>=', '2024-02-29');
+    });
+
+    it('widens the lower bound for east-of-UTC local start dates', async () => {
+        if (!isLocalRangeChild) return runLocalRangeChild('Pacific/Kiritimati', 'widens the lower bound');
+        expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe('Pacific/Kiritimati');
+        firestore.collection.mockReturnValue({ path: 'history' });
+        firestore.where.mockImplementation((field, operator, value) => ({ field, operator, value }));
+        firestore.orderBy.mockImplementation((field, direction) => ({ field, direction }));
+        firestore.documentId.mockReturnValue('DOCUMENT_ID');
+        firestore.query.mockReturnValue({ complete: true });
+        firestore.getDocs.mockResolvedValue({ docs: [
+            { id: 'local-start', data: () => ({ date: '2026-07-09T10:00:00.000Z' }) },
+            { id: 'literal-start', data: () => ({ date: '2026-07-10' }) },
+        ] });
+
+        await expect(getCompleteHistoryRange('test-user', { range: '1M', endDate: '2026-08-10' })).resolves.toMatchObject([
+            { id: 'local-start' }, { id: 'literal-start' },
+        ]);
+        expect(firestore.where).toHaveBeenNthCalledWith(1, 'date', '>=', '2026-07-09T10:00:00.000Z');
     });
 
     it('keeps Firestore document IDs authoritative over payload IDs in both history readers', async () => {
