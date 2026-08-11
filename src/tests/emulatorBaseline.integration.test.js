@@ -11,11 +11,15 @@ import {
   collection,
   connectFirestoreEmulator,
   doc,
+  documentId,
   getDocFromServer,
   getDocsFromServer,
   initializeFirestore,
   memoryLocalCache,
+  query,
+  orderBy,
   setDoc,
+  where,
 } from 'firebase/firestore';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -90,6 +94,34 @@ describeIntegration('deterministic emulator baseline integration', () => {
     }));
     expect(catalog.size).toBe(15);
     expect(history.empty).toBe(true);
+  });
+
+  it('retrieves a complete inclusive range deterministically and rejects a denied whole query', async () => {
+    const historyRef = collection(firestore, 'users', BASELINE_USER_ID, 'history');
+    const localEnd = new Date(2026, 6, 10, 23, 59, 59, 999).toISOString();
+    const beforeLocalStart = new Date(2026, 5, 10, 0, 0, 0, 0).toISOString();
+    const afterLocalEnd = new Date(new Date(2026, 6, 11).getTime()).toISOString();
+    try {
+      await Promise.all([
+        setDoc(doc(historyRef, 'range-start'), { date: '2026-06-10' }),
+        setDoc(doc(historyRef, 'before-local-start'), { date: beforeLocalStart }),
+        setDoc(doc(historyRef, 'same-date-b'), { date: '2026-06-20T12:00:00.000Z' }),
+        setDoc(doc(historyRef, 'same-date-a'), { date: '2026-06-20T12:00:00.000Z' }),
+        setDoc(doc(historyRef, 'range-end'), { date: localEnd }),
+        setDoc(doc(historyRef, 'outside'), { date: afterLocalEnd }),
+      ]);
+      const complete = query(historyRef,
+        where('date', '>=', '2026-06-10'), where('date', '<=', localEnd),
+        orderBy('date', 'asc'), orderBy(documentId(), 'asc'),
+      );
+      await expect(getDocsFromServer(complete)).resolves.toMatchObject({ docs: [
+        { id: 'range-start' }, { id: 'before-local-start' }, { id: 'same-date-a' }, { id: 'same-date-b' }, { id: 'range-end' },
+      ] });
+      const denied = query(collection(firestore, 'users', 'another-user', 'history'), orderBy('date', 'asc'));
+      await expect(getDocsFromServer(denied)).rejects.toThrow();
+    } finally {
+      await resetAndSeedBaseline({ projectId, hosts: { auth: process.env.FIREBASE_AUTH_EMULATOR_HOST, firestore: process.env.FIRESTORE_EMULATOR_HOST }, profile: 'test' });
+    }
   });
 
   it('resets canonical mutations back to the same empty baseline', async () => {

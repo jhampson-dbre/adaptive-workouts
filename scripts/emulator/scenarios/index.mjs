@@ -28,13 +28,13 @@ const timing = (index, count) => ({
   index, completed: true, plannedRestSeconds: index === count - 1 ? null : 90,
   workDurationSeconds: 30, actualRestSeconds: index === count - 1 ? null : 90,
 });
-const completedOccurrence = (id, { reps, weight } = {}) => {
+const completedOccurrence = (id, { reps, weight, name, fullReps, assistedReps, eccentricReps } = {}) => {
   const exercise = required(id);
-  const base = { id: exercise.id, occurrenceId: `${id}:seed`, name: exercise.name, muscleGroup: exercise.muscleGroup,
+  const base = { id: exercise.id, occurrenceId: `${id}:seed`, name: name ?? exercise.name, muscleGroup: exercise.muscleGroup,
     tier: exercise.tier, trackingMode: exercise.trackingMode, sets: exercise.sets, prescribedSetCount: exercise.sets };
   if (exercise.trackingMode === 'simple') return { ...base, setRecords: Array.from({ length: exercise.sets }, (_, index) => timing(index, exercise.sets)) };
   if (exercise.trackingMode === 'bodyweight') return { ...base, targetReps: exercise.targetReps,
-    setRecords: Array.from({ length: exercise.sets }, (_, index) => ({ ...timing(index, exercise.sets), targetReps: exercise.targetReps, fullReps: reps ?? exercise.targetReps, assistedReps: 0, eccentricReps: 0 })) };
+    setRecords: Array.from({ length: exercise.sets }, (_, index) => ({ ...timing(index, exercise.sets), targetReps: exercise.targetReps, fullReps: fullReps ?? reps ?? exercise.targetReps, assistedReps: assistedReps ?? 0, eccentricReps: eccentricReps ?? 0 })) };
   const actualWeight = weight ?? exercise.startingWeight;
   return { ...base, startingWeight: exercise.startingWeight, targetReps: exercise.targetReps, floorReps: exercise.floorReps, weightStep: exercise.weightStep,
     setRecords: Array.from({ length: exercise.sets }, (_, index) => ({ ...timing(index, exercise.sets), targetWeight: actualWeight, targetReps: exercise.targetReps, actualWeight, actualReps: reps ?? exercise.targetReps,
@@ -61,6 +61,15 @@ export const scenarioDefinitions = Object.freeze({
     document('scenario-quota-credit-chest', -3, [completedOccurrence('bench-press')]),
     document('scenario-quota-open', -2, [completedOccurrence('cable-row')]),
   ], expected: { quota: { closedSlice: ['scenario-quota-back-before-reset', 'scenario-quota-reset', 'scenario-quota-credit-chest'], openSlice: 'all', closedOutput: ['cable-row'], openOutput: ['standing-calf-raise'] } } },
+  'workout-trends': { name: 'Workout trend evidence across ranges', documents: [
+    document('scenario-trends-weighted-earliest', -75, [completedOccurrence('bench-press', { reps: 8, weight: 95 })]),
+    document('scenario-trends-bodyweight-earliest', -70, [completedOccurrence('pull-up', { fullReps: 3, assistedReps: 2, eccentricReps: 1 })]),
+    document('scenario-trends-long-name', -50, [completedOccurrence('triceps-pushdown', { name: 'Triceps Pushdown with a deliberately long saved exercise name for narrow layouts', reps: 12, weight: 40 }), completedOccurrence('plank')]),
+    document('scenario-trends-weighted-middle', -34, [completedOccurrence('bench-press', { reps: 9, weight: 100 })]),
+    document('scenario-trends-bodyweight-middle', -25, [completedOccurrence('pull-up', { fullReps: 5, assistedReps: 1, eccentricReps: 2 })]),
+    document('scenario-trends-bodyweight-latest', -7, [completedOccurrence('pull-up', { fullReps: 6, assistedReps: 2, eccentricReps: 1 })]),
+    document('scenario-trends-weighted-latest', -4, [completedOccurrence('bench-press', { reps: 10, weight: 105 })]),
+  ], expected: { weighted: { id: 'bench-press', dates: [-75, -34, -4], volumes: [2280, 2700, 3150] }, bodyweight: { id: 'pull-up', dates: [-70, -25, -7], totals: [{ full: 9, assisted: 6, eccentric: 3 }, { full: 15, assisted: 3, eccentric: 6 }, { full: 18, assisted: 6, eccentric: 3 }] }, oneRecord: { id: 'triceps-pushdown', date: -50 }, excluded: ['plank'] } },
 });
 
 export function buildScenario(name, referenceDate) {

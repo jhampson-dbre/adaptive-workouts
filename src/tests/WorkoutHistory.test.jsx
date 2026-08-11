@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import WorkoutHistory from '../components/WorkoutHistory';
 
@@ -58,6 +58,17 @@ function workout(overrides = {}) {
   };
 }
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((nextResolve, nextReject) => { resolve = nextResolve; reject = nextReject; });
+  return { promise, resolve, reject };
+}
+
+function overviewText() {
+  return screen.getByRole('heading', { name: 'Performance overview' }).parentElement.textContent;
+}
+
 function v3Workout(overrides = {}) {
   return {
     id: 'workout-v3', schemaVersion: 3, status: 'completed', date: '2026-07-16T12:00:00.000Z',
@@ -83,6 +94,303 @@ test('renders Workouts directly as the scan-first History destination', () => {
   expect(screen.getByRole('alert').textContent).toMatch(/failed to load/i);
 });
 
+test('opens Exercises with a fresh complete discovery read and replaces stale results before detail reads', async () => {
+  const discovery = deferred();
+  const detail = deferred();
+  const loadRange = vi.fn()
+    .mockImplementationOnce(() => discovery.promise)
+    .mockImplementationOnce(() => detail.promise);
+  render(<WorkoutHistory historyKey="u1" loadRange={loadRange} />);
+
+  const exercises = screen.getByRole('button', { name: 'Exercises' });
+  fireEvent.click(exercises);
+  expect(exercises.getAttribute('aria-pressed')).toBe('true');
+  const exercisesHeading = screen.getByRole('heading', { level: 3, name: 'Exercises' });
+  expect(exercisesHeading).toBeDefined();
+  expect(exercisesHeading.closest('.workout-history-section').className).toContain('workout-history-exercises');
+  expect(exercisesHeading.closest('section').className).toContain('exercise-discovery');
+  await waitFor(() => expect(loadRange).toHaveBeenCalledWith({ range: '1Y', endDate: expect.any(String) }));
+  expect(screen.queryByRole('textbox', { name: 'Filter exercises by name' })).toBeNull();
+
+  await act(async () => discovery.resolve([workout({ date: '2026-07-12', exercises: [weighted()] })]));
+  const filter = await screen.findByRole('textbox', { name: 'Filter exercises by name' });
+  expect(filter.closest('.exercise-discovery-content')).not.toBeNull();
+  expect(document.activeElement).toBe(filter);
+  fireEvent.click(screen.getByRole('button', { name: /Bench Press.*weighted/i }));
+  expect(screen.getByRole('button', { name: 'Back to exercises' }).textContent).toBe('Return to exercise list');
+  await waitFor(() => expect(loadRange).toHaveBeenLastCalledWith({ range: '3M', endDate: expect.any(String) }));
+  expect(screen.queryByText(/Latest volume/)).toBeNull();
+  await act(async () => detail.resolve([workout({ date: '2026-07-12', exercises: [weighted()] })]));
+  expect(await screen.findByRole('heading', { name: 'Performance overview' })).toBeDefined();
+  expect(overviewText()).toContain('Latest volume:1600 lb');
+  const overview = screen.getByRole('heading', { name: 'Performance overview' }).parentElement;
+  expect(overview.className).toContain('trend-overview');
+  expect(overview.querySelector('dl.trend-stats')).not.toBeNull();
+  expect(screen.getByRole('slider', { name: 'Recorded workout' }).closest('.trend-selection')).not.toBeNull();
+  expect(screen.getByRole('heading', { name: 'Sets in selected workout' }).parentElement.className).toContain('trend-confirmed-sets');
+});
+
+test('keeps Exercises retry focused while pending, ignores stale discovery, and focuses recovery targets', async () => {
+  const stale = deferred(); const retry = deferred();
+  const loadRange = vi.fn().mockImplementationOnce(() => stale.promise).mockImplementationOnce(() => Promise.reject(new Error('offline'))).mockImplementationOnce(() => retry.promise);
+  const { unmount } = render(<WorkoutHistory historyKey="u1" loadRange={loadRange} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  await waitFor(() => expect(loadRange).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole('button', { name: 'Workouts' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  expect(await screen.findByRole('button', { name: 'Retry' })).toBeDefined();
+  const retryButton = screen.getByRole('button', { name: 'Retry' }); retryButton.focus(); fireEvent.click(retryButton);
+  expect(document.activeElement).toBe(retryButton);
+  expect(retryButton.disabled).toBe(true);
+  await act(async () => stale.resolve([workout()]));
+  expect(screen.queryByRole('button', { name: /Bench Press.*weighted/i })).toBeNull();
+  await act(async () => retry.resolve([workout()]));
+  expect(await screen.findByRole('textbox', { name: 'Filter exercises by name' })).toBe(document.activeElement);
+  unmount();
+});
+
+test('restores Back focus to the newly mounted selected row or the filter when it no longer matches', async () => {
+  const loadRange = vi.fn().mockResolvedValue([workout()]);
+  render(<WorkoutHistory historyKey="u1" loadRange={loadRange} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  const row = await screen.findByRole('button', { name: /Bench Press.*weighted/i });
+  fireEvent.click(row);
+  await screen.findByText(/Latest volume:/);
+  fireEvent.click(screen.getByRole('button', { name: 'Back to exercises' }));
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: /Bench Press.*weighted/i })));
+});
+
+test('replaces detail range results, ignores stale resolutions, and focuses no-data recovery', async () => {
+  const first = deferred(); const second = deferred();
+  const loadRange = vi.fn().mockResolvedValueOnce([workout()]).mockResolvedValueOnce([workout()]).mockImplementationOnce(() => first.promise).mockImplementationOnce(() => second.promise);
+  render(<WorkoutHistory historyKey="u1" loadRange={loadRange} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Bench Press.*weighted/i }));
+  expect(await screen.findByText(/Latest volume:/)).toBeDefined();
+  fireEvent.click(screen.getByRole('button', { name: '1M' }));
+  expect(screen.queryByText(/Latest volume:/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '6M' }));
+  await act(async () => first.resolve([workout()]));
+  expect(screen.queryByText(/Latest volume:/)).toBeNull();
+  await act(async () => second.resolve([]));
+  const empty = await screen.findByRole('status');
+  expect(empty.textContent).toBe('No recorded workouts in this range.');
+  await waitFor(() => expect(document.activeElement).toBe(empty));
+  expect(loadRange).toHaveBeenNthCalledWith(3, { range: '1M', endDate: expect.any(String) });
+  expect(loadRange).toHaveBeenNthCalledWith(4, { range: '6M', endDate: expect.any(String) });
+});
+
+test('filters deterministic mode identities and reports distinct empty states', async () => {
+  const earlier = workout({ id: 'earlier', date: '2026-06-01', exercises: [weighted({ id: 'shared', name: 'Shared press' })] });
+  const later = workout({ id: 'later', date: '2026-07-01', exercises: [
+    bodyweight({ id: 'shared', name: 'Shared press' }),
+    weighted({ id: 'alpha', name: 'Alpha press' }),
+  ] });
+  const loadRange = vi.fn().mockResolvedValue([earlier, later]);
+  render(<WorkoutHistory historyKey="u1" loadRange={loadRange} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+
+  const filter = await screen.findByRole('textbox', { name: 'Filter exercises by name' });
+  const rows = screen.getAllByRole('button').filter(button => /Last trained/.test(button.textContent));
+  expect(rows.map(row => row.textContent)).toEqual([
+    expect.stringMatching(/^Alpha pressWeighted/),
+    expect.stringMatching(/^Shared pressBodyweight/),
+    expect.stringMatching(/^Shared pressWeighted/),
+  ]);
+  fireEvent.change(filter, { target: { value: 'shared' } });
+  expect(screen.getAllByRole('button').filter(button => /Last trained/.test(button.textContent))).toHaveLength(2);
+  fireEvent.change(filter, { target: { value: 'missing' } });
+  expect(screen.getByText('No exercises match this filter.')).toBeDefined();
+});
+
+test('distinguishes a complete discovery with no eligible exercises', async () => {
+  render(<WorkoutHistory historyKey="u1" loadRange={vi.fn().mockResolvedValue([])} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  expect(await screen.findByText('No eligible exercises in the last year.')).toBeDefined();
+});
+
+test('reports selected weighted-workout changes and omits them for the first workout', async () => {
+  const workouts = [
+    workout({ id: 'first', date: '2026-06-01', exercises: [weighted({ setRecords: [weightedRecord(0, { actualWeight: 285, actualReps: 4 }), weightedRecord(1, { actualWeight: 285, actualReps: 4 })] })] }),
+    workout({ id: 'middle', date: '2026-07-07', exercises: [weighted({ setRecords: [weightedRecord(0, { actualWeight: 270, actualReps: 5 }), weightedRecord(1, { actualWeight: 270, actualReps: 5 })] })] }),
+    workout({ id: 'latest', date: '2026-07-14', exercises: [weighted({ setRecords: [weightedRecord(0, { actualWeight: 315, actualReps: 5 }), weightedRecord(1, { actualWeight: 315, actualReps: 5 })] })] }),
+  ];
+  render(<WorkoutHistory historyKey="u1" loadRange={vi.fn().mockResolvedValue(workouts)} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Bench Press.*Weighted/i }));
+
+  const scrubber = await screen.findByRole('slider', { name: 'Recorded workout' });
+  expect(overviewText()).toContain('Since July 7:+450 lb volume');
+  fireEvent.change(scrubber, { target: { value: '1' } });
+  expect(overviewText()).toContain('Since June 1:+420 lb volume');
+  expect(overviewText()).not.toContain('Since July 7:+450 lb volume');
+  expect(screen.queryByText(/Change from previous recorded workout/)).toBeNull();
+  fireEvent.change(scrubber, { target: { value: '0' } });
+  expect(screen.queryByText(/Since /)).toBeNull();
+});
+
+test('shows separate bodyweight facts and keeps the native scrubber operable by range and keyboard', async () => {
+  const first = workout({ id: 'first', date: '2026-06-01', exercises: [bodyweight({ setRecords: [
+    { index: 0, targetReps: 8, fullReps: 2, assistedReps: 3, eccentricReps: 1, completed: true },
+  ] })] });
+  const middle = workout({ id: 'middle', date: '2026-06-15', exercises: [bodyweight({ setRecords: [
+    { index: 0, targetReps: 8, fullReps: 3, assistedReps: 1, eccentricReps: 2, completed: true },
+  ] })] });
+  const latest = workout({ id: 'latest', date: '2026-07-01', exercises: [bodyweight({ setRecords: [
+    { index: 0, targetReps: 8, fullReps: 4, assistedReps: 1, eccentricReps: 1, completed: true },
+  ] })] });
+  const loadRange = vi.fn().mockResolvedValue([first, middle, latest]);
+  render(<WorkoutHistory historyKey="u1" loadRange={loadRange} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Pull Up.*Bodyweight/i }));
+
+  await screen.findByRole('heading', { name: 'Performance overview' });
+  expect(overviewText()).toContain('Latest totals:Full 4 · Assisted 1 · Eccentric 1');
+  expect(overviewText()).toContain('Highest full reps in one workout:4');
+  expect(overviewText()).toContain('Highest assisted reps in one workout:3');
+  expect(overviewText()).toContain('Highest eccentric reps in one workout:2');
+  expect(screen.queryByText(/Range high: Full/)).toBeNull();
+  expect(overviewText()).toContain('Since June 15:Full +1 · Assisted 0 · Eccentric −1');
+  expect(screen.queryByText(/Changes from previous recorded workout/)).toBeNull();
+  expect(screen.getByRole('heading', { name: 'Sets in selected workout' }).parentElement.textContent).toMatch(/Full 4.*Assisted 1.*Eccentric 1/);
+  const plot = screen.getByTestId('trend-plot');
+  expect(screen.getByRole('heading', { name: 'Reps by type' })).toBeDefined();
+  expect(plot.parentElement.textContent).toMatch(/Full.*Assisted.*Eccentric/);
+  expect(plot.parentElement.textContent).not.toMatch(/solid|dashed|dotted|circle|square|diamond/i);
+  expect(plot.parentElement.querySelector('.trend-key-swatch.is-assisted')).not.toBeNull();
+  expect(new Set([...plot.querySelectorAll('[data-series]')].map(item => item.getAttribute('data-series')))).toEqual(new Set(['fullReps', 'assistedReps', 'eccentricReps']));
+  fireEvent.pointerDown(plot, { clientX: 20 });
+  expect(screen.getByText(/Selected June 1, 2026: Full 2/)).toBeDefined();
+  const scrubber = screen.getByRole('slider', { name: 'Recorded workout' });
+  scrubber.focus();
+  fireEvent.change(scrubber, { target: { value: '0' } });
+  expect(screen.getByText(/Selected June 1, 2026: Full 2/)).toBeDefined();
+  expect(screen.queryByText(/Since /)).toBeNull();
+  fireEvent.change(scrubber, { target: { value: '1' } });
+  expect(overviewText()).toContain('Since June 1:Full +1 · Assisted −2 · Eccentric +1');
+  fireEvent.keyDown(scrubber, { key: 'End' });
+  expect(screen.getByText(/Selected July 1, 2026: Full 4/)).toBeDefined();
+  fireEvent.keyDown(scrubber, { key: 'ArrowRight' });
+  expect(screen.getByText(/Selected July 1, 2026: Full 4/)).toBeDefined();
+  fireEvent.keyDown(scrubber, { key: 'Home' });
+  expect(screen.getByText(/Selected June 1, 2026: Full 2/)).toBeDefined();
+  expect(document.activeElement).toBe(scrubber);
+});
+
+test('keeps the evidence scrubber focused after range-result focus and keyboard selection', async () => {
+  const workouts = [
+    workout({ id: 'first', date: '2026-06-01', exercises: [weighted()] }),
+    workout({ id: 'latest', date: '2026-07-01', exercises: [weighted()] }),
+  ];
+  render(<WorkoutHistory historyKey="u1" loadRange={vi.fn().mockResolvedValue(workouts)} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Bench Press.*Weighted/i }));
+  await screen.findByText(/Latest volume:/);
+  fireEvent.click(screen.getByRole('button', { name: '1M' }));
+  const summary = await screen.findByRole('heading', { name: 'Performance overview' });
+  await waitFor(() => expect(document.activeElement).toBe(summary));
+
+  const scrubber = screen.getByRole('slider', { name: 'Recorded workout' });
+  scrubber.focus();
+  fireEvent.keyDown(scrubber, { key: 'ArrowLeft' });
+  expect(screen.getByText(/Selected June 1, 2026: 1600 lb volume/)).toBeDefined();
+  expect(document.activeElement).toBe(scrubber);
+});
+
+test('renders a calendar-scaled supplemental plot that stays synchronized with the evidence scrubber', async () => {
+  const workouts = [
+    workout({ id: 'first', date: '2026-06-01', exercises: [weighted()] }),
+    workout({ id: 'middle', date: '2026-06-02', exercises: [weighted()] }),
+    workout({ id: 'latest', date: '2026-06-30', exercises: [weighted()] }),
+  ];
+  render(<WorkoutHistory historyKey="u1" loadRange={vi.fn().mockResolvedValue(workouts)} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Bench Press.*Weighted/i }));
+
+  const plot = await screen.findByTestId('trend-plot');
+  expect(plot.getAttribute('aria-hidden')).toBe('true');
+  const x = [...plot.querySelectorAll('[data-point-index]')].map(point => Number(point.getAttribute('data-point-x')));
+  expect(x[1] - x[0]).toBeLessThan(x[2] - x[1]);
+  fireEvent.pointerDown(plot, { clientX: 20 });
+  expect(screen.getByText(/Selected June 1, 2026: 1600 lb volume/)).toBeDefined();
+  expect(screen.getByRole('slider', { name: 'Recorded workout' }).value).toBe('0');
+});
+
+test('scales sparse points and labels from the exact requested calendar window', async () => {
+  const today = new Date(); const start = new Date(today.getFullYear(), today.getMonth() - 3, today.getDate());
+  const date = value => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+  const point = new Date(start); point.setDate(point.getDate() + 1); const latest = new Date(start); latest.setDate(latest.getDate() + 2);
+  const display = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+  const displayDate = value => display.format(new Date(`${date(value)}T00:00:00Z`));
+  const workouts = [
+    workout({ id: 'first', date: date(point), exercises: [weighted()] }),
+    workout({ id: 'latest', date: date(latest), exercises: [weighted()] }),
+  ];
+  render(<WorkoutHistory historyKey="u1" loadRange={vi.fn().mockResolvedValue(workouts)} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Bench Press.*Weighted/i }));
+
+  const plot = await screen.findByTestId('trend-plot');
+  expect(plot.parentElement.textContent).toContain(`${displayDate(start)}${displayDate(today)}`);
+  expect(Number(plot.querySelector('[data-point-index="1"]').getAttribute('data-point-x'))).toBeGreaterThan(54);
+  expect(Number(plot.querySelector('[data-point-index="1"]').getAttribute('data-point-x'))).toBeLessThan(70);
+});
+
+test('labels workout volume with rounded unit ticks and an explicit selected workout', async () => {
+  const workouts = [
+    workout({ id: 'first', date: '2026-06-01', exercises: [weighted({ setRecords: [weightedRecord(0, { actualWeight: 285, actualReps: 4 }), weightedRecord(1, { actualWeight: 285, actualReps: 4 })] })] }),
+    workout({ id: 'latest', date: '2026-06-30', exercises: [weighted({ setRecords: [weightedRecord(0, { actualWeight: 315, actualReps: 5 }), weightedRecord(1, { actualWeight: 315, actualReps: 5 })] })] }),
+  ];
+  render(<WorkoutHistory historyKey="u1" loadRange={vi.fn().mockResolvedValue(workouts)} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Bench Press.*Weighted/i }));
+
+  const plot = await screen.findByTestId('trend-plot');
+  expect(screen.getByRole('heading', { name: 'Workout volume (lb)' })).toBeDefined();
+  expect(plot.querySelectorAll('[data-y-tick]')).toHaveLength(4);
+  expect([...plot.querySelectorAll('[data-y-tick]')].map(tick => tick.textContent)).toEqual(['2000 lb', '2500 lb', '3000 lb', '3500 lb']);
+  expect(plot.parentElement.textContent).not.toContain('Plot scale');
+  expect(screen.getByText('Selected workout: June 30, 2026')).toBeDefined();
+  expect(plot.querySelector('.trend-selected-rail')).toBeNull();
+});
+
+test('uses whole-rep ticks for bodyweight trends', async () => {
+  const first = workout({ id: 'first', date: '2026-06-01', exercises: [bodyweight({ setRecords: [
+    { index: 0, targetReps: 8, fullReps: 0, assistedReps: 0, eccentricReps: 0, completed: true },
+  ] })] });
+  const latest = workout({ id: 'latest', date: '2026-07-01', exercises: [bodyweight({ setRecords: [
+    { index: 0, targetReps: 8, fullReps: 1, assistedReps: 0, eccentricReps: 0, completed: true },
+  ] })] });
+  render(<WorkoutHistory historyKey="u1" loadRange={vi.fn().mockResolvedValue([first, latest])} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Pull Up.*Bodyweight/i }));
+
+  const plot = await screen.findByTestId('trend-plot');
+  expect([...plot.querySelectorAll('[data-y-tick]')].map(tick => tick.textContent)).toEqual(['0 reps', '1 rep']);
+});
+
+test('keeps detail Retry focused while pending and focuses the one-record summary on recovery', async () => {
+  const retry = deferred();
+  const loadRange = vi.fn()
+    .mockResolvedValueOnce([workout({ exercises: [weighted()] })])
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockImplementationOnce(() => retry.promise);
+  render(<WorkoutHistory historyKey="u1" loadRange={loadRange} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Bench Press.*Weighted/i }));
+  const retryButton = await screen.findByRole('button', { name: 'Retry' });
+  retryButton.focus();
+  fireEvent.click(retryButton);
+  expect(retryButton.disabled).toBe(true);
+  expect(document.activeElement).toBe(retryButton);
+  await act(async () => retry.resolve([workout({ exercises: [weighted()] })]));
+  const summary = await screen.findByRole('heading', { name: 'Performance overview' });
+  await waitFor(() => expect(document.activeElement).toBe(summary));
+  expect(screen.getByText('One recorded workout in this range.')).toBeDefined();
+  expect(screen.queryByText(/Since /)).toBeNull();
+  expect((await screen.findByTestId('trend-plot')).innerHTML).not.toContain('NaN');
+});
+
 test('renders loading, error, empty, and a semantic read-only history section after opening', () => {
   const { rerender } = render(<WorkoutHistory loading history={[]} />);
   expect(screen.getByRole('region', { name: 'History' })).toBeDefined();
@@ -92,7 +400,7 @@ test('renders loading, error, empty, and a semantic read-only history section af
   expect(screen.getByRole('alert').textContent).toMatch(/failed to load/i);
   rerender(<WorkoutHistory history={[]} />);
   expect(screen.getByText('No workouts logged yet.')).toBeDefined();
-  expect(screen.queryAllByRole('button')).toHaveLength(0);
+  expect(screen.getAllByRole('button')).toHaveLength(2);
   expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
 });
 

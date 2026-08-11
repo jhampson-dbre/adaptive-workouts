@@ -90,6 +90,7 @@ function App() {
   const baselineErrorRef = useRef(null)
   const [activeWorkoutSession, activeWorkout] = useActiveWorkoutSession({ projectId: app.options.projectId, user: access === 'authorized' ? user : null, staleAfterMs: ACTIVE_WORKOUT_STALE_AFTER_MS })
   const workout = activeWorkoutSession.activeWorkout?.exercises ?? null
+  const loadHistoryRange = useCallback(({ range, endDate }) => import('./utils/storage').then(({ getCompleteHistoryRange }) => getCompleteHistoryRange(user?.uid, { range, endDate })), [user?.uid])
 
   const clearPreferenceTimer = useCallback(() => {
     if (preferenceTimer.current) clearTimeout(preferenceTimer.current.timer)
@@ -389,7 +390,7 @@ function App() {
           componentProps={activeDestination === 'plan'
             ? { workout, timeBudget, setTimeBudget, unrecoveredGroups, setUnrecoveredGroups, preference, onGenerate: async (generated, options = {}) => { const staged = await activeWorkout.stageGenerated(generated, options.phaseTargets ?? { warmupSeconds: 0, performanceSeconds: timeBudget * 60, cooldownSeconds: 0 }); if (staged && generated?.length) { retirePreferenceOperation(); setPreference({ baseline: orderRuleFor(generated), resolution: options.preferredOrderResolution, operation: null }); chooseDestination('workout') } } }
             : activeDestination === 'settings' ? { onClose: () => chooseDestination(shellDestination), onDirtyChange: onSettingsDirtyChange, preference, onClearPreferences: clearPreferences, onSavePreference: savePreference, onDismissPreference: dismissPreference }
-              : activeDestination === 'history' ? { historyKey: user?.uid, loadPage: ({ cursor, pageSize }) => import('./utils/storage').then(({ getHistoryPage }) => getHistoryPage(user?.uid, { cursor, pageSize })) }
+              : activeDestination === 'history' ? { historyKey: user?.uid, loadPage: ({ cursor, pageSize }) => import('./utils/storage').then(({ getHistoryPage }) => getHistoryPage(user?.uid, { cursor, pageSize })), loadRange: loadHistoryRange }
               : { session: activeWorkout, sessionState: activeWorkoutSession, onComplete: () => chooseDestination('plan'), onDiscard: () => { retirePreferenceOperation(); setPreference({ baseline: null, resolution: null, operation: null }); chooseDestination('plan') }, onBackToPlan: () => chooseDestination('plan'), onResume: () => { setDestination('workout') }, preference, onSavePreference: savePreference, onStarted, onDismissPreference: dismissPreference }}
           onReady={() => {}}
           isCurrent={() => access === 'authorized'}

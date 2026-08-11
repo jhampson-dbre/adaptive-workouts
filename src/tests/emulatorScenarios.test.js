@@ -84,15 +84,24 @@ describe('emulator history scenarios', () => {
     });
   });
 
-  it('provides four stable, schema-valid scenario definitions with expected outcomes', () => {
+  it('provides stable, schema-valid scenario definitions with expected outcomes', () => {
     expect(Object.keys(scenarioDefinitions)).toEqual([
       'weighted-progression', 'pivot-rotation-staleness', 'recent-primary-leg-suppresses-tier4', 'tier4-quota-closed-open',
+      'workout-trends',
     ]);
     for (const name of Object.keys(scenarioDefinitions)) {
       const scenario = buildScenario(name, '2026-07-18');
       expect(scenario.documents.every(isValidV3WorkoutDocument)).toBe(true);
       expect(scenario.expected).toBeDefined();
     }
+    const trends = buildScenario('workout-trends', '2026-08-10');
+    expect(trends.documents).toHaveLength(7);
+    expect(trends.documents.filter(item => item.exercises.some(exercise => exercise.id === 'bench-press'))).toHaveLength(3);
+    expect(trends.documents.filter(item => item.exercises.some(exercise => exercise.id === 'pull-up'))).toHaveLength(3);
+    expect(trends.documents.find(item => item.id === 'scenario-trends-long-name')?.exercises).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: expect.stringMatching(/^.{61,}$/) }),
+      expect.objectContaining({ trackingMode: 'simple' }),
+    ]));
   });
 
   it('keeps weighted progression outcomes real against the engine helper', () => {
