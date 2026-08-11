@@ -194,14 +194,36 @@ test('distinguishes a complete discovery with no eligible exercises', async () =
   expect(await screen.findByText('No eligible exercises in the last year.')).toBeDefined();
 });
 
+test('reports selected weighted-workout changes and omits them for the first workout', async () => {
+  const workouts = [
+    workout({ id: 'first', date: '2026-06-01', exercises: [weighted({ setRecords: [weightedRecord(0, { actualWeight: 285, actualReps: 4 }), weightedRecord(1, { actualWeight: 285, actualReps: 4 })] })] }),
+    workout({ id: 'middle', date: '2026-07-07', exercises: [weighted({ setRecords: [weightedRecord(0, { actualWeight: 270, actualReps: 5 }), weightedRecord(1, { actualWeight: 270, actualReps: 5 })] })] }),
+    workout({ id: 'latest', date: '2026-07-14', exercises: [weighted({ setRecords: [weightedRecord(0, { actualWeight: 315, actualReps: 5 }), weightedRecord(1, { actualWeight: 315, actualReps: 5 })] })] }),
+  ];
+  render(<WorkoutHistory historyKey="u1" loadRange={vi.fn().mockResolvedValue(workouts)} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Bench Press.*Weighted/i }));
+
+  const scrubber = await screen.findByRole('slider', { name: 'Recorded workout' });
+  fireEvent.change(scrubber, { target: { value: '1' } });
+  expect(screen.getByText('Change from previous recorded workout: increased by 420 lb')).toBeDefined();
+  expect(screen.queryByText('Change from previous recorded workout: increased by 450 lb')).toBeNull();
+  expect(screen.queryByText(/Previous session changes?/)).toBeNull();
+  fireEvent.change(scrubber, { target: { value: '0' } });
+  expect(screen.queryByText(/Change from previous recorded workout:/)).toBeNull();
+});
+
 test('shows separate bodyweight facts and keeps the native scrubber operable by range and keyboard', async () => {
   const first = workout({ id: 'first', date: '2026-06-01', exercises: [bodyweight({ setRecords: [
     { index: 0, targetReps: 8, fullReps: 2, assistedReps: 3, eccentricReps: 1, completed: true },
   ] })] });
+  const middle = workout({ id: 'middle', date: '2026-06-15', exercises: [bodyweight({ setRecords: [
+    { index: 0, targetReps: 8, fullReps: 3, assistedReps: 1, eccentricReps: 2, completed: true },
+  ] })] });
   const latest = workout({ id: 'latest', date: '2026-07-01', exercises: [bodyweight({ setRecords: [
     { index: 0, targetReps: 8, fullReps: 4, assistedReps: 1, eccentricReps: 1, completed: true },
   ] })] });
-  const loadRange = vi.fn().mockResolvedValue([first, latest]);
+  const loadRange = vi.fn().mockResolvedValue([first, middle, latest]);
   render(<WorkoutHistory historyKey="u1" loadRange={loadRange} />);
   fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
   fireEvent.click(await screen.findByRole('button', { name: /Pull Up.*Bodyweight/i }));
@@ -209,9 +231,10 @@ test('shows separate bodyweight facts and keeps the native scrubber operable by 
   expect(await screen.findByText(/Latest totals: Full 4.*Assisted 1.*Eccentric 1/)).toBeDefined();
   expect(screen.getByText('Highest full reps in one workout: 4')).toBeDefined();
   expect(screen.getByText('Highest assisted reps in one workout: 3')).toBeDefined();
-  expect(screen.getByText('Highest eccentric reps in one workout: 1')).toBeDefined();
+  expect(screen.getByText('Highest eccentric reps in one workout: 2')).toBeDefined();
   expect(screen.queryByText(/Range high: Full/)).toBeNull();
-  expect(screen.getByText(/Previous session changes: Full increased by 2.*Assisted decreased by 2.*Eccentric no change by 0/)).toBeDefined();
+  expect(screen.getByText(/Changes from previous recorded workout: Full increased by 1.*Assisted no change by 0.*Eccentric decreased by 1/)).toBeDefined();
+  expect(screen.queryByText(/Previous session changes?/)).toBeNull();
   expect(screen.getByRole('heading', { name: 'Confirmed sets' }).parentElement.textContent).toMatch(/Full 4.*Assisted 1.*Eccentric 1/);
   const plot = screen.getByTestId('trend-plot');
   expect(screen.getByRole('heading', { name: 'Reps by type' })).toBeDefined();
@@ -225,6 +248,9 @@ test('shows separate bodyweight facts and keeps the native scrubber operable by 
   scrubber.focus();
   fireEvent.change(scrubber, { target: { value: '0' } });
   expect(screen.getByText(/Selected June 1, 2026: Full 2/)).toBeDefined();
+  expect(screen.queryByText(/Changes from previous recorded workout:/)).toBeNull();
+  fireEvent.change(scrubber, { target: { value: '1' } });
+  expect(screen.getByText(/Changes from previous recorded workout: Full increased by 1.*Assisted decreased by 2.*Eccentric increased by 1/)).toBeDefined();
   fireEvent.keyDown(scrubber, { key: 'End' });
   expect(screen.getByText(/Selected July 1, 2026: Full 4/)).toBeDefined();
   fireEvent.keyDown(scrubber, { key: 'ArrowRight' });
@@ -278,6 +304,7 @@ test('scales sparse points and labels from the exact requested calendar window',
   const date = value => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
   const point = new Date(start); point.setDate(point.getDate() + 1); const latest = new Date(start); latest.setDate(latest.getDate() + 2);
   const display = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+  const displayDate = value => display.format(new Date(`${date(value)}T00:00:00Z`));
   const workouts = [
     workout({ id: 'first', date: date(point), exercises: [weighted()] }),
     workout({ id: 'latest', date: date(latest), exercises: [weighted()] }),
@@ -287,7 +314,7 @@ test('scales sparse points and labels from the exact requested calendar window',
   fireEvent.click(await screen.findByRole('button', { name: /Bench Press.*Weighted/i }));
 
   const plot = await screen.findByTestId('trend-plot');
-  expect(plot.parentElement.textContent).toContain(`${display.format(start)}${display.format(today)}`);
+  expect(plot.parentElement.textContent).toContain(`${displayDate(start)}${displayDate(today)}`);
   expect(Number(plot.querySelector('[data-point-index="1"]').getAttribute('data-point-x'))).toBeGreaterThan(54);
   expect(Number(plot.querySelector('[data-point-index="1"]').getAttribute('data-point-x'))).toBeLessThan(70);
 });
@@ -343,7 +370,7 @@ test('keeps detail Retry focused while pending and focuses the one-record summar
   const summary = await screen.findByRole('heading', { name: 'Recorded facts' });
   await waitFor(() => expect(document.activeElement).toBe(summary));
   expect(screen.getByText('One recorded workout in this range.')).toBeDefined();
-  expect(screen.queryByText(/Previous session change:/)).toBeNull();
+  expect(screen.queryByText(/Previous session changes?/)).toBeNull();
   expect((await screen.findByTestId('trend-plot')).innerHTML).not.toContain('NaN');
 });
 
