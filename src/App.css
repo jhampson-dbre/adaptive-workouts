@@ -32,20 +32,35 @@
 .access-action-primary { background: var(--accent); border: 1px solid var(--accent); color: #000000; font-weight: 600; }
 .access-action-secondary { background: transparent; border: 1px solid var(--accent-border); color: var(--text-h); }
 
-.history-views, .trend-ranges { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.history-views { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .history-views button, .trend-ranges button, .exercise-trend-list button { min-height: 44px; border: 1px solid var(--border); border-radius: 0; background: var(--code-bg); color: var(--text-h); font-weight: 700; }
 .history-views button[aria-pressed='true'], .trend-ranges button[aria-pressed='true'] { background: var(--accent); color: var(--text-h); }
-.exercise-trends { display: grid; gap: 12px; overflow-wrap: anywhere; }
+.exercise-trends { display: grid; gap: 16px; overflow-wrap: anywhere; }
+.exercise-discovery { gap: 8px; }
+.exercise-discovery-content { display: grid; gap: 12px; }
 .exercise-filter { display: grid; gap: 4px; max-width: 100%; }
 .exercise-filter input { min-height: 44px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 0; background: var(--code-bg); color: var(--text-h); padding: 10px 12px; }
-.exercise-trend-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.exercise-trend-list button { display: grid; width: 100%; gap: 4px; padding: 10px 12px; text-align: left; }
+.exercise-trend-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border-block-start: 1px solid var(--border); }
+.exercise-trend-list li { border-block-end: 1px solid var(--border); }
+.exercise-trend-list button { display: grid; width: 100%; gap: 4px; padding: 10px 12px; border: 0; text-align: left; }
 .exercise-trend-list span { font-weight: 400; }
-.trend-scrubber { display: grid; gap: 8px; }
-.trend-scrubber input { min-height: 44px; }
+.trend-back { justify-self: start; min-inline-size: 44px; min-block-size: 44px; max-inline-size: 100%; padding: 10px 0; border: 0; background: transparent; color: var(--text-h); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.trend-detail-identity { display: grid; gap: 4px; }
+.trend-detail-identity :is(h3, p) { margin: 0; }
+.trend-ranges { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.trend-ranges button { min-inline-size: 44px; min-block-size: 44px; }
+.trend-overview { display: grid; gap: 8px; }
+.trend-overview h4, .trend-confirmed-sets h4 { margin: 0; }
+.trend-stats { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; margin: 0; }
+.trend-stat { display: grid; gap: 4px; min-inline-size: 0; padding-block: 8px; border-block-start: 1px solid var(--border); }
+.trend-stat dt { font-weight: 700; }
+.trend-stat dd { min-inline-size: 0; margin: 0; overflow-wrap: anywhere; }
+.trend-overview-note { margin: 0; }
 .trend-plot { display: grid; gap: 8px; margin: 0; padding: 12px; border: 1px solid var(--border); background: var(--code-bg); overflow: hidden; }
+.trend-plot figcaption { display: grid; gap: 4px; }
 .trend-plot-title { margin: 0; }
-.trend-plot-key, .trend-plot-dates { display: flex; justify-content: space-between; gap: 8px; font-family: 'Barlow Condensed', 'Atkinson Hyperlegible', sans-serif; font-size: .875rem; font-weight: 700; text-transform: uppercase; }
+.trend-plot-key, .trend-plot-dates { display: flex; justify-content: space-between; gap: 8px; font-family: 'Barlow Condensed', 'Atkinson Hyperlegible', sans-serif; font-size: .72rem; font-weight: 700; text-transform: uppercase; }
+.trend-plot-key { flex-wrap: wrap; justify-content: flex-start; }
 .trend-key-item { display: inline-flex; align-items: center; gap: 4px; }
 .trend-key-swatch { position: relative; display: inline-block; width: 24px; border-block-end: 2px solid var(--text-h); }
 .trend-key-swatch::after { position: absolute; content: ''; width: 5px; height: 5px; inset: -4px 0 auto 9px; border: 2px solid var(--text-h); border-radius: 50%; background: var(--code-bg); }
@@ -60,5 +75,28 @@
 .trend-y-tick { fill: var(--text-h); font: 700 11px 'Barlow Condensed', 'Atkinson Hyperlegible', sans-serif; }
 .trend-marker { fill: var(--code-bg); stroke: var(--text-h); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .trend-marker.is-selected { fill: var(--accent); stroke-width: 3; }
+.trend-selection { display: grid; gap: 8px; }
+.trend-scrubber { display: grid; gap: 8px; }
+.trend-scrubber input { width: 100%; min-height: 44px; }
+.trend-selection-confirmation { margin: 0; opacity: .75; }
+.trend-confirmed-sets { display: grid; gap: 8px; padding-block-start: 16px; border-block-start: 1px solid var(--border); }
+.trend-confirmed-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border-block-start: 1px solid var(--border); }
+.trend-confirmed-list li { padding-block: 8px; border-block-end: 1px solid var(--border); }
 .exercise-trends :is(button, input):focus-visible { outline: 4px solid var(--focus); outline-offset: 3px; }
-@media (max-width: 360px) { .trend-ranges button { flex: 1 0 calc(50% - 8px); } }
+@media (min-width: 600px) {
+  .workout-history-section.workout-history-exercises { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 16px; row-gap: 12px; padding-block: 20px; }
+  .workout-history-exercises > h2 { margin: 0; }
+  .workout-history-exercises > .history-views { justify-self: end; margin: 0; }
+  .workout-history-exercises > .trend-detail { grid-column: 1 / -1; }
+  .trend-detail { grid-template-columns: minmax(0, 3fr) minmax(12rem, 1fr); align-items: center; column-gap: 16px; row-gap: 12px; }
+  .trend-detail > .trend-detail-identity { grid-column: 1; grid-row: 1; }
+  .trend-detail > .trend-back { grid-column: 2; grid-row: 1; justify-self: end; }
+  .trend-detail > .trend-ranges { grid-column: 1; justify-self: start; grid-template-columns: repeat(4, 56px); }
+  .trend-detail > :not(.trend-back, .trend-detail-identity, .trend-ranges, .trend-overview, .trend-plot) { grid-column: 1 / -1; }
+  .trend-detail > .trend-overview { grid-column: 2; grid-row: 3; align-self: start; }
+  .trend-detail > .trend-plot { grid-column: 1; grid-row: 3; align-self: start; }
+  .trend-stat { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
+  .trend-stat dd { flex: 0 1 auto; }
+  .trend-stats { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 360px) { .trend-ranges { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

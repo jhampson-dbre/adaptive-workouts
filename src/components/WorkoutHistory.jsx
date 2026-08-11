@@ -426,7 +426,7 @@ export default function WorkoutHistory({ history, historyKey, loading = false, e
   const hasOlderError = !staticHistory && (phase === 'olderError' || retryingOlder);
   const isLoading = staticHistory ? loading : phase === 'loadingInitial';
   return (
-    <section className="workout-history-section" aria-labelledby="history-heading">
+    <section className={`workout-history-section${view === 'exercises' ? ' workout-history-exercises' : ''}`} aria-labelledby="history-heading">
       <h2 id="history-heading" tabIndex="-1">History</h2>
       <div className="history-views"><button type="button" aria-pressed={view === 'workouts'} onClick={() => { setView('workouts'); setTimeout(() => workoutsHeadingRef.current?.focus()); }}>Workouts</button><button type="button" aria-pressed={view === 'exercises'} onClick={() => setView('exercises')}>Exercises</button></div>
       {view === 'exercises' ? <ExerciseTrends loadRange={loadRange} /> : <>

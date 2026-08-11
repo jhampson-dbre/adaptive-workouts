@@ -65,6 +65,10 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
+function overviewText() {
+  return screen.getByRole('heading', { name: 'Performance overview' }).parentElement.textContent;
+}
+
 function v3Workout(overrides = {}) {
   return {
     id: 'workout-v3', schemaVersion: 3, status: 'completed', date: '2026-07-16T12:00:00.000Z',
@@ -101,18 +105,29 @@ test('opens Exercises with a fresh complete discovery read and replaces stale re
   const exercises = screen.getByRole('button', { name: 'Exercises' });
   fireEvent.click(exercises);
   expect(exercises.getAttribute('aria-pressed')).toBe('true');
-  expect(screen.getByRole('heading', { level: 3, name: 'Exercises' })).toBeDefined();
+  const exercisesHeading = screen.getByRole('heading', { level: 3, name: 'Exercises' });
+  expect(exercisesHeading).toBeDefined();
+  expect(exercisesHeading.closest('.workout-history-section').className).toContain('workout-history-exercises');
+  expect(exercisesHeading.closest('section').className).toContain('exercise-discovery');
   await waitFor(() => expect(loadRange).toHaveBeenCalledWith({ range: '1Y', endDate: expect.any(String) }));
   expect(screen.queryByRole('textbox', { name: 'Filter exercises by name' })).toBeNull();
 
   await act(async () => discovery.resolve([workout({ date: '2026-07-12', exercises: [weighted()] })]));
   const filter = await screen.findByRole('textbox', { name: 'Filter exercises by name' });
+  expect(filter.closest('.exercise-discovery-content')).not.toBeNull();
   expect(document.activeElement).toBe(filter);
   fireEvent.click(screen.getByRole('button', { name: /Bench Press.*weighted/i }));
+  expect(screen.getByRole('button', { name: 'Back to exercises' }).textContent).toBe('Return to exercise list');
   await waitFor(() => expect(loadRange).toHaveBeenLastCalledWith({ range: '3M', endDate: expect.any(String) }));
   expect(screen.queryByText(/Latest volume/)).toBeNull();
   await act(async () => detail.resolve([workout({ date: '2026-07-12', exercises: [weighted()] })]));
-  expect(await screen.findByText(/Latest volume: 1600 lb/)).toBeDefined();
+  expect(await screen.findByRole('heading', { name: 'Performance overview' })).toBeDefined();
+  expect(overviewText()).toContain('Latest volume:1600 lb');
+  const overview = screen.getByRole('heading', { name: 'Performance overview' }).parentElement;
+  expect(overview.className).toContain('trend-overview');
+  expect(overview.querySelector('dl.trend-stats')).not.toBeNull();
+  expect(screen.getByRole('slider', { name: 'Recorded workout' }).closest('.trend-selection')).not.toBeNull();
+  expect(screen.getByRole('heading', { name: 'Sets in selected workout' }).parentElement.className).toContain('trend-confirmed-sets');
 });
 
 test('keeps Exercises retry focused while pending, ignores stale discovery, and focuses recovery targets', async () => {
@@ -205,10 +220,10 @@ test('reports selected weighted-workout changes and omits them for the first wor
   fireEvent.click(await screen.findByRole('button', { name: /Bench Press.*Weighted/i }));
 
   const scrubber = await screen.findByRole('slider', { name: 'Recorded workout' });
-  expect(screen.getByText('Since July 7: +450 lb volume')).toBeDefined();
+  expect(overviewText()).toContain('Since July 7:+450 lb volume');
   fireEvent.change(scrubber, { target: { value: '1' } });
-  expect(screen.getByText('Since June 1: +420 lb volume')).toBeDefined();
-  expect(screen.queryByText('Since July 7: +450 lb volume')).toBeNull();
+  expect(overviewText()).toContain('Since June 1:+420 lb volume');
+  expect(overviewText()).not.toContain('Since July 7:+450 lb volume');
   expect(screen.queryByText(/Change from previous recorded workout/)).toBeNull();
   fireEvent.change(scrubber, { target: { value: '0' } });
   expect(screen.queryByText(/Since /)).toBeNull();
@@ -229,14 +244,15 @@ test('shows separate bodyweight facts and keeps the native scrubber operable by 
   fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
   fireEvent.click(await screen.findByRole('button', { name: /Pull Up.*Bodyweight/i }));
 
-  expect(await screen.findByText(/Latest totals: Full 4.*Assisted 1.*Eccentric 1/)).toBeDefined();
-  expect(screen.getByText('Highest full reps in one workout: 4')).toBeDefined();
-  expect(screen.getByText('Highest assisted reps in one workout: 3')).toBeDefined();
-  expect(screen.getByText('Highest eccentric reps in one workout: 2')).toBeDefined();
+  await screen.findByRole('heading', { name: 'Performance overview' });
+  expect(overviewText()).toContain('Latest totals:Full 4 · Assisted 1 · Eccentric 1');
+  expect(overviewText()).toContain('Highest full reps in one workout:4');
+  expect(overviewText()).toContain('Highest assisted reps in one workout:3');
+  expect(overviewText()).toContain('Highest eccentric reps in one workout:2');
   expect(screen.queryByText(/Range high: Full/)).toBeNull();
-  expect(screen.getByText('Since June 15: Full +1 · Assisted 0 · Eccentric −1')).toBeDefined();
+  expect(overviewText()).toContain('Since June 15:Full +1 · Assisted 0 · Eccentric −1');
   expect(screen.queryByText(/Changes from previous recorded workout/)).toBeNull();
-  expect(screen.getByRole('heading', { name: 'Confirmed sets' }).parentElement.textContent).toMatch(/Full 4.*Assisted 1.*Eccentric 1/);
+  expect(screen.getByRole('heading', { name: 'Sets in selected workout' }).parentElement.textContent).toMatch(/Full 4.*Assisted 1.*Eccentric 1/);
   const plot = screen.getByTestId('trend-plot');
   expect(screen.getByRole('heading', { name: 'Reps by type' })).toBeDefined();
   expect(plot.parentElement.textContent).toMatch(/Full.*Assisted.*Eccentric/);
@@ -251,7 +267,7 @@ test('shows separate bodyweight facts and keeps the native scrubber operable by 
   expect(screen.getByText(/Selected June 1, 2026: Full 2/)).toBeDefined();
   expect(screen.queryByText(/Since /)).toBeNull();
   fireEvent.change(scrubber, { target: { value: '1' } });
-  expect(screen.getByText('Since June 1: Full +1 · Assisted −2 · Eccentric +1')).toBeDefined();
+  expect(overviewText()).toContain('Since June 1:Full +1 · Assisted −2 · Eccentric +1');
   fireEvent.keyDown(scrubber, { key: 'End' });
   expect(screen.getByText(/Selected July 1, 2026: Full 4/)).toBeDefined();
   fireEvent.keyDown(scrubber, { key: 'ArrowRight' });
@@ -271,7 +287,7 @@ test('keeps the evidence scrubber focused after range-result focus and keyboard 
   fireEvent.click(await screen.findByRole('button', { name: /Bench Press.*Weighted/i }));
   await screen.findByText(/Latest volume:/);
   fireEvent.click(screen.getByRole('button', { name: '1M' }));
-  const summary = await screen.findByRole('heading', { name: 'Recorded facts' });
+  const summary = await screen.findByRole('heading', { name: 'Performance overview' });
   await waitFor(() => expect(document.activeElement).toBe(summary));
 
   const scrubber = screen.getByRole('slider', { name: 'Recorded workout' });
@@ -368,7 +384,7 @@ test('keeps detail Retry focused while pending and focuses the one-record summar
   expect(retryButton.disabled).toBe(true);
   expect(document.activeElement).toBe(retryButton);
   await act(async () => retry.resolve([workout({ exercises: [weighted()] })]));
-  const summary = await screen.findByRole('heading', { name: 'Recorded facts' });
+  const summary = await screen.findByRole('heading', { name: 'Performance overview' });
   await waitFor(() => expect(document.activeElement).toBe(summary));
   expect(screen.getByText('One recorded workout in this range.')).toBeDefined();
   expect(screen.queryByText(/Since /)).toBeNull();
