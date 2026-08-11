@@ -205,12 +205,13 @@ test('reports selected weighted-workout changes and omits them for the first wor
   fireEvent.click(await screen.findByRole('button', { name: /Bench Press.*Weighted/i }));
 
   const scrubber = await screen.findByRole('slider', { name: 'Recorded workout' });
+  expect(screen.getByText('Since July 7: +450 lb volume')).toBeDefined();
   fireEvent.change(scrubber, { target: { value: '1' } });
-  expect(screen.getByText('Change from previous recorded workout: increased by 420 lb')).toBeDefined();
-  expect(screen.queryByText('Change from previous recorded workout: increased by 450 lb')).toBeNull();
-  expect(screen.queryByText(/Previous session changes?/)).toBeNull();
+  expect(screen.getByText('Since June 1: +420 lb volume')).toBeDefined();
+  expect(screen.queryByText('Since July 7: +450 lb volume')).toBeNull();
+  expect(screen.queryByText(/Change from previous recorded workout/)).toBeNull();
   fireEvent.change(scrubber, { target: { value: '0' } });
-  expect(screen.queryByText(/Change from previous recorded workout:/)).toBeNull();
+  expect(screen.queryByText(/Since /)).toBeNull();
 });
 
 test('shows separate bodyweight facts and keeps the native scrubber operable by range and keyboard', async () => {
@@ -233,8 +234,8 @@ test('shows separate bodyweight facts and keeps the native scrubber operable by 
   expect(screen.getByText('Highest assisted reps in one workout: 3')).toBeDefined();
   expect(screen.getByText('Highest eccentric reps in one workout: 2')).toBeDefined();
   expect(screen.queryByText(/Range high: Full/)).toBeNull();
-  expect(screen.getByText(/Changes from previous recorded workout: Full increased by 1.*Assisted no change by 0.*Eccentric decreased by 1/)).toBeDefined();
-  expect(screen.queryByText(/Previous session changes?/)).toBeNull();
+  expect(screen.getByText('Since June 15: Full +1 · Assisted 0 · Eccentric −1')).toBeDefined();
+  expect(screen.queryByText(/Changes from previous recorded workout/)).toBeNull();
   expect(screen.getByRole('heading', { name: 'Confirmed sets' }).parentElement.textContent).toMatch(/Full 4.*Assisted 1.*Eccentric 1/);
   const plot = screen.getByTestId('trend-plot');
   expect(screen.getByRole('heading', { name: 'Reps by type' })).toBeDefined();
@@ -248,9 +249,9 @@ test('shows separate bodyweight facts and keeps the native scrubber operable by 
   scrubber.focus();
   fireEvent.change(scrubber, { target: { value: '0' } });
   expect(screen.getByText(/Selected June 1, 2026: Full 2/)).toBeDefined();
-  expect(screen.queryByText(/Changes from previous recorded workout:/)).toBeNull();
+  expect(screen.queryByText(/Since /)).toBeNull();
   fireEvent.change(scrubber, { target: { value: '1' } });
-  expect(screen.getByText(/Changes from previous recorded workout: Full increased by 1.*Assisted decreased by 2.*Eccentric increased by 1/)).toBeDefined();
+  expect(screen.getByText('Since June 1: Full +1 · Assisted −2 · Eccentric +1')).toBeDefined();
   fireEvent.keyDown(scrubber, { key: 'End' });
   expect(screen.getByText(/Selected July 1, 2026: Full 4/)).toBeDefined();
   fireEvent.keyDown(scrubber, { key: 'ArrowRight' });
@@ -370,7 +371,7 @@ test('keeps detail Retry focused while pending and focuses the one-record summar
   const summary = await screen.findByRole('heading', { name: 'Recorded facts' });
   await waitFor(() => expect(document.activeElement).toBe(summary));
   expect(screen.getByText('One recorded workout in this range.')).toBeDefined();
-  expect(screen.queryByText(/Previous session changes?/)).toBeNull();
+  expect(screen.queryByText(/Since /)).toBeNull();
   expect((await screen.findByTestId('trend-plot')).innerHTML).not.toContain('NaN');
 });
 
