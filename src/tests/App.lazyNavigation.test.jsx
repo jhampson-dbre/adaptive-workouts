@@ -80,6 +80,20 @@ describe('lazy authorized navigation', () => {
     await waitFor(() => expect(historyProps.loadRange).toBe(stableLoader))
   })
 
+  it('returns an empty-History Plan action to an existing generated review', async () => {
+    const app = await mount({
+      historyFactory: () => ({ default: ({ onPlan }) => <section><h2>History</h2><button onClick={onPlan}>Plan a workout</button></section> }),
+    })
+    await app.emit(approved('u1'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Generate nonempty' }))
+    await screen.findByRole('heading', { name: 'Ready to sweat?' })
+    fireEvent.click(screen.getByRole('button', { name: 'History' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Plan a workout' }))
+
+    expect(await screen.findByText('Workout same-workout')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Start workout' })).toBeTruthy()
+  })
+
   it('retries a failed History lazy import from its generated entry URL', async () => {
     const app = await mount({ historyFactory: () => Promise.reject(new Error('offline')) })
     await app.emit(approved('u1'))
