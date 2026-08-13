@@ -907,6 +907,29 @@ test('orients a started legacy workout as Main workout', () => {
   expect(screen.getByText('Workout').closest('li').getAttribute('aria-current')).toBe('step');
 });
 
+test('keeps early-finish decisions reachable with a long unfinished-work summary', () => {
+  const longWorkout = Array.from({ length: 12 }, (_, index) => ({
+    ...timedWorkout[0],
+    id: `exercise-${index}`,
+    occurrenceId: `exercise-${index}:0`,
+    name: `Exercise ${index + 1}`,
+    setRecords: timedWorkout[0].setRecords.map(record => ({ ...record })),
+  }));
+  renderWorkout(longWorkout);
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Exercise 1 exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Exercise 1 exercise 1 set 1 confirm/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
+
+  const unfinished = screen.getByRole('list', { name: /Unfinished work/ });
+  expect(within(unfinished).getAllByRole('listitem')).toHaveLength(12);
+  expect(unfinished.tabIndex).toBe(0);
+  expect(styles).toMatch(/\.early-finish-confirmation--partial ul\s*\{[^}]*max-block-size:\s*min\(20vh,\s*10rem\)[^}]*overflow-y:\s*auto/);
+  expect(styles).toMatch(/@media \(max-width: 520px\)\s*\{\s*\.early-finish-confirmation--partial ul\s*\{[^}]*max-block-size:\s*min\(14vh,\s*8rem\)/);
+  expect(screen.getByRole('button', { name: 'Return to workout' })).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Continue to cooldown' })).toBeDefined();
+});
+
 test('keeps Finish dominant in an early Cooldown and returns controls only after Continue workout', async () => {
   const view = renderWorkout(timedWorkout);
   fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
@@ -1879,7 +1902,11 @@ test('zero-work cancellation and partial early finish use explicit session outco
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 cancel/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
-  expect(screen.getByRole('region', { name: 'Cancel workout' })).toBeDefined();
+  const cancelPrompt = screen.getByRole('region', { name: 'Cancel workout' });
+  expect(cancelPrompt.classList.contains('early-finish-confirmation--partial')).toBe(false);
+  expect(cancelPrompt.querySelector('.early-finish-actions')).toBeNull();
+  expect([...cancelPrompt.children].filter(child => child.tagName === 'BUTTON')).toHaveLength(2);
+  expect(styles).not.toMatch(/\.early-finish-confirmation\s*\{[^}]*display:\s*grid/);
   expect(screen.getByRole('heading', { name: 'Cancel workout?' })).toBe(document.activeElement);
   fireEvent.click(screen.getByRole('button', { name: 'Keep working' }));
   expect(screen.queryByRole('region', { name: 'Cancel workout' })).toBeNull();

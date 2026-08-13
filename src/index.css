@@ -1000,6 +1000,35 @@ input:focus-visible {
   color: var(--code-bg);
 }
 
+.early-finish-confirmation--partial {
+  display: grid;
+  gap: 16px;
+}
+
+.early-finish-confirmation--partial h2,
+.early-finish-confirmation--partial p {
+  margin: 0;
+}
+
+.early-finish-confirmation--partial ul {
+  max-block-size: min(20vh, 10rem);
+  margin: 0;
+  padding-inline: 24px 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.early-finish-confirmation--partial ul:focus-visible {
+  outline: 4px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.early-finish-confirmation--partial .early-finish-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .early-finish-confirmation button {
   min-height: 44px;
   margin-right: 8px;
@@ -1014,6 +1043,21 @@ input:focus-visible {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--text-h);
+}
+
+.early-finish-confirmation--partial .early-finish-actions button {
+  width: 100%;
+  margin: 0;
+}
+
+@media (max-width: 520px) {
+  .early-finish-confirmation--partial ul {
+    max-block-size: min(14vh, 8rem);
+  }
+
+  .early-finish-confirmation--partial .early-finish-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .phase-cooldown .summary-actions {
