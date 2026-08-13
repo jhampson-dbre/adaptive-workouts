@@ -232,9 +232,9 @@ function RestReadout({ record, now, showLive = true }) {
   if (!record._activeRest || !showLive) return <span>Rest planned: {formatTime(record.plannedRestSeconds)}</span>;
   const elapsed = calculateElapsedSeconds(record._activeRest.startedAt, now);
   const remaining = record.plannedRestSeconds - elapsed;
-  return remaining > 0
-    ? <span>Rest: {formatTime(remaining)} remaining / {formatTime(record.plannedRestSeconds)} planned</span>
-    : remaining === 0 ? <span>Rest complete</span> : <span className="timer-overtime">Rest overtime: +{formatTime(Math.abs(remaining))}</span>;
+  return remaining >= 0
+    ? <span>Rest: {formatTime(remaining)} remaining</span>
+    : <span className="timer-overtime">Rest overtime: +{formatTime(Math.abs(remaining))}</span>;
 }
 
 function PerformanceInputs({ exercise, exerciseIndex, setIndex, disabled, dispatch }) {
@@ -251,18 +251,29 @@ function PerformanceInputs({ exercise, exerciseIndex, setIndex, disabled, dispat
   return null;
 }
 
-function SetRow({ exercise, exerciseIndex, setIndex, started, activeTimer, activeOwnerName, now, dispatch, error, onError, onClearError, onStart, onConfirm, onCancel, startRef, restRecord }) {
+function SetRow({ exercise, exerciseIndex, setIndex, started, activeTimer, activeOwnerName, now, dispatch, error, onError, onClearError, onStart, onConfirm, onCancel, startRef, restRecord, claimFinalRestCue }) {
   const record = exercise.setRecords[setIndex];
   const status = getSetStatus(exercise, setIndex);
   const prefix = `${exercise.name} exercise ${exerciseIndex + 1} set ${setIndex + 1}`;
   const errorId = `exercise-${exerciseIndex}-feedback`;
   const isActive = activeTimer?.exerciseIndex === exerciseIndex && activeTimer?.setIndex === setIndex;
-  const isResting = restRecord?._activeRest && calculateElapsedSeconds(restRecord._activeRest.startedAt, now) < restRecord.plannedRestSeconds;
+  const restRemaining = restRecord?._activeRest ? restRecord.plannedRestSeconds - calculateElapsedSeconds(restRecord._activeRest.startedAt, now) : null;
+  const isResting = restRemaining > 10;
+  const isFinalRest = restRemaining !== null && restRemaining <= 10;
   const [showDetails, setShowDetails] = useState(false);
+  const [showRestCue, setShowRestCue] = useState(false);
   const inputDisabled = !started || status === 'locked';
   useEffect(() => {
     if (!record.completed) setShowDetails(false);
   }, [record.completed]);
+  useEffect(() => {
+    const restId = restRecord?._activeRest?.id;
+    if (!isFinalRest || !restId) { setShowRestCue(false); return undefined; }
+    if (!claimFinalRestCue(restId)) return undefined;
+    setShowRestCue(true);
+    const timeout = setTimeout(() => setShowRestCue(false), 450);
+    return () => clearTimeout(timeout);
+  }, [claimFinalRestCue, isFinalRest, restRecord?._activeRest?.id]);
   const start = () => {
     if (activeTimer && !isActive) {
       const owner = activeTimer;
@@ -278,7 +289,7 @@ function SetRow({ exercise, exerciseIndex, setIndex, started, activeTimer, activ
     {error && <p id={errorId} className="error-message" role="alert">{error}</p>}
     <div className="set-timing">
       {isActive ? <><span className="work-timer">Work: {formatTime(calculateElapsedSeconds(activeTimer.startedAt, now))}</span><button type="button" aria-label={`${prefix} confirm`} aria-describedby={error ? errorId : undefined} onClick={() => onConfirm(exerciseIndex, setIndex)}>Confirm attempt</button><button type="button" aria-label={`${prefix} cancel`} onClick={() => onCancel(exerciseIndex, setIndex)}>Cancel timer</button></>
-        : status === 'ready' ? <><button type="button" ref={startRef} aria-label={`${prefix} start`} disabled={!started} aria-describedby={error ? errorId : (!started ? 'workout-start-help' : undefined)} onClick={start}>{isResting ? 'Start set early' : 'Start set'}</button>{restRecord && <span className="superset-rest-status rest-timer"><RestReadout record={restRecord} now={now} /></span>}</>
+        : status === 'ready' ? <><button type="button" ref={startRef} className={showRestCue ? 'rest-final-cue' : undefined} aria-label={`${prefix} start`} disabled={!started} aria-describedby={error ? errorId : (!started ? 'workout-start-help' : undefined)} onClick={start}>{isResting ? 'Start set early' : 'Start set'}</button>{restRecord && <span className="superset-rest-status rest-timer"><RestReadout record={restRecord} now={now} /></span>}</>
           : record.completed ? <><button type="button" aria-expanded={showDetails} onClick={() => setShowDetails(current => !current)}>{showDetails ? `Hide details for ${exercise.name} set ${setIndex + 1}` : `Show details for ${exercise.name} set ${setIndex + 1}`}</button>{showDetails && <div className="completed-set-details"><span>Work: {formatTime(record.workDurationSeconds ?? 0)}</span><RestReadout record={record} now={now} showLive={false} /><button type="button" className="secondary-action" disabled={record.actualRestSeconds !== null || exercise.setRecords.slice(setIndex + 1).some(item => item.completed)} onClick={() => dispatch({ type: 'undoSet', exerciseIndex, setIndex })}>Undo set {setIndex + 1}</button></div>}</>
             : <span>Complete the previous set first.</span>}
     </div>
@@ -333,6 +344,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
   const copyRef = useRef(null);
   const headerRefs = useRef([]);
   const startRefs = useRef({});
+  const cuedFinalRestsRef = useRef(new Set());
   const alertedRestsRef = useRef(new Set());
   const announcedRestStartsRef = useRef(new Set());
   const restAnnouncementsRef = useRef(new Map());
@@ -391,6 +403,11 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
     setNow(accepted);
     return accepted;
   }, [durableEpochFloor]);
+  const claimFinalRestCue = useCallback(restId => {
+    if (cuedFinalRestsRef.current.has(restId)) return false;
+    cuedFinalRestsRef.current.add(restId);
+    return true;
+  }, []);
 
   useEffect(() => {
     if (durableEpochFloor > acceptedDisplayEpochMsRef.current) acceptDisplayTime(durableEpochFloor);
@@ -699,6 +716,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
     }}
     startRef={element => { startRefs.current[`${exerciseIndex}-${setIndex}`] = element; }}
     restRecord={restRecordFor(exercise, exerciseIndex, setIndex)}
+    claimFinalRestCue={claimFinalRestCue}
   />;
 
   const renderOptionalSetDetails = (exercise, exerciseIndex, focusedSet, key) => {
