@@ -365,13 +365,14 @@ function App() {
   const hasSavedReceipt = activeWorkoutSession.status === 'saved' && activeWorkoutSession.savedReceipt
   const activeDestination = canLeaveWorkout ? (hasSavedReceipt && destination === 'plan' ? 'workout' : destination) : 'workout'
   const shellDestination = workout?.length || hasSavedReceipt ? 'workout' : 'plan'
+  const shellLabel = shellDestination === 'workout' && activeWorkoutSession.status !== 'generated' ? 'Workout' : 'Plan'
   return (
     <AuthContext.Provider value={user}>
       <header className="app-header">
         <h1>Nudge</h1>
         <div className="app-header-actions">
           {canLeaveWorkout && <>
-            <button className="settings-toggle" type="button" onClick={() => chooseDestination(shellDestination)}>{shellDestination === 'workout' ? 'Workout' : 'Plan'}</button>
+            <button className="settings-toggle" type="button" onClick={() => chooseDestination(shellDestination)}>{shellLabel}</button>
             <button className="settings-toggle" type="button" onClick={() => chooseDestination('history')}>History</button>
             <button className="settings-toggle" type="button" onClick={() => chooseDestination('settings')}>Settings</button>
           </>}
@@ -390,7 +391,7 @@ function App() {
           componentProps={activeDestination === 'plan'
             ? { workout, timeBudget, setTimeBudget, unrecoveredGroups, setUnrecoveredGroups, preference, onGenerate: async (generated, options = {}) => { const staged = await activeWorkout.stageGenerated(generated, options.phaseTargets ?? { warmupSeconds: 0, performanceSeconds: timeBudget * 60, cooldownSeconds: 0 }); if (staged && generated?.length) { retirePreferenceOperation(); setPreference({ baseline: orderRuleFor(generated), resolution: options.preferredOrderResolution, operation: null }); chooseDestination('workout') } } }
             : activeDestination === 'settings' ? { onClose: () => chooseDestination(shellDestination), onDirtyChange: onSettingsDirtyChange, preference, onClearPreferences: clearPreferences, onSavePreference: savePreference, onDismissPreference: dismissPreference }
-              : activeDestination === 'history' ? { historyKey: user?.uid, loadPage: ({ cursor, pageSize }) => import('./utils/storage').then(({ getHistoryPage }) => getHistoryPage(user?.uid, { cursor, pageSize })), loadRange: loadHistoryRange }
+              : activeDestination === 'history' ? { historyKey: user?.uid, loadPage: ({ cursor, pageSize }) => import('./utils/storage').then(({ getHistoryPage }) => getHistoryPage(user?.uid, { cursor, pageSize })), loadRange: loadHistoryRange, onPlan: () => chooseDestination('plan') }
               : { session: activeWorkout, sessionState: activeWorkoutSession, onComplete: () => chooseDestination('plan'), onDiscard: () => { retirePreferenceOperation(); setPreference({ baseline: null, resolution: null, operation: null }); chooseDestination('plan') }, onBackToPlan: () => chooseDestination('plan'), onResume: () => { setDestination('workout') }, preference, onSavePreference: savePreference, onStarted, onDismissPreference: dismissPreference }}
           onReady={() => {}}
           isCurrent={() => access === 'authorized'}

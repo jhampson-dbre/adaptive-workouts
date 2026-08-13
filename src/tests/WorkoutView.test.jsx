@@ -107,7 +107,7 @@ test('announces and reports a successful Resume without reporting a failed attem
   await waitFor(() => expect(onResume).toHaveBeenCalledOnce());
   rerender(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ resume }} sessionState={{ status: 'owned', activeWorkout: initializeActiveWorkout(timedWorkout, { phaseTimingEnabled: true }), blocked: false }} onResume={onResume} /></AuthContext.Provider>);
   expect(screen.getByRole('status').textContent).toBe('Workout resumed.');
-  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Workout ready' })));
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Review your workout' })));
 
   const failedResume = vi.fn(async () => false);
   rerender(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ resume: failedResume }} sessionState={{ status: 'recovery-available', activeWorkout: null, blocked: true }} onResume={onResume} /></AuthContext.Provider>);
@@ -454,6 +454,21 @@ test('keeps the Workout-ready summary bounded and embeds solo order controls in 
   expect(rows).toHaveLength(4);
   expect(rows.every(row => row.querySelector('.exercise-order-actions'))).toBe(true);
   expect(within(rows[0]).getByRole('button', { name: 'Move Plank later; position 1 of 4; available' })).toBeTruthy();
+});
+
+test('keeps generated work in Plan and moves focus from Start set to Confirm attempt', async () => {
+  renderWorkout(timedWorkout);
+
+  expect(screen.getByRole('heading', { level: 2, name: 'Review your workout' })).toBeTruthy();
+  expect(screen.getByText('Plan').closest('li').getAttribute('aria-current')).toBe('step');
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+  const startSet = screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i });
+  startSet.focus();
+  fireEvent.click(startSet);
+
+  const confirm = await screen.findByRole('button', { name: /Plank exercise 1 set 1 confirm/i });
+  await waitFor(() => expect(document.activeElement).toBe(confirm));
+  expect(screen.getByRole('status').textContent).toContain('Main workout started.');
 });
 
 test('puts Back to Plan below Start workout, discards the unstarted session, and hides it after start', async () => {
@@ -885,7 +900,7 @@ test('editing completed details preserves another set invalid-confirmation feedb
 test('starts explicitly with set controls disabled and one shared total timer', async () => {
   vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
   renderWorkout(timedWorkout);
-  expect(screen.getByRole('heading', { name: 'Workout ready' })).toBeDefined();
+  expect(screen.getByRole('heading', { name: 'Review your workout' })).toBeDefined();
   expect(screen.queryByText('Ready when you are')).toBeNull();
   expect(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }).disabled).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
@@ -1485,7 +1500,7 @@ test('A8 production phase targets drive Warmup, Performance, Cooldown, and Revie
   fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   expect(screen.getByRole('heading', { level: 2, name: 'Warmup' })).toBe(document.activeElement);
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 start/i }));
-  expect(screen.getByRole('heading', { level: 2, name: 'Main workout' })).toBe(document.activeElement);
+  expect(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i })).toBe(document.activeElement);
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   expect(screen.getByRole('heading', { level: 2, name: 'Cooldown' })).toBe(document.activeElement);
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));

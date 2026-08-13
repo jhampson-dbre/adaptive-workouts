@@ -51,4 +51,9 @@ describe('Nudge CSS consolidation', () => {
     expect(indexCss).toMatch(/\.tracking-fields\s*\{[^}]*display:\s*flex[^}]*flex:\s*1\s+1\s+100%[^}]*gap:\s*12px[^}]*flex-wrap:\s*wrap[^}]*align-items:\s*end/s);
     expect(indexCss).toMatch(/\.add-form \.tracking-field:has\(select\),\s*\.edit-form \.tracking-field:has\(select\)\s*\{[^}]*flex:\s*1\s+1\s+200px/s);
   });
+
+  it('stacks Settings default labels and bounds their controls', () => {
+    expect(indexCss).toMatch(/\.setting-group label\s*\{[^}]*display:\s*grid[^}]*gap:\s*5px/s);
+    expect(indexCss).toMatch(/\.setting-group :is\(input, select\)\s*\{[^}]*width:\s*min\(100%,\s*14rem\)/s);
+  });
 });

@@ -23,7 +23,7 @@ function Ready({ Component: Destination, componentProps, onReady }) {
   const onReadyRef = useRef(onReady)
   useEffect(() => {
     const heading = ref.current?.querySelector('h1,h2')
-    if (heading?.focus) { heading.tabIndex = -1; heading.focus() }
+    if (!ref.current?.contains(document.activeElement) && heading?.focus) { heading.tabIndex = -1; heading.focus() }
     onReadyRef.current?.()
   }, [])
   return <div ref={ref}><Destination {...componentProps} /></div>

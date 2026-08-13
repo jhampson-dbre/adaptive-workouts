@@ -16,7 +16,7 @@ const identityKey = item => `${item.id}\0${item.trackingMode}`;
 const signed = value => value > 0 ? `+${value}` : value < 0 ? `−${Math.abs(value)}` : '0';
 const volumeChange = (current, previous) => `${signed(current - previous)} lb volume`;
 
-export default function ExerciseTrends({ loadRange }) {
+export default function ExerciseTrends({ loadRange, onPlan }) {
   const [discovery, setDiscovery] = useState({ phase: 'loading', trends: [], retrying: false });
   const [filter, setFilter] = useState(''); const [selected, setSelected] = useState(null); const [range, setRange] = useState('3M');
   const [detail, setDetail] = useState({ phase: 'idle', trend: null, point: 0, focusResult: false, retrying: false });
@@ -41,7 +41,7 @@ export default function ExerciseTrends({ loadRange }) {
   }, [loadRange]);
   useEffect(() => { requestDiscovery(); return () => { discoveryId.current += 1; detailId.current += 1; }; }, [requestDiscovery]);
   useEffect(() => { exercisesRef.current?.focus(); }, []);
-  useEffect(() => { if (discovery.phase === 'loaded') filterRef.current?.focus(); }, [discovery.phase]);
+  useEffect(() => { if (discovery.phase === 'loaded' && discovery.trends.length) filterRef.current?.focus(); }, [discovery.phase, discovery.trends.length]);
   useEffect(() => { if (selected) headingRef.current?.focus(); }, [selected]);
   useEffect(() => { if (detail.phase === 'loaded' && detail.focusResult) (detail.trend ? summaryRef.current : emptyRef.current)?.focus(); }, [detail.focusResult, detail.phase, detail.trend]);
 
@@ -51,7 +51,7 @@ export default function ExerciseTrends({ loadRange }) {
     <h3 ref={exercisesRef} id="exercises-heading" tabIndex="-1">Exercises</h3>
     {discovery.phase === 'loading' && <p aria-live="polite">Loading exercises…</p>}
     {discovery.phase === 'error' && <div role="alert"><p>{discovery.retrying ? 'Retrying exercises…' : 'Couldn’t load exercises.'}</p><button type="button" disabled={discovery.retrying} aria-busy={discovery.retrying} onClick={() => requestDiscovery(true)}>Retry</button></div>}
-    {discovery.phase === 'loaded' && <div className="exercise-discovery-content"><label className="exercise-filter">Filter exercises by name<input ref={filterRef} value={filter} onChange={event => setFilter(event.target.value)} /></label>{discovery.trends.length === 0 ? <p>No eligible exercises in the last year.</p> : matching.length === 0 ? <p>No exercises match this filter.</p> : <ul className="exercise-trend-list">{matching.map(item => <li key={identityKey(item)}><button ref={element => { if (element) rows.current.set(identityKey(item), element); }} type="button" onClick={() => choose(item)}><strong>{item.name}</strong><span>{modeLabel(item.trackingMode)} · Last trained {formatDate(item.points.at(-1).date)}</span></button></li>)}</ul>}</div>}</section>;
+    {discovery.phase === 'loaded' && <div className="exercise-discovery-content">{discovery.trends.length === 0 ? <div className="history-empty"><p>Exercise trends appear after you complete and save a workout.</p>{onPlan && <button className="history-action" type="button" onClick={onPlan}>Plan a workout</button>}</div> : <><label className="exercise-filter">Filter exercises by name<input ref={filterRef} value={filter} onChange={event => setFilter(event.target.value)} /></label>{matching.length === 0 ? <p>No exercises match this filter.</p> : <ul className="exercise-trend-list">{matching.map(item => <li key={identityKey(item)}><button ref={element => { if (element) rows.current.set(identityKey(item), element); }} type="button" onClick={() => choose(item)}><strong>{item.name}</strong><span>{modeLabel(item.trackingMode)} · Last trained {formatDate(item.points.at(-1).date)}</span></button></li>)}</ul>}</>}</div>}</section>;
 
   const point = detail.trend?.points[detail.point];
   const setPoint = next => setDetail(current => ({ ...current, point: Math.max(0, Math.min(next, (current.trend?.points.length ?? 1) - 1)) }));

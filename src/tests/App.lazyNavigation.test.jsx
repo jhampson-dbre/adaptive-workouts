@@ -102,6 +102,18 @@ describe('lazy authorized navigation', () => {
     expect(screen.queryByRole('button', { name: 'History' })).toBeNull()
   })
 
+  it('labels a generated workout as Plan until Start workout succeeds', async () => {
+    const app = await mount(); await app.emit(approved('u1'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Generate nonempty' }))
+    await screen.findByRole('heading', { name: 'Ready to sweat?' })
+    expect(screen.getByRole('button', { name: 'Plan' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Workout' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start workout' }))
+    app.setSessionState({ status: 'owned', blocked: false, activeWorkout: { exercises: [{ id: 'same-workout' }], workoutStartedAt: 1 } })
+    expect(screen.getByRole('button', { name: 'Workout' })).toBeTruthy()
+  })
+
   it('returns from History to the authoritative saved receipt', async () => {
     const app = await mount({ initialSessionState: { status: 'saved', blocked: false, activeWorkout: null, savedReceipt: { id: 'saved-receipt' } } })
     await app.emit(approved('u1'))
@@ -173,9 +185,9 @@ describe('lazy authorized navigation', () => {
   it('returns Settings opened from Workout to the same generated workout through Close and header Back', async () => {
     const app = await mount(); await app.emit(approved('u1')); await screen.findByRole('heading', { name: 'Generate Workout' })
     fireEvent.click(screen.getByRole('button', { name: 'Generate nonempty' })); await screen.findByRole('heading', { name: 'Ready to sweat?' })
-    fireEvent.click(screen.getByRole('button', { name: 'Settings' })); await screen.findByRole('heading', { name: 'Catalog Management' }); expect(screen.getByRole('button', { name: 'Workout' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' })); await screen.findByRole('heading', { name: 'Catalog Management' }); expect(screen.getByRole('button', { name: 'Plan' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Close' })); const workout = await screen.findByRole('heading', { name: 'Ready to sweat?' }); await waitFor(() => expect(document.activeElement).toBe(workout)); expect(screen.getByText('Workout same-workout')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Settings' })); await screen.findByRole('heading', { name: 'Catalog Management' }); fireEvent.click(screen.getByRole('button', { name: 'Workout' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' })); await screen.findByRole('heading', { name: 'Catalog Management' }); fireEvent.click(screen.getByRole('button', { name: 'Plan' }))
     const returnedWorkout = await screen.findByRole('heading', { name: 'Ready to sweat?' }); await waitFor(() => expect(document.activeElement).toBe(returnedWorkout))
   })
 
@@ -225,7 +237,7 @@ describe('lazy authorized navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save order' })); await waitFor(() => expect(screen.getByText('Preference success')).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: 'Settings' })); await screen.findByRole('heading', { name: 'Catalog Management' });
     expect(app.settingsProps().preference.operation.successMessage).toBe('Order saved.');
-    fireEvent.click(screen.getByRole('button', { name: 'Workout' })); await screen.findByRole('heading', { name: 'Ready to sweat?' });
+    fireEvent.click(screen.getByRole('button', { name: 'Plan' })); await screen.findByRole('heading', { name: 'Ready to sweat?' });
     fireEvent.click(screen.getByRole('button', { name: 'Start workout' })); fireEvent.click(screen.getByRole('button', { name: 'Settings' })); await screen.findByRole('heading', { name: 'Catalog Management' });
     expect(app.settingsProps().preference).toMatchObject({ baseline: candidate, resolution: null, operation: null });
   })
@@ -249,7 +261,7 @@ describe('lazy authorized navigation', () => {
     await act(async () => { vi.advanceTimersByTime(15_000) }); expect(screen.getByText('Preference indeterminate')).toBeTruthy(); vi.useRealTimers();
     fireEvent.click(screen.getByRole('button', { name: 'Completed back to plan' })); await screen.findByRole('heading', { name: 'Generate Workout' }); fireEvent.click(screen.getByRole('button', { name: 'Settings' })); await screen.findByRole('heading', { name: 'Catalog Management' });
     expect(app.settingsProps().preference.operation.state).toBe('indeterminate');
-    fireEvent.click(screen.getByRole('button', { name: 'Workout' })); await screen.findByRole('heading', { name: 'Ready to sweat?' }); fireEvent.click(screen.getByRole('button', { name: 'Cancel generated' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Plan' })); await screen.findByRole('heading', { name: 'Ready to sweat?' }); fireEvent.click(screen.getByRole('button', { name: 'Cancel generated' }));
     await screen.findByRole('heading', { name: 'Generate Workout' }); fireEvent.click(screen.getByRole('button', { name: 'Settings' })); await screen.findByRole('heading', { name: 'Catalog Management' });
     expect(app.settingsProps().preference.operation).toBeNull();
     await act(async () => settle({ contextKey: '["a","b","c"]', evicted: null, overridden: [] }));
