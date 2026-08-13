@@ -495,6 +495,15 @@ input:focus-visible {
   transform: translateY(-50%) rotate(45deg);
 }
 
+@keyframes rest-final-cue {
+  0%, 100% { transform: translateX(0) translateY(-50%) rotate(45deg); }
+  50% { transform: translateX(14px) translateY(-50%) rotate(45deg); }
+}
+
+.set-row.ready .set-timing button.rest-final-cue::after {
+  animation: rest-final-cue 450ms cubic-bezier(0.16, 1, 0.3, 1) 1;
+}
+
 .generate-btn:hover,
 .start-btn:hover,
 .finish-btn:hover,
@@ -538,13 +547,27 @@ input:focus-visible {
   grid-column: 2;
   align-self: stretch;
   display: grid;
+  grid-template-rows: auto auto;
   min-width: 100px;
   place-items: center;
-  padding: 10px;
+  gap: 3px;
+  padding: 8px 10px;
   background: var(--text-h);
   color: var(--code-bg);
-  font: 700 var(--type-timer)/1 var(--heading);
   font-variant-numeric: tabular-nums;
+}
+
+.timer-label {
+  align-self: end;
+  font: 700 var(--type-label)/1 var(--heading);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  opacity: 0.78;
+}
+
+.timer-value {
+  align-self: start;
+  font: 700 var(--type-timer)/1 var(--heading);
 }
 
 .workout-help {
@@ -977,6 +1000,35 @@ input:focus-visible {
   color: var(--code-bg);
 }
 
+.early-finish-confirmation--partial {
+  display: grid;
+  gap: 16px;
+}
+
+.early-finish-confirmation--partial h2,
+.early-finish-confirmation--partial p {
+  margin: 0;
+}
+
+.early-finish-confirmation--partial ul {
+  max-block-size: min(20vh, 10rem);
+  margin: 0;
+  padding-inline: 24px 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.early-finish-confirmation--partial ul:focus-visible {
+  outline: 4px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.early-finish-confirmation--partial .early-finish-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .early-finish-confirmation button {
   min-height: 44px;
   margin-right: 8px;
@@ -991,6 +1043,21 @@ input:focus-visible {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--text-h);
+}
+
+.early-finish-confirmation--partial .early-finish-actions button {
+  width: 100%;
+  margin: 0;
+}
+
+@media (max-width: 520px) {
+  .early-finish-confirmation--partial ul {
+    max-block-size: min(14vh, 8rem);
+  }
+
+  .early-finish-confirmation--partial .early-finish-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .phase-cooldown .summary-actions {
@@ -1041,39 +1108,65 @@ input:focus-visible {
 }
 
 .workout-summary > .summary-facts {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin: 0;
-  padding: 22px 0;
-  border: 0;
-  list-style: none;
+  width: 100%;
+  margin: 22px 0 0;
+  border-collapse: collapse;
+  table-layout: fixed;
 }
 
-.summary-facts li {
-  min-width: 0;
-  padding-top: 10px;
-  border-top: 2px solid var(--border);
-}
-
-.summary-facts strong,
-.summary-facts span {
-  display: block;
-}
-
-.summary-facts strong {
+.summary-facts caption {
+  padding-bottom: 10px;
   color: var(--text-h);
+  font-family: var(--heading);
+  font-size: var(--type-label);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.summary-facts th,
+.summary-facts td {
+  padding: 9px 6px;
+  border-top: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-facts th {
+  color: var(--text-h);
+  font-weight: 700;
+  text-align: left;
+}
+
+.summary-facts thead th {
+  border-top-width: 2px;
   font-family: var(--heading);
   font-size: var(--type-label);
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
 
-.summary-facts span {
-  margin-top: 4px;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+.summary-facts th:first-child {
+  width: 48%;
+  padding-left: 0;
+}
+
+.summary-facts td,
+.summary-facts thead th:not(:first-child) {
+  text-align: right;
+}
+
+.summary-facts td:last-child,
+.summary-facts thead th:last-child {
+  padding-right: 0;
+}
+
+.summary-facts tfoot th,
+.summary-facts tfoot td {
+  padding-top: 12px;
+  border-top: 3px solid var(--border);
+  color: var(--text-h);
+  font-weight: 700;
 }
 
 .summary-save-status {
@@ -1127,9 +1220,19 @@ input:focus-visible {
 }
 
 @media (max-width: 600px) {
-  .workout-summary > .summary-facts,
   .workout-summary .saved-actions {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 360px) {
+  .workout-summary {
+    padding-inline: 18px;
+  }
+
+  .summary-facts th,
+  .summary-facts td {
+    padding-inline: 4px;
   }
 }
 
@@ -1390,6 +1493,9 @@ input:focus-visible {
 
   .timer {
     min-width: 0;
+  }
+
+  .timer-value {
     font-size: var(--type-timer-mobile);
   }
 
@@ -1411,6 +1517,10 @@ input:focus-visible {
   .set-row.ready .set-timing button,
   .phase-cooldown .finish-btn,
   .workout-summary .finish-btn {
+    animation: none;
+  }
+
+  .set-row.ready .set-timing button.rest-final-cue::after {
     animation: none;
   }
 }

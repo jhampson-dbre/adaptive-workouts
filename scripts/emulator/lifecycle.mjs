@@ -8,6 +8,7 @@ import path from 'node:path';
 const require = createRequire(import.meta.url);
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_STOP_GRACE_MS = 5_000;
+const emulatorWindowsOwnership = new WeakMap();
 
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 const pathExists = async target => access(target).then(() => true, () => false);
@@ -85,11 +86,13 @@ export async function waitForServices(services, {
   probe = probeService,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   intervalMs = 200,
+  onPoll = () => {},
 } = {}) {
   const pending = new Map(services.map(service => [service.name, service]));
   const deadline = Date.now() + timeoutMs;
   while (pending.size && Date.now() < deadline) {
     for (const [name, service] of pending) {
+      onPoll(service);
       if (await probe(service)) pending.delete(name);
     }
     if (pending.size) await delay(intervalMs);
@@ -162,6 +165,121 @@ const runTaskkill = (pid, force) => {
   return spawnSync('taskkill.exe', args, { stdio: 'ignore', windowsHide: true });
 };
 
+const isWindowsProcessIdentity = process => (
+  Number.isSafeInteger(process?.pid)
+  && Number.isSafeInteger(process?.parentPid)
+  && typeof process.startedAtTicks === 'string'
+  && /^\d+$/.test(process.startedAtTicks)
+);
+
+const isSameWindowsProcess = (left, right) => (
+  isWindowsProcessIdentity(left)
+  && isWindowsProcessIdentity(right)
+  && left.pid === right.pid
+  && left?.startedAtTicks === right?.startedAtTicks
+);
+
+export const parseWindowsProcessLookup = output => {
+  try {
+    const values = JSON.parse(output);
+    const processes = Array.isArray(values) ? values : [values];
+    return processes.every(isWindowsProcessIdentity) ? processes : [];
+  } catch {
+    return [];
+  }
+};
+
+const listWindowsProcesses = () => {
+  const command = [
+    '$started = @{};',
+    'Get-Process | ForEach-Object { try { $started[[int]$_.Id] = $_.StartTime.ToUniversalTime().Ticks.ToString() } catch {} };',
+    'Get-CimInstance Win32_Process',
+    '| Where-Object { $started.ContainsKey([int]$_.ProcessId) }',
+    "| Select-Object @{n='pid';e={$_.ProcessId}}, @{n='parentPid';e={$_.ParentProcessId}}, @{n='startedAtTicks';e={$started[[int]$_.ProcessId]}}",
+    '| ConvertTo-Json -Compress',
+  ].join(' ');
+  const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+    windowsHide: true,
+  });
+  if (result.status !== 0 || typeof result.stdout !== 'string' || !result.stdout.trim()) return [];
+  return parseWindowsProcessLookup(result.stdout);
+};
+
+const spawnedChildIsAlive = child => {
+  const wasKilled = child.killed;
+  try {
+    return child.kill(0);
+  } catch {
+    return false;
+  } finally {
+    child.killed = wasKilled;
+  }
+};
+
+export const captureOwnedWindowsDescendants = (child, {
+  listProcesses = listWindowsProcesses,
+  isChildAlive = spawnedChildIsAlive,
+} = {}) => {
+  if (!child?.pid) return [];
+  const prior = emulatorWindowsOwnership.get(child);
+  // Signal 0 checks Node's original Windows process handle. A PID snapshot is
+  // trusted only while that handle stays live across the complete lookup.
+  if (!isChildAlive(child)) return prior?.descendants ?? [];
+  const processes = listProcesses();
+  if (!isChildAlive(child) || !Array.isArray(processes) || !processes.every(isWindowsProcessIdentity)) {
+    return prior?.descendants ?? [];
+  }
+  const root = processes.find(process => process?.pid === child.pid);
+  const ownership = prior ?? { rootIdentity: undefined, descendants: [] };
+  emulatorWindowsOwnership.set(child, ownership);
+  if (!ownership.rootIdentity && root) ownership.rootIdentity = root;
+  if (!isSameWindowsProcess(root, ownership.rootIdentity)) {
+    return ownership.descendants;
+  }
+  const descendants = [];
+  const parents = new Set([child.pid]);
+  while (parents.size) {
+    const children = processes.filter(process => parents.has(process.parentPid) && !parents.has(process.pid));
+    if (!children.length) break;
+    children.forEach(process => parents.add(process.pid));
+    descendants.push(...children);
+  }
+  const snapshot = [...new Map([...ownership.descendants, ...descendants].map(process => [
+    `${process.pid}:${process.startedAtTicks}`, process,
+  ])).values()];
+  ownership.descendants = snapshot;
+  return snapshot;
+};
+
+const terminateWindowsProcessIdentities = descendants => {
+  if (!descendants.length) return;
+  const snapshot = Buffer.from(JSON.stringify(descendants)).toString('base64');
+  const command = [
+    `$owned = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${snapshot}')) | ConvertFrom-Json`,
+    '$owned | ForEach-Object {',
+    'try { $process = Get-Process -Id $_.pid -ErrorAction Stop;',
+    'if ($process.StartTime.ToUniversalTime().Ticks.ToString() -eq $_.startedAtTicks) { $process.Kill() }',
+    '} catch {}',
+    '}',
+  ].join(' ');
+  spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
+    stdio: 'ignore',
+    windowsHide: true,
+  });
+};
+
+export const terminateOwnedWindowsOrphans = (descendants, {
+  listProcesses = listWindowsProcesses,
+  terminateIdentities = terminateWindowsProcessIdentities,
+} = {}) => {
+  const processes = listProcesses();
+  if (!Array.isArray(processes)) return;
+  const stillOwned = descendants.filter(owned => processes.some(process => isSameWindowsProcess(process, owned)));
+  if (stillOwned.length) terminateIdentities(stillOwned);
+};
+
 const describeTerminationResult = (label, result) => {
   if (!result) return `${label}: no result`;
   const details = [`status ${result.status ?? 'none'}`, `signal ${result.signal ?? 'none'}`];
@@ -202,13 +320,19 @@ export async function terminateEmulatorProcessTree(child, {
   graceMs = DEFAULT_STOP_GRACE_MS,
   platform = process.platform,
   taskkill = runTaskkill,
+  terminateOwnedOrphans = terminateOwnedWindowsOrphans,
   waitForExit: wait = waitForExit,
 } = {}) {
+  if (!child?.pid) return;
   if (platform !== 'win32') {
+    if (child.exitCode !== null || child.signalCode !== null) return;
     return terminateProcessTree(child, { graceMs, platform, taskkill, waitForExit: wait });
   }
-  if (!child?.pid || child.exitCode !== null || child.signalCode !== null) return;
 
+  if (child.exitCode !== null || child.signalCode !== null) {
+    terminateOwnedOrphans(emulatorWindowsOwnership.get(child)?.descendants ?? []);
+    return;
+  }
   const firstResult = taskkill(child.pid, true);
   if (await wait(child, graceMs)) return;
   const secondResult = taskkill(child.pid, true);
@@ -234,14 +358,24 @@ export function spawnOwnedProcess(command, args, options = {}, {
 // the wrapper's shutdown signal and needs the running emulators to remain alive
 // long enough for `emulators:export` to complete.
 export function spawnEmulatorProcess(command, args, options = {}, {
+  platform = process.platform,
   spawnProcess = spawn,
+  stdout = process.stdout,
+  stderr = process.stderr,
 } = {}) {
-  return spawnProcess(command, args, {
+  const isolateWindowsConsole = platform === 'win32' && (!options.stdio || options.stdio === 'inherit');
+  const child = spawnProcess(command, args, {
     ...options,
     shell: false,
     detached: true,
     windowsHide: true,
+    ...(isolateWindowsConsole ? { stdio: ['ignore', 'pipe', 'pipe'] } : {}),
   });
+  if (isolateWindowsConsole) {
+    child.stdout.pipe(stdout, { end: false });
+    child.stderr.pipe(stderr, { end: false });
+  }
+  return child;
 }
 
 export function waitForOwnedChild(child, {
@@ -291,7 +425,11 @@ export function waitForOwnedChild(child, {
   });
 }
 
-export function createProcessSupervisor({ terminateTree = terminateProcessTree, onFailure = () => {} } = {}) {
+export function createProcessSupervisor({
+  terminateTree = terminateProcessTree,
+  onFailure = () => {},
+  retainExitedChildForCleanup = false,
+} = {}) {
   let state = 'running';
   const children = new Map();
   let cleanupPromise;
@@ -353,10 +491,12 @@ export function createProcessSupervisor({ terminateTree = terminateProcessTree, 
     watch(name, child) {
       children.set(name, { name, child });
       child.once('exit', (code, signal) => {
-        children.delete(name);
         if (state === 'running') {
+          if (!retainExitedChildForCleanup) children.delete(name);
           const error = new Error(`${name} exited unexpectedly (code ${code ?? 'none'}, signal ${signal ?? 'none'})`);
           void fail(error);
+        } else {
+          children.delete(name);
         }
       });
       child.once('error', error => void fail(new Error(`${name} failed to launch: ${error.message}`, { cause: error })));
@@ -389,6 +529,7 @@ export async function startEmulatorStack({
   stdio = 'inherit',
   onFailure = () => {},
   signal,
+  spawnEmulator = spawnEmulatorProcess,
 } = {}) {
   if (!['canonical', 'scratch'].includes(profile)) throw new Error(`Unknown emulator profile: ${profile}`);
   if (signal?.aborted) throw new Error('Emulator startup was cancelled');
@@ -399,8 +540,10 @@ export async function startEmulatorStack({
 
   const scratchExists = profile === 'scratch' && await pathExists(absoluteScratch);
   if (scratchExists) await validateScratchExport(absoluteScratch);
-
   const configHome = await mkdtemp(path.join(os.tmpdir(), 'adaptive-workouts-firebase-config-'));
+  // Firebase's Emulator Hub creates firebase-export-* relative to the emulator
+  // process working directory before renaming it to the requested export path.
+  const emulatorWorkingDirectory = profile === 'scratch' ? configHome : process.cwd();
   const env = { ...process.env, XDG_CONFIG_HOME: configHome };
   const args = buildEmulatorArgs({
     configPath: absoluteConfig,
@@ -409,13 +552,18 @@ export async function startEmulatorStack({
     scratchDirectory: absoluteScratch,
     scratchExists,
   });
-  const child = spawnEmulatorProcess(process.execPath, args, {
-    cwd: process.cwd(),
+  const child = spawnEmulator(process.execPath, args, {
+    cwd: emulatorWorkingDirectory,
     env,
     stdio,
   });
-  const supervisor = createProcessSupervisor({ onFailure, terminateTree: terminateEmulatorProcessTree });
+  const supervisor = createProcessSupervisor({
+    onFailure,
+    terminateTree: terminateEmulatorProcessTree,
+    retainExitedChildForCleanup: true,
+  });
   supervisor.watch('Firebase emulators', child);
+  if (process.platform === 'win32') captureOwnedWindowsDescendants(child);
 
   const auth = services.find(service => service.name === 'Auth');
   const firestore = services.find(service => service.name === 'Firestore');
@@ -476,6 +624,11 @@ export async function startEmulatorStack({
       waitForServices(readinessServices, {
         probe: service => probeService(service, projectId),
         timeoutMs: readinessTimeoutMs,
+        onPoll: () => {
+          if (process.platform === 'win32' && child.exitCode === null && child.signalCode === null) {
+            captureOwnedWindowsDescendants(child);
+          }
+        },
       }),
       supervisor.unexpectedExit,
       aborted,

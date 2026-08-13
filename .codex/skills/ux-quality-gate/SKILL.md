@@ -25,11 +25,17 @@ combined evidence set. Keep the final task represented by a shared journey in pr
 until this review is ready; earlier tasks may complete.
 
 Dispatch a fresh ux-usability-reviewer with only the user goal, usage context, final
-build and starting state, and safe scenario controls. Do not initially provide task
-descriptions, acceptance criteria, approved artifacts, diffs, collected evidence,
-captioned screenshots, expected labels or layout, observed-result narratives, or
-implementation rationale. The reviewer traverses the final build live from before the
-changed action through the next meaningful boundary, using the whole viewport and,
+build and starting state, and safe scenario controls. Frame the goal as the real-world
+outcome the person wants or a question they need the product to answer, not as a route,
+control operation, expected interpretation, or request to identify interface elements.
+When the feature's value is informational, let the reviewer choose one or two concrete
+questions that matter in the supplied context before opening the feature, then report
+the conclusions it can support, its confidence and evidence limits, and any friction in
+getting there. An inability to answer is valid product evidence. Do not initially
+provide task descriptions, acceptance criteria, approved artifacts, diffs, collected
+evidence, captioned screenshots, expected labels or layout, observed-result narratives,
+or implementation rationale. The reviewer traverses the final build live from before
+the changed action through the next meaningful boundary, using the whole viewport and,
 where realistic, proceeding without optional cleanup. If the reviewer cannot control
 the live final build, the journey review is blocked. Screenshots, recordings, narrated
 transitions, and previously collected evidence belong to changed-surface review and do

@@ -7,11 +7,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   buildEmulatorArgs,
+  captureOwnedWindowsDescendants,
   createProcessSupervisor,
+  parseWindowsProcessLookup,
   preflightPorts,
+  startEmulatorStack,
   spawnEmulatorProcess,
   spawnOwnedProcess,
   terminateEmulatorProcessTree,
+  terminateOwnedWindowsOrphans,
   terminateProcessTree,
   validateScratchExport,
   waitForOwnedChild,
@@ -29,7 +33,13 @@ const fakeChild = pid => Object.assign(new EventEmitter(), {
   pid,
   exitCode: null,
   signalCode: null,
+  killed: false,
+  kill: () => true,
 });
+
+const windowsProcess = (pid, parentPid, {
+  startedAtTicks = '638000000000000002',
+} = {}) => ({ pid, parentPid, startedAtTicks });
 
 const expectSettledWithin = promise => Promise.race([
   promise,
@@ -89,6 +99,30 @@ describe('emulator lifecycle', () => {
     });
     expect(persistedScratch).toContain('--import');
     expect(persistedScratch).toContain('persisted');
+  });
+
+  it('spawns scratch stacks from isolated configHome and canonical stacks from the repository', async () => {
+    const configPath = path.resolve('firebase.emulator-test.json');
+    const spawnAndExit = vi.fn(() => {
+      const child = fakeChild();
+      queueMicrotask(() => {
+        child.exitCode = 1;
+        child.emit('exit', 1, null);
+      });
+      return child;
+    });
+    const start = profile => startEmulatorStack({
+      configPath,
+      profile,
+      scratchDirectory: path.join(os.tmpdir(), `emulator-working-directory-${profile}`),
+      spawnEmulator: spawnAndExit,
+    });
+
+    await expect(start('scratch')).rejects.toThrow('Firebase emulators exited unexpectedly');
+    expect(spawnAndExit.mock.calls[0][2].cwd.startsWith(path.join(os.tmpdir(), 'adaptive-workouts-firebase-config-'))).toBe(true);
+
+    await expect(start('canonical')).rejects.toThrow('Firebase emulators exited unexpectedly');
+    expect(spawnAndExit.mock.calls[1][2].cwd).toBe(process.cwd());
   });
 
   it('rejects corrupt scratch exports instead of treating them as absent', async () => {
@@ -157,6 +191,170 @@ describe('emulator lifecycle', () => {
     expect(taskkill).toHaveBeenCalledExactlyOnceWith(510020, true);
   });
 
+  it('fails safe on malformed or unavailable Windows ownership lookup output', () => {
+    expect(parseWindowsProcessLookup('not JSON')).toEqual([]);
+    const unavailableAtLaunch = fakeChild(510021);
+    expect(captureOwnedWindowsDescendants(unavailableAtLaunch, { listProcesses: () => [
+      windowsProcess(510030, 510021),
+    ] })).toEqual([]);
+    expect(captureOwnedWindowsDescendants(unavailableAtLaunch, { listProcesses: () => [
+      windowsProcess(510021, 1),
+      windowsProcess(510030, 510021),
+    ] })).toEqual([windowsProcess(510030, 510021)]);
+    const child = fakeChild(510022);
+    const root = windowsProcess(510022, 1);
+    const known = windowsProcess(510023, 510022);
+    captureOwnedWindowsDescendants(child, { listProcesses: () => [root, known] });
+    expect(captureOwnedWindowsDescendants(child, { listProcesses: () => undefined })).toEqual([known]);
+    expect(captureOwnedWindowsDescendants(child, { listProcesses: () => [] })).toEqual([known]);
+    expect(captureOwnedWindowsDescendants(child, { listProcesses: () => [root] })).toEqual([known]);
+  });
+
+  it('does not terminate a descendant PID that has been recycled', () => {
+    const owned = windowsProcess(510031, 510030);
+    const recycled = { ...owned, startedAtTicks: '638000000000000003' };
+    const terminateIdentities = vi.fn();
+
+    terminateOwnedWindowsOrphans([owned], {
+      listProcesses: () => [recycled],
+      terminateIdentities,
+    });
+
+    expect(terminateIdentities).not.toHaveBeenCalled();
+  });
+
+  it('cleans up only descendants captured before the emulator root exits', async () => {
+    const child = fakeChild(510021);
+    const root = windowsProcess(510021, 1);
+    const owned = windowsProcess(510022, 510021);
+    const unrelated = windowsProcess(510023, 999999);
+    captureOwnedWindowsDescendants(child, { listProcesses: () => [root, owned, unrelated] });
+    child.exitCode = 2;
+    const taskkill = vi.fn(() => ({ status: 0, signal: null }));
+    const terminateOwnedOrphans = vi.fn();
+
+    await expect(terminateEmulatorProcessTree(child, {
+      platform: 'win32',
+      taskkill,
+      terminateOwnedOrphans,
+      waitForExit: async () => true,
+    })).resolves.toBeUndefined();
+
+    expect(terminateOwnedOrphans).toHaveBeenCalledExactlyOnceWith([owned]);
+    expect(taskkill).not.toHaveBeenCalled();
+  });
+
+  it('refreshes startup ownership before readiness so an early root exit cleans up its Java child', async () => {
+    const child = fakeChild(510024);
+    const root = windowsProcess(510024, 1);
+    const java = windowsProcess(510025, 510024);
+    const terminateOwnedOrphans = vi.fn();
+
+    await expect(waitForServices([{ name: 'Firestore' }], {
+      probe: async () => false,
+      timeoutMs: 5,
+      intervalMs: 1,
+      onPoll: () => captureOwnedWindowsDescendants(child, { listProcesses: () => [root, java] }),
+    })).rejects.toThrow('Timed out waiting for Firestore');
+    child.exitCode = 2;
+
+    await terminateEmulatorProcessTree(child, { platform: 'win32', terminateOwnedOrphans });
+    expect(terminateOwnedOrphans).toHaveBeenCalledExactlyOnceWith([java]);
+  });
+
+  it('pins a root first seen before a readiness probe and cleans up its Java child after exit', async () => {
+    const child = fakeChild(510032);
+    const root = windowsProcess(510032, 1);
+    const java = windowsProcess(510033, 510032);
+    const terminateOwnedOrphans = vi.fn();
+    captureOwnedWindowsDescendants(child, { listProcesses: () => [] });
+
+    await expect(waitForServices([{ name: 'Firestore' }], {
+      probe: async () => {
+        child.exitCode = 2;
+        return false;
+      },
+      timeoutMs: 5,
+      intervalMs: 1,
+      onPoll: () => {
+        if (child.exitCode === null) {
+          captureOwnedWindowsDescendants(child, { listProcesses: () => [root, java] });
+        }
+      },
+    })).rejects.toThrow('Timed out waiting for Firestore');
+
+    await terminateEmulatorProcessTree(child, { platform: 'win32', terminateOwnedOrphans });
+    expect(terminateOwnedOrphans).toHaveBeenCalledExactlyOnceWith([java]);
+  });
+
+  it('refreshes ownership between readiness probes before the root can exit', async () => {
+    const child = fakeChild(510026);
+    const root = windowsProcess(510026, 1);
+    const java = windowsProcess(510027, 510026);
+    const terminateOwnedOrphans = vi.fn();
+    let javaStarted = false;
+
+    await expect(waitForServices([{ name: 'Auth' }, { name: 'Firestore' }], {
+      probe: async service => {
+        if (service.name === 'Auth') {
+          javaStarted = true;
+          return true;
+        }
+        child.exitCode = 2;
+        return false;
+      },
+      timeoutMs: 5,
+      intervalMs: 1,
+      onPoll: () => {
+        if (javaStarted && child.exitCode === null) {
+          captureOwnedWindowsDescendants(child, { listProcesses: () => [root, java] });
+        }
+      },
+    })).rejects.toThrow('Timed out waiting for Firestore');
+
+    await terminateEmulatorProcessTree(child, { platform: 'win32', terminateOwnedOrphans });
+    expect(terminateOwnedOrphans).toHaveBeenCalledExactlyOnceWith([java]);
+  });
+
+  it('refuses a refresh when the exited Firebase root PID has been reused', async () => {
+    const child = fakeChild(510028);
+    const root = windowsProcess(510028, 1);
+    const reusedRoot = windowsProcess(510028, 1, {
+      startedAtTicks: '638000000000000003',
+    });
+    const unrelated = windowsProcess(510029, 510028, {
+      startedAtTicks: '638000000000000003',
+    });
+    const terminateOwnedOrphans = vi.fn();
+    captureOwnedWindowsDescendants(child, { listProcesses: () => [root] });
+    captureOwnedWindowsDescendants(child, { listProcesses: () => [reusedRoot, unrelated] });
+    child.exitCode = 2;
+
+    await terminateEmulatorProcessTree(child, { platform: 'win32', terminateOwnedOrphans });
+    expect(terminateOwnedOrphans).toHaveBeenCalledExactlyOnceWith([]);
+  });
+
+  it('does not first-pin a reused root PID after the spawned process handle exits', async () => {
+    const child = fakeChild(510034);
+    const reusedRoot = windowsProcess(510034, 1, { startedAtTicks: '638000000000000003' });
+    const unrelated = windowsProcess(510035, 510034, { startedAtTicks: '638000000000000003' });
+    const isChildAlive = vi.fn()
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(false);
+    const terminateOwnedOrphans = vi.fn();
+    captureOwnedWindowsDescendants(child, { listProcesses: () => [], isChildAlive });
+    captureOwnedWindowsDescendants(child, {
+      listProcesses: () => [reusedRoot, unrelated],
+      isChildAlive,
+    });
+    child.exitCode = 2;
+
+    await terminateEmulatorProcessTree(child, { platform: 'win32', terminateOwnedOrphans });
+    expect(terminateOwnedOrphans).toHaveBeenCalledExactlyOnceWith([]);
+  });
+
   it('accepts a raced child exit even when graceful taskkill reports nonzero', async () => {
     const child = fakeChild(510003);
     const taskkill = vi.fn(() => ({ status: 128, signal: null }));
@@ -213,15 +411,27 @@ describe('emulator lifecycle', () => {
     }));
   });
 
-  it('isolates the long-running emulator stack from Windows Ctrl+C broadcasts', () => {
+  it('isolates the long-running Windows emulator stack from Ctrl+C and inherited console handles', () => {
     const child = fakeChild(510006);
+    child.stdout = { pipe: vi.fn() };
+    child.stderr = { pipe: vi.fn() };
     const spawnProcess = vi.fn(() => child);
+    const stdout = {};
+    const stderr = {};
 
-    expect(spawnEmulatorProcess('node', ['firebase.js', 'emulators:start'], { stdio: 'inherit' }, { spawnProcess })).toBe(child);
+    expect(spawnEmulatorProcess('node', ['firebase.js', 'emulators:start'], { stdio: 'inherit' }, {
+      platform: 'win32',
+      spawnProcess,
+      stdout,
+      stderr,
+    })).toBe(child);
     expect(spawnProcess).toHaveBeenCalledWith('node', ['firebase.js', 'emulators:start'], expect.objectContaining({
       detached: true,
       shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
     }));
+    expect(child.stdout.pipe).toHaveBeenCalledWith(stdout, { end: false });
+    expect(child.stderr.pipe).toHaveBeenCalledWith(stderr, { end: false });
   });
 
   it('attempts integration stack stop and scratch removal independently', async () => {
@@ -272,6 +482,26 @@ describe('emulator lifecycle', () => {
       message: expect.stringContaining(`Firebase emulators exited unexpectedly (${expected})`),
     }));
     expect(terminateTree).toHaveBeenCalledOnce();
+  });
+
+  it('includes an unexpectedly exited root in cleanup so its emulator descendants are not orphaned', async () => {
+    const root = fakeChild(4248);
+    const sibling = fakeChild(4249);
+    const terminateTree = vi.fn(async () => {});
+    const supervisor = createProcessSupervisor({
+      terminateTree,
+      retainExitedChildForCleanup: true,
+    });
+    supervisor.watch('Firebase emulators', root);
+    supervisor.watch('Sibling process', sibling);
+
+    root.exitCode = 2;
+    root.emit('exit', 2, null);
+    await supervisor.unexpectedExit.catch(() => {});
+
+    expect(terminateTree).toHaveBeenCalledTimes(2);
+    expect(terminateTree).toHaveBeenCalledWith(root);
+    expect(terminateTree).toHaveBeenCalledWith(sibling);
   });
 
   it('allows coordinated shutdown without reporting child failure', async () => {

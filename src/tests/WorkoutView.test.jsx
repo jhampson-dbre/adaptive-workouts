@@ -673,16 +673,17 @@ test('expands the guided superset member when recovery hydrates in place', async
 });
 
 test('keeps a same-exercise rest beside the next Start control while completed sets stay compact', () => {
-  renderWorkout([timedWorkout[0]]);
+  const exercise = { ...timedWorkout[0], setRecords: timedWorkout[0].setRecords.map(record => ({ ...record, plannedRestSeconds: 12 })) };
+  renderWorkout([exercise]);
   fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
 
   const nextStart = screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i });
-  expect(nextStart.parentElement.textContent).toMatch(/Rest: 0:02 remaining/i);
-  expect(nextStart.nextElementSibling.textContent).toMatch(/Rest: 0:02 remaining/i);
+  expect(nextStart.parentElement.textContent).toMatch(/Rest: 0:12 remaining/i);
+  expect(nextStart.nextElementSibling.textContent).toMatch(/Rest: 0:12 remaining/i);
   expect(document.querySelectorAll('.rest-timer')).toHaveLength(1);
-  expect(screen.getByRole('button', { name: /Plank.*collapse/i }).getAttribute('aria-label')).not.toMatch(/rest 0:02 remaining/i);
+  expect(screen.getByRole('button', { name: /Plank.*collapse/i }).getAttribute('aria-label')).not.toMatch(/rest 0:12 remaining/i);
   expect(screen.getByText('Set 2: Resting')).toBeDefined();
   expect(nextStart.textContent).toBe('Start set early');
   expect(screen.getByRole('button', { name: /Show details for Plank set 1/i })).toBeDefined();
@@ -690,10 +691,10 @@ test('keeps a same-exercise rest beside the next Start control while completed s
   fireEvent.click(screen.getByRole('button', { name: /Show details for Plank set 1/i }));
   expect(screen.getByRole('button', { name: /Undo set 1/i })).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: /Plank.*collapse/i }));
-  expect(screen.getByRole('button', { name: /Plank.*expand/i }).getAttribute('aria-label')).toMatch(/rest 0:02 remaining/i);
+  expect(screen.getByRole('button', { name: /Plank.*expand/i }).getAttribute('aria-label')).toMatch(/rest 0:12 remaining/i);
 });
 
-test('returns a resting set to Ready with its rest-complete status at zero', () => {
+test('returns a resting set to Ready with its zero countdown at rest completion', () => {
   vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
   renderWorkout([timedWorkout[0]]);
   fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
@@ -703,12 +704,72 @@ test('returns a resting set to Ready with its rest-complete status at zero', () 
   act(() => vi.advanceTimersByTime(2000));
   expect(screen.getByText('Set 2: Ready')).toBeDefined();
   expect(screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i }).textContent).toBe('Start set');
-  expect(screen.getByText('Rest complete')).toBeDefined();
+  expect(screen.getByText('Rest: 0:00 remaining')).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: /Plank.*collapse/i }));
   expect(screen.getByRole('button', { name: /Plank.*expand/i }).getAttribute('aria-label')).toMatch(/rest complete/i);
   fireEvent.click(screen.getByRole('button', { name: /Plank.*expand/i }));
   act(() => vi.advanceTimersByTime(1000));
   expect(screen.getByText('Rest overtime: +0:01')).toBeDefined();
+});
+
+test('switches the live rest action at ten seconds and cues its arrow once without planned-duration noise', () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
+  const exercise = {
+    ...timedWorkout[0],
+    setRecords: timedWorkout[0].setRecords.map(record => ({ ...record, plannedRestSeconds: 12 })),
+  };
+  renderWorkout([exercise]);
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+
+  const nextStart = screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i });
+  expect(nextStart.textContent).toBe('Start set early');
+  expect(nextStart.className).not.toContain('rest-final-cue');
+  expect(nextStart.nextElementSibling.textContent).toBe('Rest: 0:12 remaining');
+  expect(nextStart.parentElement.textContent).not.toMatch(/planned/i);
+
+  act(() => vi.advanceTimersByTime(2000));
+  expect(nextStart.textContent).toBe('Start set');
+  expect(nextStart.className).toContain('rest-final-cue');
+  expect(nextStart.nextElementSibling.textContent).toBe('Rest: 0:10 remaining');
+
+  act(() => vi.advanceTimersByTime(10000));
+  expect(nextStart.textContent).toBe('Start set');
+  expect(nextStart.nextElementSibling.textContent).toBe('Rest: 0:00 remaining');
+  act(() => vi.advanceTimersByTime(1000));
+  expect(nextStart.textContent).toBe('Start set');
+  expect(nextStart.nextElementSibling.textContent).toBe('Rest overtime: +0:01');
+
+  expect(styles).toMatch(/@keyframes rest-final-cue\s*{[^}]*translateX\(0\)[\s\S]*?translateX\(14px\)/);
+  expect(styles).toMatch(/\.rest-final-cue::after\s*{[^}]*animation:\s*rest-final-cue 450ms [^;}]+ 1;/s);
+  expect(styles).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.rest-final-cue::after\s*{[^}]*animation:\s*none;/);
+});
+
+test('does not replay the final-rest cue after remount but cues a new rest identity', () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-07-16T12:00:00Z'));
+  const exercise = {
+    ...timedWorkout[0],
+    setRecords: timedWorkout[0].setRecords.map(record => ({ ...record, plannedRestSeconds: 12 })),
+  };
+  renderWorkout([exercise]);
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+  act(() => vi.advanceTimersByTime(2000));
+
+  expect(screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i }).className).toContain('rest-final-cue');
+  fireEvent.click(screen.getByRole('button', { name: /Plank.*collapse/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank.*expand/i }));
+  expect(screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i }).className).not.toContain('rest-final-cue');
+
+  fireEvent.click(screen.getByRole('button', { name: /Show details for Plank set 1/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Undo set 1/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 confirm/i }));
+  expect(screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i }).className).not.toContain('rest-final-cue');
+  act(() => vi.advanceTimersByTime(2000));
+  expect(screen.getByRole('button', { name: /Plank exercise 1 set 2 start/i }).className).toContain('rest-final-cue');
 });
 
 test('renders a group rest once beside its recommended next set', async () => {
@@ -830,7 +891,9 @@ test('starts explicitly with set controls disabled and one shared total timer', 
   fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   expect(screen.getByText('Workout').closest('li').getAttribute('aria-current')).toBe('step');
   act(() => vi.advanceTimersByTime(2000));
-  expect(screen.getByLabelText('Total elapsed 0:02')).toBeDefined();
+  const elapsedLabel = screen.getByText('Elapsed');
+  expect(elapsedLabel.closest('.timer').getAttribute('aria-label')).toBe('Total elapsed 0:02');
+  expect(styles).toMatch(/@media \(max-width: 520px\)\s*\{[\s\S]*?\.timer-value\s*\{[^}]*font-size:\s*var\(--type-timer-mobile\)/);
   expect(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }).disabled).toBe(false);
 });
 
@@ -842,6 +905,29 @@ test('orients a started legacy workout as Main workout', () => {
   expect(screen.queryByRole('heading', { name: 'Performance' })).toBeNull();
   expect(screen.getByText('Start each set as you begin it, then confirm when you finish.')).toBeDefined();
   expect(screen.getByText('Workout').closest('li').getAttribute('aria-current')).toBe('step');
+});
+
+test('keeps early-finish decisions reachable with a long unfinished-work summary', () => {
+  const longWorkout = Array.from({ length: 12 }, (_, index) => ({
+    ...timedWorkout[0],
+    id: `exercise-${index}`,
+    occurrenceId: `exercise-${index}:0`,
+    name: `Exercise ${index + 1}`,
+    setRecords: timedWorkout[0].setRecords.map(record => ({ ...record })),
+  }));
+  renderWorkout(longWorkout);
+  fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
+  fireEvent.click(screen.getByRole('button', { name: /Exercise 1 exercise 1 set 1 start/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Exercise 1 exercise 1 set 1 confirm/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
+
+  const unfinished = screen.getByRole('list', { name: /Unfinished work/ });
+  expect(within(unfinished).getAllByRole('listitem')).toHaveLength(12);
+  expect(unfinished.tabIndex).toBe(0);
+  expect(styles).toMatch(/\.early-finish-confirmation--partial ul\s*\{[^}]*max-block-size:\s*min\(20vh,\s*10rem\)[^}]*overflow-y:\s*auto/);
+  expect(styles).toMatch(/@media \(max-width: 520px\)\s*\{\s*\.early-finish-confirmation--partial ul\s*\{[^}]*max-block-size:\s*min\(14vh,\s*8rem\)/);
+  expect(screen.getByRole('button', { name: 'Return to workout' })).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Continue to cooldown' })).toBeDefined();
 });
 
 test('keeps Finish dominant in an early Cooldown and returns controls only after Continue workout', async () => {
@@ -905,7 +991,8 @@ test('labels a completed simple exercise factually in Review', () => {
   };
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{}} sessionState={{ status: 'review', activeWorkout, phaseTargets: { warmupSeconds: 0, performanceSeconds: 60, cooldownSeconds: 0 }, blocked: false }} /></AuthContext.Provider>);
 
-  expect(screen.getByText('1 set and 2 exercises recorded · 1:00')).toBeDefined();
+  expect(screen.getByText('1 set and 2 exercises recorded')).toBeDefined();
+  expect(screen.getByRole('table', { name: 'Session timing' }).querySelector('tfoot tr').textContent).toBe('Total session1:001:00');
 });
 
 test('times work inline, confirms a set, and exposes persistent overtime when collapsed', () => {
@@ -1336,7 +1423,8 @@ test('renders the saved receipt from session state after live workout state is r
   const copy = await screen.findByRole('button', { name: 'Copy workout results' });
   expect(storage.getHistoryPage).not.toHaveBeenCalled();
   expect(screen.getByRole('status').textContent).toBe('Saved to workout history');
-  expect(screen.getByText('3 sets and 3 exercises recorded · 0:06')).toBeDefined();
+  expect(screen.getByText('3 sets and 3 exercises recorded')).toBeDefined();
+  expect(screen.getByRole('table', { name: 'Session timing' }).querySelector('tfoot tr').textContent).toBe('Total session0:000:06');
   expect(screen.getByRole('button', { name: 'Return to plan' })).toBeDefined();
   expect(screen.getByText('Recorded exercises').closest('details').open).toBe(false);
   fireEvent.click(copy);
@@ -1354,7 +1442,7 @@ test('keeps partial factual totals, omissions, and approved action order in Revi
   const view = render(renderState({ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, blocked: false }));
 
   const summary = screen.getByRole('region', { name: 'Workout summary' });
-  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).className).toContain('summary-facts');
+  expect(screen.getByRole('table', { name: 'Session timing' }).className).toContain('summary-facts');
   expect(summary.textContent).toMatch(/1 set and 1 exercise recorded/);
   expect(screen.getByText('Planned work not recorded').closest('details').open).toBe(false);
   expect(screen.getByText('Review recorded exercises').closest('details').className).toContain('summary-remaining');
@@ -1414,9 +1502,49 @@ test('renders planned phase timing and freezes all phase totals in the semantic 
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   expect(screen.getByRole('heading', { level: 2, name: 'Review' })).toBe(document.activeElement);
-  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Warmup: 0:00 actual \/ 1:00 planned/);
-  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Main workout: 0:00 actual \/ 0:45 planned/);
-  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Cooldown: 0:00 actual \/ 0:30 planned/);
+  expect([...screen.getByRole('table', { name: 'Session timing' }).querySelectorAll('tbody tr')].map(row => row.textContent)).toEqual([
+    'Warmup1:000:00',
+    'Main workout0:450:00',
+    'Cooldown0:300:00',
+  ]);
+});
+
+test('presents one planned-first phase ledger with derived totals in Review and the saved receipt', () => {
+  const phaseDurations = {
+    warmup: { plannedSeconds: 60, actualSeconds: 7 },
+    performance: { plannedSeconds: 45, actualSeconds: 60 },
+    cooldown: { plannedSeconds: 30, actualSeconds: 14 },
+  };
+  const exercises = [{ ...timedWorkout[1], setRecords: [{ ...timedWorkout[1].setRecords[0], completed: true }] }];
+  const review = {
+    ...initializeActiveWorkout(exercises, { phaseTimingEnabled: true }),
+    phase: 'review',
+    phaseCandidate: {
+      actualDurationSeconds: 81,
+      phaseActualSeconds: Object.fromEntries(Object.entries(phaseDurations).map(([phase, duration]) => [phase, duration.actualSeconds])),
+      finishRequestedAtEpochMs: 5_000,
+      finishRequestedAt: new Date(5_000).toISOString(),
+      exercises,
+    },
+  };
+  const renderState = state => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={state} /></AuthContext.Provider>;
+  const view = render(renderState({ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 60, performanceSeconds: 45, cooldownSeconds: 30 }, blocked: false }));
+
+  let ledger = screen.getByRole('table', { name: 'Session timing' });
+  expect([...ledger.querySelectorAll('thead th')].map(cell => cell.textContent)).toEqual(['Phase', 'Planned', 'Actual']);
+  expect([...ledger.querySelectorAll('tbody tr')].map(row => row.textContent)).toEqual([
+    'Warmup1:000:07',
+    'Main workout0:451:00',
+    'Cooldown0:300:14',
+  ]);
+  expect(ledger.querySelector('tfoot tr').textContent).toBe('Total session2:151:21');
+  expect(screen.getByText('1 set and 1 exercise recorded').textContent).not.toMatch(/1:21/);
+
+  view.rerender(renderState({ status: 'saved', activeWorkout: null, savedReceipt: { actualDurationSeconds: 81, phaseDurations, exercises }, blocked: false }));
+  ledger = screen.getByRole('table', { name: 'Session timing' });
+  expect([...ledger.querySelectorAll('thead th')].map(cell => cell.textContent)).toEqual(['Phase', 'Planned', 'Actual']);
+  expect(ledger.querySelector('tfoot tr').textContent).toBe('Total session2:151:21');
+  expect(screen.getByText('1 set and 1 exercise recorded').textContent).not.toMatch(/1:21/);
 });
 
 test('offers cooperative handoff after a live-owner timeout and resumes through the normal destination callback', async () => {
@@ -1505,7 +1633,7 @@ test('renders the session-produced divergent immutable-save conflict as frozen R
 
   const summary = await screen.findByRole('region', { name: 'Workout summary' });
   expect(screen.getByRole('heading', { level: 2, name: 'Review' })).toBe(document.activeElement);
-  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Main workout: 0:00 actual \/ 45:00 planned/);
+  expect([...screen.getByRole('table', { name: 'Session timing' }).querySelectorAll('tbody tr')].find(row => row.textContent.startsWith('Main workout')).textContent).toBe('Main workout45:000:00');
   expect(summary.textContent).toMatch(/1 set and 1 exercise recorded/);
   expect([...summary.querySelectorAll('button')].map(button => button.textContent)).toEqual(['Keep this workout open', 'Exit to Plan']);
   fireEvent.click(screen.getByRole('button', { name: 'Keep this workout open' }));
@@ -1591,7 +1719,8 @@ test('uses the accepted visible epoch for every transition after a backward acti
     expect.objectContaining({ type: 'confirmSet', timestamp: 18_000 }),
     expect.objectContaining({ type: 'finishWorkout', timestamp: 18_000 }),
   ]));
-  expect(screen.getByText(/recorded · 0:08/)).toBeDefined();
+  expect(screen.getByText(/recorded$/)).toBeDefined();
+  expect(screen.getByRole('table', { name: 'Session timing' }).querySelector('tfoot tr').textContent).toBe('Total session3:000:08');
 });
 
 test('the live total sums the phase ledger and never moves backward with a display clock regression', () => {
@@ -1773,7 +1902,11 @@ test('zero-work cancellation and partial early finish use explicit session outco
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }));
   fireEvent.click(screen.getByRole('button', { name: /Plank exercise 1 set 1 cancel/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
-  expect(screen.getByRole('region', { name: 'Cancel workout' })).toBeDefined();
+  const cancelPrompt = screen.getByRole('region', { name: 'Cancel workout' });
+  expect(cancelPrompt.classList.contains('early-finish-confirmation--partial')).toBe(false);
+  expect(cancelPrompt.querySelector('.early-finish-actions')).toBeNull();
+  expect([...cancelPrompt.children].filter(child => child.tagName === 'BUTTON')).toHaveLength(2);
+  expect(styles).not.toMatch(/\.early-finish-confirmation\s*\{[^}]*display:\s*grid/);
   expect(screen.getByRole('heading', { name: 'Cancel workout?' })).toBe(document.activeElement);
   fireEvent.click(screen.getByRole('button', { name: 'Keep working' }));
   expect(screen.queryByRole('region', { name: 'Cancel workout' })).toBeNull();

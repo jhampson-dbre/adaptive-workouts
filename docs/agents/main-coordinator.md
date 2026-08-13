@@ -27,6 +27,10 @@ review authority or escalation path.
 
 Small approved-intent clarifications are recorded and routed only to the affected review authority. Require a complete re-review only for a named material invalidator. Material plan conflicts return to senior-developer review. Product, architecture, data, auth, migration, or scope changes return to design review and applicable user approval. Unchanged evidence is not a reason to rerun a stage.
 
+For implementation-owner convergence, apply `AGENTS.md`'s ownership and replacement invariant. Keep the ordinary first accepted review finding and remediation with the current owner; a raw retry count never establishes unable-to-continue. Before declaring the owner unable, validate the complete accepted finding/remediation chain against that invariant and confirm that the later finding demonstrates the failed remediation on its named boundary. Record that rationale, then interrupt or release the prior owner before replacement.
+
+Dispatch the replacement as the higher-capability implementor with `fork_turns: "none"` and a bounded packet containing the approved intent, scoped files, dirty state, complete accepted finding/remediation chain, tests, constraints, current diff, success criteria, and expected output. For the configured Terra/medium implementor, use its documented Sol/high fallback tier. If Sol/high or its preset is unavailable, stop and report the explicit limitation instead of silently downgrading a safety-critical escalation. After the replacement stabilizes the remediation, return only the affected delta and evidence to the reviewer responsible for that finding; do not rerun unaffected review authorities or loop on unchanged evidence.
+
 ## Handoff
 
 Dispatch packets state task, goal, acceptance criteria, scoped files, dirty-worktree notes, verification, and expected output. Require residual risks to have a durable disposition or a documented intentional exception. Report Workflow feedback under EPIC-6 only after coordinator validation.
