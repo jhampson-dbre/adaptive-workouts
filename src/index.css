@@ -1100,7 +1100,7 @@ input:focus-visible {
   background: var(--text-h);
   color: var(--code-bg);
   font-family: var(--heading);
-  font-size: clamp(1.55rem, 5vw, 2.35rem);
+  font-size: var(--type-headline);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   line-height: 1.05;
@@ -1472,6 +1472,8 @@ input:focus-visible {
   }
 
   .app-header-actions {
+    display: grid;
+    grid-template-columns: repeat(2, max-content);
     gap: 4px;
   }
 
