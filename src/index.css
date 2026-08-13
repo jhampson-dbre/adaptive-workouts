@@ -1064,39 +1064,65 @@ input:focus-visible {
 }
 
 .workout-summary > .summary-facts {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin: 0;
-  padding: 22px 0;
-  border: 0;
-  list-style: none;
+  width: 100%;
+  margin: 22px 0 0;
+  border-collapse: collapse;
+  table-layout: fixed;
 }
 
-.summary-facts li {
-  min-width: 0;
-  padding-top: 10px;
-  border-top: 2px solid var(--border);
-}
-
-.summary-facts strong,
-.summary-facts span {
-  display: block;
-}
-
-.summary-facts strong {
+.summary-facts caption {
+  padding-bottom: 10px;
   color: var(--text-h);
+  font-family: var(--heading);
+  font-size: var(--type-label);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.summary-facts th,
+.summary-facts td {
+  padding: 9px 6px;
+  border-top: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-facts th {
+  color: var(--text-h);
+  font-weight: 700;
+  text-align: left;
+}
+
+.summary-facts thead th {
+  border-top-width: 2px;
   font-family: var(--heading);
   font-size: var(--type-label);
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
 
-.summary-facts span {
-  margin-top: 4px;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+.summary-facts th:first-child {
+  width: 48%;
+  padding-left: 0;
+}
+
+.summary-facts td,
+.summary-facts thead th:not(:first-child) {
+  text-align: right;
+}
+
+.summary-facts td:last-child,
+.summary-facts thead th:last-child {
+  padding-right: 0;
+}
+
+.summary-facts tfoot th,
+.summary-facts tfoot td {
+  padding-top: 12px;
+  border-top: 3px solid var(--border);
+  color: var(--text-h);
+  font-weight: 700;
 }
 
 .summary-save-status {
@@ -1150,9 +1176,19 @@ input:focus-visible {
 }
 
 @media (max-width: 600px) {
-  .workout-summary > .summary-facts,
   .workout-summary .saved-actions {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 360px) {
+  .workout-summary {
+    padding-inline: 18px;
+  }
+
+  .summary-facts th,
+  .summary-facts td {
+    padding-inline: 4px;
   }
 }
 

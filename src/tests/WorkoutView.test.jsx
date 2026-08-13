@@ -968,7 +968,8 @@ test('labels a completed simple exercise factually in Review', () => {
   };
   render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{}} sessionState={{ status: 'review', activeWorkout, phaseTargets: { warmupSeconds: 0, performanceSeconds: 60, cooldownSeconds: 0 }, blocked: false }} /></AuthContext.Provider>);
 
-  expect(screen.getByText('1 set and 2 exercises recorded · 1:00')).toBeDefined();
+  expect(screen.getByText('1 set and 2 exercises recorded')).toBeDefined();
+  expect(screen.getByRole('table', { name: 'Session timing' }).querySelector('tfoot tr').textContent).toBe('Total session1:001:00');
 });
 
 test('times work inline, confirms a set, and exposes persistent overtime when collapsed', () => {
@@ -1399,7 +1400,8 @@ test('renders the saved receipt from session state after live workout state is r
   const copy = await screen.findByRole('button', { name: 'Copy workout results' });
   expect(storage.getHistoryPage).not.toHaveBeenCalled();
   expect(screen.getByRole('status').textContent).toBe('Saved to workout history');
-  expect(screen.getByText('3 sets and 3 exercises recorded · 0:06')).toBeDefined();
+  expect(screen.getByText('3 sets and 3 exercises recorded')).toBeDefined();
+  expect(screen.getByRole('table', { name: 'Session timing' }).querySelector('tfoot tr').textContent).toBe('Total session0:000:06');
   expect(screen.getByRole('button', { name: 'Return to plan' })).toBeDefined();
   expect(screen.getByText('Recorded exercises').closest('details').open).toBe(false);
   fireEvent.click(copy);
@@ -1417,7 +1419,7 @@ test('keeps partial factual totals, omissions, and approved action order in Revi
   const view = render(renderState({ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, blocked: false }));
 
   const summary = screen.getByRole('region', { name: 'Workout summary' });
-  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).className).toContain('summary-facts');
+  expect(screen.getByRole('table', { name: 'Session timing' }).className).toContain('summary-facts');
   expect(summary.textContent).toMatch(/1 set and 1 exercise recorded/);
   expect(screen.getByText('Planned work not recorded').closest('details').open).toBe(false);
   expect(screen.getByText('Review recorded exercises').closest('details').className).toContain('summary-remaining');
@@ -1477,9 +1479,49 @@ test('renders planned phase timing and freezes all phase totals in the semantic 
   fireEvent.click(screen.getByRole('button', { name: /Squat exercise 1 set 1 confirm/i }));
   fireEvent.click(screen.getByRole('button', { name: 'Finish workout' }));
   expect(screen.getByRole('heading', { level: 2, name: 'Review' })).toBe(document.activeElement);
-  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Warmup: 0:00 actual \/ 1:00 planned/);
-  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Main workout: 0:00 actual \/ 0:45 planned/);
-  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Cooldown: 0:00 actual \/ 0:30 planned/);
+  expect([...screen.getByRole('table', { name: 'Session timing' }).querySelectorAll('tbody tr')].map(row => row.textContent)).toEqual([
+    'Warmup1:000:00',
+    'Main workout0:450:00',
+    'Cooldown0:300:00',
+  ]);
+});
+
+test('presents one planned-first phase ledger with derived totals in Review and the saved receipt', () => {
+  const phaseDurations = {
+    warmup: { plannedSeconds: 60, actualSeconds: 7 },
+    performance: { plannedSeconds: 45, actualSeconds: 60 },
+    cooldown: { plannedSeconds: 30, actualSeconds: 14 },
+  };
+  const exercises = [{ ...timedWorkout[1], setRecords: [{ ...timedWorkout[1].setRecords[0], completed: true }] }];
+  const review = {
+    ...initializeActiveWorkout(exercises, { phaseTimingEnabled: true }),
+    phase: 'review',
+    phaseCandidate: {
+      actualDurationSeconds: 81,
+      phaseActualSeconds: Object.fromEntries(Object.entries(phaseDurations).map(([phase, duration]) => [phase, duration.actualSeconds])),
+      finishRequestedAtEpochMs: 5_000,
+      finishRequestedAt: new Date(5_000).toISOString(),
+      exercises,
+    },
+  };
+  const renderState = state => <AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn() }} sessionState={state} /></AuthContext.Provider>;
+  const view = render(renderState({ status: 'review', activeWorkout: review, phaseTargets: { warmupSeconds: 60, performanceSeconds: 45, cooldownSeconds: 30 }, blocked: false }));
+
+  let ledger = screen.getByRole('table', { name: 'Session timing' });
+  expect([...ledger.querySelectorAll('thead th')].map(cell => cell.textContent)).toEqual(['Phase', 'Planned', 'Actual']);
+  expect([...ledger.querySelectorAll('tbody tr')].map(row => row.textContent)).toEqual([
+    'Warmup1:000:07',
+    'Main workout0:451:00',
+    'Cooldown0:300:14',
+  ]);
+  expect(ledger.querySelector('tfoot tr').textContent).toBe('Total session2:151:21');
+  expect(screen.getByText('1 set and 1 exercise recorded').textContent).not.toMatch(/1:21/);
+
+  view.rerender(renderState({ status: 'saved', activeWorkout: null, savedReceipt: { actualDurationSeconds: 81, phaseDurations, exercises }, blocked: false }));
+  ledger = screen.getByRole('table', { name: 'Session timing' });
+  expect([...ledger.querySelectorAll('thead th')].map(cell => cell.textContent)).toEqual(['Phase', 'Planned', 'Actual']);
+  expect(ledger.querySelector('tfoot tr').textContent).toBe('Total session2:151:21');
+  expect(screen.getByText('1 set and 1 exercise recorded').textContent).not.toMatch(/1:21/);
 });
 
 test('offers cooperative handoff after a live-owner timeout and resumes through the normal destination callback', async () => {
@@ -1568,7 +1610,7 @@ test('renders the session-produced divergent immutable-save conflict as frozen R
 
   const summary = await screen.findByRole('region', { name: 'Workout summary' });
   expect(screen.getByRole('heading', { level: 2, name: 'Review' })).toBe(document.activeElement);
-  expect(screen.getByRole('list', { name: 'Frozen phase timing' }).textContent).toMatch(/Main workout: 0:00 actual \/ 45:00 planned/);
+  expect([...screen.getByRole('table', { name: 'Session timing' }).querySelectorAll('tbody tr')].find(row => row.textContent.startsWith('Main workout')).textContent).toBe('Main workout45:000:00');
   expect(summary.textContent).toMatch(/1 set and 1 exercise recorded/);
   expect([...summary.querySelectorAll('button')].map(button => button.textContent)).toEqual(['Keep this workout open', 'Exit to Plan']);
   fireEvent.click(screen.getByRole('button', { name: 'Keep this workout open' }));
@@ -1654,7 +1696,8 @@ test('uses the accepted visible epoch for every transition after a backward acti
     expect.objectContaining({ type: 'confirmSet', timestamp: 18_000 }),
     expect.objectContaining({ type: 'finishWorkout', timestamp: 18_000 }),
   ]));
-  expect(screen.getByText(/recorded · 0:08/)).toBeDefined();
+  expect(screen.getByText(/recorded$/)).toBeDefined();
+  expect(screen.getByRole('table', { name: 'Session timing' }).querySelector('tfoot tr').textContent).toBe('Total session3:000:08');
 });
 
 test('the live total sums the phase ledger and never moves backward with a display clock regression', () => {

@@ -63,14 +63,24 @@ function recordedWorkText(exercises) {
 }
 
 function ReceiptFacts({ phaseDurations }) {
-  return <ul className="summary-facts" aria-label="Frozen phase timing">
-    {['warmup', 'performance', 'cooldown'].map(phase => {
-      const duration = phaseDurations?.[phase];
-      if (!duration) return null;
-      const label = phase === 'performance' ? 'Main workout' : phase[0].toUpperCase() + phase.slice(1);
-      return <li key={phase}><strong>{label}:</strong>{' '}<span>{formatTime(duration.actualSeconds ?? 0)} actual / {formatTime(duration.plannedSeconds ?? 0)} planned</span></li>;
-    })}
-  </ul>;
+  const phases = [
+    ['warmup', 'Warmup'],
+    ['performance', 'Main workout'],
+    ['cooldown', 'Cooldown'],
+  ];
+  const totals = phases.reduce((sum, [phase]) => ({
+    plannedSeconds: sum.plannedSeconds + (phaseDurations?.[phase]?.plannedSeconds ?? 0),
+    actualSeconds: sum.actualSeconds + (phaseDurations?.[phase]?.actualSeconds ?? 0),
+  }), { plannedSeconds: 0, actualSeconds: 0 });
+  return <table className="summary-facts">
+    <caption>Session timing</caption>
+    <thead><tr><th scope="col">Phase</th><th scope="col">Planned</th><th scope="col">Actual</th></tr></thead>
+    <tbody>{phases.map(([phase, label]) => {
+      const duration = phaseDurations?.[phase] ?? {};
+      return <tr key={phase}><th scope="row">{label}</th><td>{formatTime(duration.plannedSeconds ?? 0)}</td><td>{formatTime(duration.actualSeconds ?? 0)}</td></tr>;
+    })}</tbody>
+    <tfoot><tr><th scope="row">Total session</th><td>{formatTime(totals.plannedSeconds)}</td><td>{formatTime(totals.actualSeconds)}</td></tr></tfoot>
+  </table>;
 }
 
 function RecordedExercises({ exercises, summary }) {
@@ -187,7 +197,7 @@ function WorkoutSummary({ candidate, phaseTargets, isSaving, saveError, saveStat
   return (
     <section className="workout-summary" role="region" aria-label="Workout summary">
       <h2 tabIndex="-1" ref={summaryRef}>Review</h2>
-      <p className="summary-total">{recordedWork} recorded · {formatTime(candidate.actualDurationSeconds)}</p>
+      <p className="summary-total">{recordedWork} recorded</p>
       <ReceiptFacts phaseDurations={Object.fromEntries(['warmup', 'performance', 'cooldown'].map(phase => [phase, { plannedSeconds: phaseTargets?.[`${phase}Seconds`] ?? 0, actualSeconds: candidate.phaseActualSeconds?.[phase] ?? 0 }]))} />
       {!hasWork && <p className="error-message" role="alert">Confirm at least one exercise or set before saving.</p>}
       {hasWork && <PlannedWorkNotRecorded exercises={candidate.exercises} />}
@@ -836,7 +846,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
     const returnToPlan = () => {
       return session.exit ? session.exit().then(() => (onComplete ?? onFinish)?.()) : (onComplete ?? onFinish)?.();
     };
-    return <div className="workout-view"><JourneyProgress current="Review" /><section className="workout-summary workout-summary--saved"><h2 ref={savedRef} tabIndex="-1">Workout saved</h2><p className="summary-save-status" role="status">Saved to workout history</p>{receipt && <><p className="summary-total">{recordedWorkText(receipt.exercises)} recorded · {formatTime(receipt.actualDurationSeconds)}</p><ReceiptFacts phaseDurations={receipt.phaseDurations} /><PlannedWorkNotRecorded exercises={receipt.exercises} /><RecordedExercises exercises={receipt.exercises} summary="Recorded exercises" /></>}<div className="summary-actions saved-actions"><button type="button" className="recovery-secondary" onClick={returnToPlan}>Return to plan</button><button ref={copyRef} type="button" className="recovery-secondary" onClick={copyWorkout}>Copy workout results</button></div>{clipboardFeedback && <p role={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'status' : 'alert'} aria-live={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'polite' : 'assertive'} aria-atomic="true">{clipboardFeedback}</p>}</section></div>;
+    return <div className="workout-view"><JourneyProgress current="Review" /><section className="workout-summary workout-summary--saved"><h2 ref={savedRef} tabIndex="-1">Workout saved</h2><p className="summary-save-status" role="status">Saved to workout history</p>{receipt && <><p className="summary-total">{recordedWorkText(receipt.exercises)} recorded</p><ReceiptFacts phaseDurations={receipt.phaseDurations} /><PlannedWorkNotRecorded exercises={receipt.exercises} /><RecordedExercises exercises={receipt.exercises} summary="Recorded exercises" /></>}<div className="summary-actions saved-actions"><button type="button" className="recovery-secondary" onClick={returnToPlan}>Return to plan</button><button ref={copyRef} type="button" className="recovery-secondary" onClick={copyWorkout}>Copy workout results</button></div>{clipboardFeedback && <p role={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'status' : 'alert'} aria-live={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'polite' : 'assertive'} aria-atomic="true">{clipboardFeedback}</p>}</section></div>;
   }
   return <div className={`workout-view phase-${activeWorkout.phase}`}>
     <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{orderAnnouncement || restAnnouncement || recoveryAcknowledgement}</div>
