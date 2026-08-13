@@ -11,6 +11,7 @@ import {
   createProcessSupervisor,
   parseWindowsProcessLookup,
   preflightPorts,
+  startEmulatorStack,
   spawnEmulatorProcess,
   spawnOwnedProcess,
   terminateEmulatorProcessTree,
@@ -98,6 +99,30 @@ describe('emulator lifecycle', () => {
     });
     expect(persistedScratch).toContain('--import');
     expect(persistedScratch).toContain('persisted');
+  });
+
+  it('spawns scratch stacks from isolated configHome and canonical stacks from the repository', async () => {
+    const configPath = path.resolve('firebase.emulator-test.json');
+    const spawnAndExit = vi.fn(() => {
+      const child = fakeChild();
+      queueMicrotask(() => {
+        child.exitCode = 1;
+        child.emit('exit', 1, null);
+      });
+      return child;
+    });
+    const start = profile => startEmulatorStack({
+      configPath,
+      profile,
+      scratchDirectory: path.join(os.tmpdir(), `emulator-working-directory-${profile}`),
+      spawnEmulator: spawnAndExit,
+    });
+
+    await expect(start('scratch')).rejects.toThrow('Firebase emulators exited unexpectedly');
+    expect(spawnAndExit.mock.calls[0][2].cwd.startsWith(path.join(os.tmpdir(), 'adaptive-workouts-firebase-config-'))).toBe(true);
+
+    await expect(start('canonical')).rejects.toThrow('Firebase emulators exited unexpectedly');
+    expect(spawnAndExit.mock.calls[1][2].cwd).toBe(process.cwd());
   });
 
   it('rejects corrupt scratch exports instead of treating them as absent', async () => {

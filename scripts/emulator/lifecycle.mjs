@@ -519,6 +519,7 @@ export async function startEmulatorStack({
   stdio = 'inherit',
   onFailure = () => {},
   signal,
+  spawnEmulator = spawnEmulatorProcess,
 } = {}) {
   if (!['canonical', 'scratch'].includes(profile)) throw new Error(`Unknown emulator profile: ${profile}`);
   if (signal?.aborted) throw new Error('Emulator startup was cancelled');
@@ -529,8 +530,10 @@ export async function startEmulatorStack({
 
   const scratchExists = profile === 'scratch' && await pathExists(absoluteScratch);
   if (scratchExists) await validateScratchExport(absoluteScratch);
-
   const configHome = await mkdtemp(path.join(os.tmpdir(), 'adaptive-workouts-firebase-config-'));
+  // Firebase's Emulator Hub creates firebase-export-* relative to the emulator
+  // process working directory before renaming it to the requested export path.
+  const emulatorWorkingDirectory = profile === 'scratch' ? configHome : process.cwd();
   const env = { ...process.env, XDG_CONFIG_HOME: configHome };
   const args = buildEmulatorArgs({
     configPath: absoluteConfig,
@@ -539,8 +542,8 @@ export async function startEmulatorStack({
     scratchDirectory: absoluteScratch,
     scratchExists,
   });
-  const child = spawnEmulatorProcess(process.execPath, args, {
-    cwd: process.cwd(),
+  const child = spawnEmulator(process.execPath, args, {
+    cwd: emulatorWorkingDirectory,
     env,
     stdio,
   });
