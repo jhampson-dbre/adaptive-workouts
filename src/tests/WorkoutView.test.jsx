@@ -830,7 +830,9 @@ test('starts explicitly with set controls disabled and one shared total timer', 
   fireEvent.click(screen.getByRole('button', { name: 'Start workout' }));
   expect(screen.getByText('Workout').closest('li').getAttribute('aria-current')).toBe('step');
   act(() => vi.advanceTimersByTime(2000));
-  expect(screen.getByLabelText('Total elapsed 0:02')).toBeDefined();
+  const elapsedLabel = screen.getByText('Elapsed');
+  expect(elapsedLabel.closest('.timer').getAttribute('aria-label')).toBe('Total elapsed 0:02');
+  expect(styles).toMatch(/@media \(max-width: 520px\)\s*\{[\s\S]*?\.timer-value\s*\{[^}]*font-size:\s*var\(--type-timer-mobile\)/);
   expect(screen.getByRole('button', { name: /Plank exercise 1 set 1 start/i }).disabled).toBe(false);
 });
 

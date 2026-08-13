@@ -538,13 +538,27 @@ input:focus-visible {
   grid-column: 2;
   align-self: stretch;
   display: grid;
+  grid-template-rows: auto auto;
   min-width: 100px;
   place-items: center;
-  padding: 10px;
+  gap: 3px;
+  padding: 8px 10px;
   background: var(--text-h);
   color: var(--code-bg);
-  font: 700 var(--type-timer)/1 var(--heading);
   font-variant-numeric: tabular-nums;
+}
+
+.timer-label {
+  align-self: end;
+  font: 700 var(--type-label)/1 var(--heading);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  opacity: 0.78;
+}
+
+.timer-value {
+  align-self: start;
+  font: 700 var(--type-timer)/1 var(--heading);
 }
 
 .workout-help {
@@ -1390,6 +1404,9 @@ input:focus-visible {
 
   .timer {
     min-width: 0;
+  }
+
+  .timer-value {
     font-size: var(--type-timer-mobile);
   }
 
