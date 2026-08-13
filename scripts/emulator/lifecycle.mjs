@@ -358,14 +358,24 @@ export function spawnOwnedProcess(command, args, options = {}, {
 // the wrapper's shutdown signal and needs the running emulators to remain alive
 // long enough for `emulators:export` to complete.
 export function spawnEmulatorProcess(command, args, options = {}, {
+  platform = process.platform,
   spawnProcess = spawn,
+  stdout = process.stdout,
+  stderr = process.stderr,
 } = {}) {
-  return spawnProcess(command, args, {
+  const isolateWindowsConsole = platform === 'win32' && (!options.stdio || options.stdio === 'inherit');
+  const child = spawnProcess(command, args, {
     ...options,
     shell: false,
     detached: true,
     windowsHide: true,
+    ...(isolateWindowsConsole ? { stdio: ['ignore', 'pipe', 'pipe'] } : {}),
   });
+  if (isolateWindowsConsole) {
+    child.stdout.pipe(stdout, { end: false });
+    child.stderr.pipe(stderr, { end: false });
+  }
+  return child;
 }
 
 export function waitForOwnedChild(child, {

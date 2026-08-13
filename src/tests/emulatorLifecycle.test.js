@@ -411,15 +411,27 @@ describe('emulator lifecycle', () => {
     }));
   });
 
-  it('isolates the long-running emulator stack from Windows Ctrl+C broadcasts', () => {
+  it('isolates the long-running Windows emulator stack from Ctrl+C and inherited console handles', () => {
     const child = fakeChild(510006);
+    child.stdout = { pipe: vi.fn() };
+    child.stderr = { pipe: vi.fn() };
     const spawnProcess = vi.fn(() => child);
+    const stdout = {};
+    const stderr = {};
 
-    expect(spawnEmulatorProcess('node', ['firebase.js', 'emulators:start'], { stdio: 'inherit' }, { spawnProcess })).toBe(child);
+    expect(spawnEmulatorProcess('node', ['firebase.js', 'emulators:start'], { stdio: 'inherit' }, {
+      platform: 'win32',
+      spawnProcess,
+      stdout,
+      stderr,
+    })).toBe(child);
     expect(spawnProcess).toHaveBeenCalledWith('node', ['firebase.js', 'emulators:start'], expect.objectContaining({
       detached: true,
       shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
     }));
+    expect(child.stdout.pipe).toHaveBeenCalledWith(stdout, { end: false });
+    expect(child.stderr.pipe).toHaveBeenCalledWith(stderr, { end: false });
   });
 
   it('attempts integration stack stop and scratch removal independently', async () => {
