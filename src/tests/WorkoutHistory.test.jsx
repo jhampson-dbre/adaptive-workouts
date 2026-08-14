@@ -94,6 +94,21 @@ test('renders Workouts directly as the scan-first History destination', () => {
   expect(screen.getByRole('alert').textContent).toMatch(/failed to load/i);
 });
 
+test('turns first-use Workouts and Exercises into a direct path back to Plan', async () => {
+  const onPlan = vi.fn();
+  render(<WorkoutHistory history={[]} loadRange={vi.fn().mockResolvedValue([])} onPlan={onPlan} />);
+
+  expect(screen.getByText('Complete and save a workout to see it here.')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Plan a workout' }));
+  expect(onPlan).toHaveBeenCalledOnce();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
+  expect(await screen.findByText('Exercise trends appear after you complete and save a workout.')).toBeTruthy();
+  expect(screen.queryByRole('textbox', { name: 'Filter exercises by name' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Plan a workout' }));
+  expect(onPlan).toHaveBeenCalledTimes(2);
+});
+
 test('opens Exercises with a fresh complete discovery read and replaces stale results before detail reads', async () => {
   const discovery = deferred();
   const detail = deferred();
@@ -206,7 +221,7 @@ test('filters deterministic mode identities and reports distinct empty states', 
 test('distinguishes a complete discovery with no eligible exercises', async () => {
   render(<WorkoutHistory historyKey="u1" loadRange={vi.fn().mockResolvedValue([])} />);
   fireEvent.click(screen.getByRole('button', { name: 'Exercises' }));
-  expect(await screen.findByText('No eligible exercises in the last year.')).toBeDefined();
+  expect(await screen.findByText('Exercise trends appear after you complete and save a workout.')).toBeDefined();
 });
 
 test('reports selected weighted-workout changes and omits them for the first workout', async () => {
@@ -399,7 +414,7 @@ test('renders loading, error, empty, and a semantic read-only history section af
   rerender(<WorkoutHistory error="Failed to load workout history." history={[]} />);
   expect(screen.getByRole('alert').textContent).toMatch(/failed to load/i);
   rerender(<WorkoutHistory history={[]} />);
-  expect(screen.getByText('No workouts logged yet.')).toBeDefined();
+  expect(screen.getByText('Complete and save a workout to see it here.')).toBeDefined();
   expect(screen.getAllByRole('button')).toHaveLength(2);
   expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
 });
@@ -468,7 +483,7 @@ test('refreshes an empty History destination', async () => {
     .mockResolvedValueOnce({ items: [workout({ id: 'saved-after-collapse' })], nextCursor: null, hasMore: false });
   const { rerender } = render(<WorkoutHistory refreshKey={0} loadPage={loadPage} />);
 
-  expect(await screen.findByText('No workouts logged yet.')).toBeDefined();
+  expect(await screen.findByText('Complete and save a workout to see it here.')).toBeDefined();
   rerender(<WorkoutHistory refreshKey={1} loadPage={loadPage} />);
   await waitFor(() => expect(loadPage).toHaveBeenCalledTimes(2));
   expect(loadPage).toHaveBeenLastCalledWith({ cursor: null, pageSize: 20 });
@@ -749,9 +764,9 @@ test('formats date-only values without rollback, guards invalid dates, and prese
 test('treats a non-array history result as empty instead of crashing', () => {
   const { rerender } = render(<WorkoutHistory history={null} />);
   openHistory();
-  expect(screen.getByText('No workouts logged yet.')).toBeDefined();
+  expect(screen.getByText('Complete and save a workout to see it here.')).toBeDefined();
   rerender(<WorkoutHistory history={{ bad: true }} />);
-  expect(screen.getByText('No workouts logged yet.')).toBeDefined();
+  expect(screen.getByText('Complete and save a workout to see it here.')).toBeDefined();
 });
 
 test('renders valid v3 total and per-set work, planned rest, actual rest, and overtime', () => {

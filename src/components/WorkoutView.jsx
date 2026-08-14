@@ -272,6 +272,7 @@ function SetRow({ exercise, exerciseIndex, setIndex, started, activeTimer, activ
   const isFinalRest = restRemaining !== null && restRemaining <= 10;
   const [showDetails, setShowDetails] = useState(false);
   const [showRestCue, setShowRestCue] = useState(false);
+  const activeControlRef = useRef(null);
   const inputDisabled = !started || status === 'locked';
   useEffect(() => {
     if (!record.completed) setShowDetails(false);
@@ -284,6 +285,7 @@ function SetRow({ exercise, exerciseIndex, setIndex, started, activeTimer, activ
     const timeout = setTimeout(() => setShowRestCue(false), 450);
     return () => clearTimeout(timeout);
   }, [claimFinalRestCue, isFinalRest, restRecord?._activeRest?.id]);
+  useEffect(() => { if (isActive) activeControlRef.current?.focus(); }, [isActive]);
   const start = () => {
     if (activeTimer && !isActive) {
       const owner = activeTimer;
@@ -298,8 +300,8 @@ function SetRow({ exercise, exerciseIndex, setIndex, started, activeTimer, activ
       {exercise.trackingMode === 'weighted' && <p className="recommendation-reason" aria-label={`${prefix} recommendation reason`}>{recommendationText(exercise, record)}</p>}</>}
     {error && <p id={errorId} className="error-message" role="alert">{error}</p>}
     <div className="set-timing">
-      {isActive ? <><span className="work-timer">Work: {formatTime(calculateElapsedSeconds(activeTimer.startedAt, now))}</span><button type="button" aria-label={`${prefix} confirm`} aria-describedby={error ? errorId : undefined} onClick={() => onConfirm(exerciseIndex, setIndex)}>Confirm attempt</button><button type="button" aria-label={`${prefix} cancel`} onClick={() => onCancel(exerciseIndex, setIndex)}>Cancel timer</button></>
-        : status === 'ready' ? <><button type="button" ref={startRef} className={showRestCue ? 'rest-final-cue' : undefined} aria-label={`${prefix} start`} disabled={!started} aria-describedby={error ? errorId : (!started ? 'workout-start-help' : undefined)} onClick={start}>{isResting ? 'Start set early' : 'Start set'}</button>{restRecord && <span className="superset-rest-status rest-timer"><RestReadout record={restRecord} now={now} /></span>}</>
+      {isActive ? <><span className="work-timer">Work: {formatTime(calculateElapsedSeconds(activeTimer.startedAt, now))}</span><button ref={activeControlRef} type="button" aria-label={`${prefix} confirm`} aria-describedby={error ? errorId : undefined} onClick={() => onConfirm(exerciseIndex, setIndex)}>Confirm attempt</button><button type="button" aria-label={`${prefix} cancel`} onClick={() => onCancel(exerciseIndex, setIndex)}>Cancel timer</button></>
+        : status === 'ready' ? <><button type="button" ref={element => { activeControlRef.current = element; startRef(element); }} className={showRestCue ? 'rest-final-cue' : undefined} aria-label={`${prefix} start`} disabled={!started} aria-describedby={error ? errorId : (!started ? 'workout-start-help' : undefined)} onClick={start}>{isResting ? 'Start set early' : 'Start set'}</button>{restRecord && <span className="superset-rest-status rest-timer"><RestReadout record={restRecord} now={now} /></span>}</>
           : record.completed ? <><button type="button" aria-expanded={showDetails} onClick={() => setShowDetails(current => !current)}>{showDetails ? `Hide details for ${exercise.name} set ${setIndex + 1}` : `Show details for ${exercise.name} set ${setIndex + 1}`}</button>{showDetails && <div className="completed-set-details"><span>Work: {formatTime(record.workDurationSeconds ?? 0)}</span><RestReadout record={record} now={now} showLive={false} /><button type="button" className="secondary-action" disabled={record.actualRestSeconds !== null || exercise.setRecords.slice(setIndex + 1).some(item => item.completed)} onClick={() => dispatch({ type: 'undoSet', exerciseIndex, setIndex })}>Undo set {setIndex + 1}</button></div>}</>
             : <span>Complete the previous set first.</span>}
     </div>
@@ -347,6 +349,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
   const [clipboardFeedback, setClipboardFeedback] = useState('');
   const summaryRef = useRef(null);
   const phaseHeadingRef = useRef(null);
+  const activeWorkTimerRef = useRef(activeWorkout.activeWorkTimer);
   const recoveryHeadingRef = useRef(null);
   const promptHeadingRef = useRef(null);
   const finishRef = useRef(null);
@@ -366,7 +369,9 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
   const acceptedDisplayEpochMsRef = useRef(initialDisplayEpochMs);
   const backPendingRef = useRef(false);
   const wasShowingRecoveryRef = useRef(false);
+  activeWorkTimerRef.current = activeWorkout.activeWorkTimer;
   const started = activeWorkout.workoutStartedAt !== null;
+  const announcedMainWorkoutRef = useRef(started && activeWorkout.phase === 'performance');
   const hasUnfinishedSets = activeWorkout.exercises.some(exercise => exercise.setRecords.some(record => !record.completed));
   const orderBlocks = activeWorkout.exercises.reduce((blocks, exercise) => {
     const group = supersetFor(activeWorkout, exercise)?.occurrenceIds ?? [exercise.occurrenceId];
@@ -398,7 +403,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       : started || ['warmup', 'performance'].includes(activeWorkout.phase) ? 'Workout' : 'Plan';
   const phaseTitle = started && activeWorkout.phase === 'generated'
     ? 'Main workout'
-    : { generated: 'Workout ready', warmup: 'Warmup', performance: 'Main workout', cooldown: 'Cooldown', review: 'Review', cancelled: 'Workout cancelled' }[activeWorkout.phase] ?? 'Workout';
+    : { generated: 'Review your workout', warmup: 'Warmup', performance: 'Main workout', cooldown: 'Cooldown', review: 'Review', cancelled: 'Workout cancelled' }[activeWorkout.phase] ?? 'Workout';
   const showingRecovery = (sessionState?.blocked && !blockedSaveConflict) || !sessionState?.activeWorkout;
   const recoveryPresentation = showingRecovery
     ? `${sessionState?.status ?? ''}:${sessionState?.error ?? ''}:${sessionState?.snapshot?.draftId ?? ''}:${sessionState?.snapshot?.ownershipGeneration ?? ''}`
@@ -526,7 +531,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
   }, [activeWorkout.exercises, activeWorkout.phase, now]);
 
   useEffect(() => { if (finishCandidate) summaryRef.current?.focus(); }, [finishCandidate, blockedSaveConflict]);
-  useEffect(() => { if (phasePresentation) phaseHeadingRef.current?.focus(); }, [phasePresentation]);
+  useEffect(() => { if (phasePresentation && !activeWorkTimerRef.current) phaseHeadingRef.current?.focus(); }, [phasePresentation]);
   useEffect(() => { if (recoveryPresentation) recoveryHeadingRef.current?.focus(); }, [recoveryPresentation]);
   useEffect(() => { if (earlyFinishPrompt) promptHeadingRef.current?.focus(); }, [earlyFinishPrompt]);
 
@@ -572,10 +577,18 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
     }
     clearExerciseError(exerciseIndex);
     setExpanded(current => ({ ...current, [expansionKeyAt(activeWorkout, exerciseIndex)]: true }));
-    dispatch({ type: 'startSet', exerciseIndex, setIndex, timestamp: acceptDisplayTime(Date.now()) });
+    const action = { type: 'startSet', exerciseIndex, setIndex, timestamp: acceptDisplayTime(Date.now()) };
+    if (!announcedMainWorkoutRef.current) void (async () => {
+      if (await session.action(action)) {
+        announcedMainWorkoutRef.current = true;
+        setRecoveryAcknowledgement('Main workout started.');
+      }
+    })();
+    else dispatch(action);
   };
 
   const handleConfirmSet = (exerciseIndex, setIndex) => {
+    setRecoveryAcknowledgement('');
     const exercise = activeWorkout.exercises[exerciseIndex];
     const before = exercise.setRecords[setIndex];
     dispatch({ type: 'confirmSet', exerciseIndex, setIndex, timestamp: acceptDisplayTime(Date.now()) });
@@ -855,7 +868,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       <div className="workout-header"><h2 className="workout-title" ref={phaseHeadingRef} tabIndex="-1">{phaseTitle}</h2>{started && <div className="timer" aria-label={`Total elapsed ${formatTime(displayedElapsedSeconds)}`}><span className="timer-label">Elapsed</span><span className="timer-value">{formatTime(displayedElapsedSeconds)}</span></div>}</div>
       <p id="workout-start-help" className="workout-help">{['warmup', 'cooldown'].includes(activeWorkout.phase) && activeWorkout.phaseLedger ? phaseReadout(activeWorkout.phase === 'warmup' ? 'Warmup' : 'Cooldown', sessionState?.phaseTargets?.[`${activeWorkout.phase}Seconds`] ?? 0, getPhaseElapsedSeconds(activeWorkout, activeWorkout.phase, now), true) : started ? 'Start each set as you begin it, then confirm when you finish.' : 'Start the workout to time your sets.'}</p>
       {started && preference?.operation && <section className="order-preference-panel" aria-label="Saved exercise orders">{['pending', 'indeterminate'].includes(preference.operation.state) && <p role="status">{preference.operation.state === 'pending' ? 'Saving this exercise order for future workouts.' : 'Saving is taking longer than expected. We’ll confirm when it finishes.'}</p>}{preference.operation.state === 'success' && <><p role="status">{preference.operation.successMessage ?? 'Order saved.'}</p><button type="button" onClick={onDismissPreference}>Dismiss</button></>}{preference.operation.state === 'failure' && <><p role="alert">Couldn't save this exercise order. Your saved exercise orders and today's workout order are unchanged.</p><button type="button" onClick={() => onSavePreference?.(preference.operation.candidate)}>Try saving this exercise order again</button></>}</section>}
-      {!started && activeWorkout.phase !== 'cancelled' && <section className="workout-ready" aria-label="Workout ready">
+      {!started && activeWorkout.phase !== 'cancelled' && <section className="workout-ready" aria-label="Review your workout">
         <div className="workout-ready-summary"><p>{plannedSeconds > 0 ? `${Math.round(plannedSeconds / 60)} min planned · ` : ''}{activeWorkout.exercises.length} {activeWorkout.exercises.length === 1 ? 'exercise' : 'exercises'} · {counts.planned} {counts.planned === 1 ? 'set' : 'sets'}</p>{orderSummary && <p>{orderSummary}</p>}</div>
         <button className="start-btn" disabled={preference?.operation?.state === 'pending'} onClick={async () => { const timestamp = acceptDisplayTime(Date.now()); const successOperationId = preference?.operation?.state === 'success' ? preference.operation.id : null; if (await session.action({ type: 'startWorkout', timestamp })) { setOrderAnnouncement(''); setRecoveryAcknowledgement(''); onStarted?.(activeWorkout.exercises, successOperationId); } }}>Start workout</button>
         <button className="recovery-secondary workout-ready-back" type="button" onClick={async () => { await session.discard(); onBackToPlan?.(); }}>Back to Plan</button>

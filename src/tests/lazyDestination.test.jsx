@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useEffect, useRef } from 'react'
 import LazyDestination from '../components/LazyDestination'
 
 describe('LazyDestination', () => {
@@ -33,6 +34,18 @@ describe('LazyDestination', () => {
     expect(button.disabled).toBe(true)
     expect(button.textContent).toBe('Retrying…')
     expect(retry).toHaveBeenCalledOnce()
+  })
+
+  it('preserves a ready destination control that claims focus on mount', async () => {
+    function ActiveSet() {
+      const ref = useRef(null)
+      useEffect(() => { ref.current?.focus() }, [])
+      return <><h2>Main workout</h2><button ref={ref}>Confirm attempt</button></>
+    }
+    render(<LazyDestination destination="workout" loader={() => Promise.resolve({ default: ActiveSet })} />)
+
+    const control = await screen.findByRole('button', { name: 'Confirm attempt' })
+    await waitFor(() => expect(document.activeElement).toBe(control))
   })
 
   it('restores the alert and enabled same retry control after a rejected retry', async () => {

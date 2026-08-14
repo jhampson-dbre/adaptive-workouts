@@ -309,7 +309,7 @@ function HistoryEntry({ entry, ...headingProps }) {
 
 const pageMessage = (count, older = false) => `${count} ${older ? 'older ' : ''}workout${count === 1 ? '' : 's'} loaded.`;
 
-export default function WorkoutHistory({ history, historyKey, loading = false, error = null, loadPage, loadRange, refreshKey }) {
+export default function WorkoutHistory({ history, historyKey, loading = false, error = null, loadPage, loadRange, refreshKey, onPlan }) {
   const staticHistory = Array.isArray(history);
   const [entries, setEntries] = useState(() => staticHistory ? history : []);
   const [phase, setPhase] = useState(staticHistory ? 'loaded' : 'idle');
@@ -429,7 +429,7 @@ export default function WorkoutHistory({ history, historyKey, loading = false, e
     <section className={`workout-history-section${view === 'exercises' ? ' workout-history-exercises' : ''}`} aria-labelledby="history-heading">
       <h2 id="history-heading" tabIndex="-1">History</h2>
       <div className="history-views"><button type="button" aria-pressed={view === 'workouts'} onClick={() => { setView('workouts'); setTimeout(() => workoutsHeadingRef.current?.focus()); }}>Workouts</button><button type="button" aria-pressed={view === 'exercises'} onClick={() => setView('exercises')}>Exercises</button></div>
-      {view === 'exercises' ? <ExerciseTrends loadRange={loadRange} /> : <>
+      {view === 'exercises' ? <ExerciseTrends loadRange={loadRange} onPlan={onPlan} /> : <>
       <h3 ref={workoutsHeadingRef} tabIndex="-1">Workouts</h3>
       {isLoading ? <p aria-live="polite">Loading workout history…</p> : initialError ? (
             <div className="error-message" role="alert">
@@ -440,7 +440,7 @@ export default function WorkoutHistory({ history, historyKey, loading = false, e
             </div>
           ) : (
             <>
-              {entries.length === 0 ? <p>No workouts logged yet.</p> : (
+              {entries.length === 0 ? <div className="history-empty"><p>Complete and save a workout to see it here.</p>{onPlan && <button className="history-action" type="button" onClick={onPlan}>Plan a workout</button>}</div> : (
                 <div className="history-list">
                   {entries.map((entry, index) => <HistoryEntry entry={entry} key={entry?.id || index} focusable={index === focusIndex} headingRef={index === focusIndex ? headingRef : undefined} onFocusLeave={() => setFocusIndex(null)} />)}
                 </div>

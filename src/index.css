@@ -1784,6 +1784,15 @@ input:focus-visible {
   font-size: var(--type-body);
 }
 
+.setting-group label {
+  display: grid;
+  gap: 5px;
+}
+
+.setting-group :is(input, select) {
+  width: min(100%, 14rem);
+}
+
 .tracking-field {
   display: flex;
   flex: 1 1 150px;
