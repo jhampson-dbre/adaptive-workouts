@@ -648,6 +648,49 @@ describe('Generator Engine', () => {
                 .toEqual(['chest']);
         });
 
+        it('treats a completed v5 Core superset as recent so 25 minutes selects the pivot and older fitting Tier 3 after legs are excluded', () => {
+            const catalog = [
+                exercise('biceps', 'Biceps', 1, 3),
+                exercise('core', 'Core', 4, 10),
+                exercise('older-back', 'Back', 3, 4),
+                exercise('legs', 'Legs', 3),
+            ];
+            const coreSetRecords = memberIndex => Array.from({ length: 10 }, (_, index) => ({
+                index,
+                completed: true,
+                plannedRestSeconds: index < 9 || memberIndex === 0 ? 60 : null,
+                workDurationSeconds: 1,
+                actualRestSeconds: memberIndex === 0 ? 0 : null,
+            }));
+            const v5CoreSuperset = {
+                schemaVersion: 5,
+                status: 'completed',
+                date: '2026-06-29T10:00:00Z',
+                actualDurationSeconds: 60,
+                phaseDurations: {
+                    warmup: { plannedSeconds: 0, actualSeconds: 0 },
+                    performance: { plannedSeconds: 60, actualSeconds: 60 },
+                    cooldown: { plannedSeconds: 0, actualSeconds: 0 },
+                },
+                exercises: [
+                    {
+                        ...catalog[1], occurrenceId: 'core:0', trackingMode: 'simple', prescribedSetCount: 10,
+                        setRecords: coreSetRecords(0),
+                    },
+                    {
+                        id: 'core-partner', name: 'Core Partner', muscleGroup: 'Core', tier: 4, sets: 10,
+                        occurrenceId: 'core-partner:1', trackingMode: 'simple', prescribedSetCount: 10,
+                        setRecords: coreSetRecords(1),
+                    },
+                ],
+                supersets: [{ occurrenceIds: ['core:0', 'core-partner:1'], restPlacement: 'AFTER_ROUND' }],
+            };
+            const history = [legacyWorkout('2026-06-20T10:00:00Z', 'older-back'), v5CoreSuperset];
+
+            expect(ids(generateWorkout(25, ['Legs'], false, catalog, history, { staleThreshold: 5 })))
+                .toEqual(['biceps', 'older-back']);
+        });
+
         it('is deterministic for unordered malformed history and equal-recency catalog ties', () => {
             const catalog = [exercise('first', 'A', 3), exercise('second', 'B', 3), exercise('third', 'C', 4)];
             const history = [

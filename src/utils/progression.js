@@ -4,6 +4,7 @@ import {
   isValidV3ExerciseOccurrence,
   isValidV3WorkoutDocument,
   isValidV4WorkoutDocument,
+  isValidV5ExerciseOccurrence,
   isValidV5WorkoutDocument,
   isValidWeightedCatalogConfig,
 } from './workoutSchema';
@@ -40,9 +41,9 @@ function isEligibleProgressionWorkout(workout) {
 }
 
 function isValidProgressionOccurrence(workout, occurrence) {
-  return workout.schemaVersion === 3 || workout.schemaVersion === 4 || workout.schemaVersion === 5
-    ? isValidV3ExerciseOccurrence(occurrence)
-    : isValidV2ExerciseOccurrence(occurrence);
+  if (workout.schemaVersion === 5) return isValidV5ExerciseOccurrence(workout, occurrence);
+  return workout.schemaVersion === 3 || workout.schemaVersion === 4
+    ? isValidV3ExerciseOccurrence(occurrence) : isValidV2ExerciseOccurrence(occurrence);
 }
 
 function findNewestAnchor(exerciseId, history) {

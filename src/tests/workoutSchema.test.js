@@ -302,6 +302,41 @@ describe('workout schema', () => {
   });
 
   it.each([
+    ['AFTER_ROUND', validV5Workout],
+    ['BETWEEN_EXERCISES', {
+      ...validV5Workout,
+      exercises: validV5Workout.exercises.map(exercise => ({
+        ...exercise,
+        setRecords: exercise.setRecords.map(record => ({
+          ...record,
+          completed: true,
+          workDurationSeconds: 0,
+          plannedRestSeconds: 60,
+          actualRestSeconds: 0,
+        })),
+      })),
+      supersets: [{ occurrenceIds: ['plank:2', 'side-plank:3'], restPlacement: 'BETWEEN_EXERCISES' }],
+    }],
+  ])('recognizes confirmed %s v5 superset members without weakening document validation', (_placement, workout) => {
+    expect(isValidV5WorkoutDocument(workout)).toBe(true);
+    expect(wasPerformed(workout, workout.exercises[0])).toBe(true);
+    expect(wasPerformed(workout, workout.exercises[1])).toBe(true);
+    expect(wasPerformed({ ...workout, actualDurationSeconds: 999 }, workout.exercises[0])).toBe(false);
+    expect(wasPerformed(workout, {
+      occurrenceId: workout.exercises[0].occurrenceId,
+      setRecords: [{ completed: true }],
+    })).toBe(false);
+    expect(wasPerformed(workout, { occurrenceId: workout.exercises[0].occurrenceId })).toBe(false);
+    const unconfirmed = structuredClone(workout);
+    unconfirmed.exercises[0].setRecords.forEach(record => {
+      record.completed = false;
+      record.workDurationSeconds = null;
+      record.actualRestSeconds = null;
+    });
+    expect(wasPerformed(unconfirmed, unconfirmed.exercises[0])).toBe(false);
+  });
+
+  it.each([
     ['exercise bookkeeping', workout => ({
       ...workout,
       exercises: workout.exercises.map((exercise, index) => (

@@ -108,12 +108,39 @@ function v4Workout(options = {}) {
   };
 }
 
+function v5SupersetWorkout({ id = 'workout-v5', date = '2026-07-12T10:00:00.000Z', malformed = false } = {}) {
+  const bench = v3Occurrence({ occurrenceId: 'bench:0', actualWeight: 120 });
+  const partner = { ...v3Occurrence({ id: 'row', occurrenceId: 'row:1', actualWeight: 100 }), id: 'row', name: 'Row', muscleGroup: 'Back' };
+  const exercises = [bench, partner].map((exercise, memberIndex) => ({
+    ...exercise,
+    setRecords: exercise.setRecords.map((record, index) => ({
+      ...record,
+      plannedRestSeconds: index < exercise.setRecords.length - 1 || memberIndex === 0 ? 90 : null,
+      actualRestSeconds: memberIndex === 0 ? (index === exercise.setRecords.length - 1 ? 0 : 80) : null,
+    })),
+  }));
+  return {
+    ...v4Workout({ id, date, exercises }),
+    schemaVersion: 5,
+    supersets: [{ occurrenceIds: ['bench:0', 'row:1'], restPlacement: 'AFTER_ROUND' }],
+    ...(malformed ? { actualDurationSeconds: 1 } : {}),
+  };
+}
+
 describe('next-session weighted progression', () => {
   it('uses valid v4 snapshots as anchors and ignores malformed v4 snapshots', () => {
     expect(getNextSessionRecommendation(currentExercise, [v4Workout({ id: 'v4', exercises: [v3Occurrence({ actualWeight: 110 })] })]))
       .toMatchObject({ sourceWorkoutId: 'v4', recommendedWeight: 120 });
     expect(getNextSessionRecommendation(currentExercise, [{ ...v4Workout({ id: 'bad', exercises: [v3Occurrence({ actualWeight: 110 })] }), actualDurationSeconds: 1 }]))
       .toMatchObject({ decision: 'starting', sourceWorkoutId: null });
+  });
+
+  it('uses a valid v5 superset member as the newest anchor and ignores malformed v5', () => {
+    const older = v4Workout({ id: 'older', date: '2026-07-11T10:00:00.000Z', exercises: [v3Occurrence({ actualWeight: 110 })] });
+    expect(getNextSessionRecommendation(currentExercise, [older, v5SupersetWorkout()]))
+      .toMatchObject({ sourceWorkoutId: 'workout-v5', sourceAnchorWeight: 120, recommendedWeight: 130 });
+    expect(getNextSessionRecommendation(currentExercise, [older, v5SupersetWorkout({ id: 'bad-v5', malformed: true })]))
+      .toMatchObject({ sourceWorkoutId: 'older', sourceAnchorWeight: 110, recommendedWeight: 120 });
   });
   it('requires successfully loaded history to be an array', () => {
     expect(() => getNextSessionRecommendation(currentExercise, null)).toThrow(/history.*array/i);

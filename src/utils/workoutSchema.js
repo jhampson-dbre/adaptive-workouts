@@ -496,15 +496,28 @@ function groupTimingValidationCopy(supersets, exercises) {
   return normalized;
 }
 
-export function isValidV5WorkoutDocument(workout) {
+function getValidV5NormalizedExercises(workout) {
   const { supersets, ...v4 } = workout ?? {};
-  if (!Array.isArray(supersets) || !Array.isArray(workout?.exercises)) return false;
-  if (!isValidSavedSupersets(supersets, workout.exercises)) return false;
+  if (!Array.isArray(supersets) || !Array.isArray(workout?.exercises)) return null;
+  if (!isValidSavedSupersets(supersets, workout.exercises)) return null;
   const normalizedExercises = groupTimingValidationCopy(supersets, workout.exercises);
-  if (!normalizedExercises) return false;
+  if (!normalizedExercises) return null;
   return hasOnlyFields(workout, new Set([...V4_DOCUMENT_FIELDS, 'supersets']))
     && workout.schemaVersion === 5
-    && isValidV4WorkoutDocument({ ...v4, schemaVersion: 4, exercises: normalizedExercises });
+    && isValidV4WorkoutDocument({ ...v4, schemaVersion: 4, exercises: normalizedExercises })
+    ? normalizedExercises
+    : null;
+}
+
+export function isValidV5WorkoutDocument(workout) {
+  return getValidV5NormalizedExercises(workout) !== null;
+}
+
+export function isValidV5ExerciseOccurrence(workout, occurrence) {
+  const normalizedExercises = getValidV5NormalizedExercises(workout);
+  return normalizedExercises?.some((_exercise, index) => (
+    workout.exercises[index] === occurrence
+  )) ?? false;
 }
 
 export function isMalformedV2WorkoutDocument(workout) {
@@ -536,8 +549,12 @@ export function wasPerformed(workout, occurrence) {
   if (isLegacyWorkoutDocument(workout)) {
     return occurrence !== null && typeof occurrence === 'object' && !Array.isArray(occurrence);
   }
-  if (workout?.schemaVersion === 3 || workout?.schemaVersion === 4 || workout?.schemaVersion === 5) {
-    return (workout.schemaVersion === 3 ? isValidV3WorkoutDocument(workout) : workout.schemaVersion === 4 ? isValidV4WorkoutDocument(workout) : isValidV5WorkoutDocument(workout))
+  if (workout?.schemaVersion === 5) {
+    return isValidV5ExerciseOccurrence(workout, occurrence)
+      && occurrence.setRecords.some(record => record.completed === true);
+  }
+  if (workout?.schemaVersion === 3 || workout?.schemaVersion === 4) {
+    return (workout.schemaVersion === 3 ? isValidV3WorkoutDocument(workout) : isValidV4WorkoutDocument(workout))
       && isValidV3ExerciseOccurrence(occurrence)
       && occurrence.setRecords.some(record => record.completed === true);
   }
