@@ -6,7 +6,7 @@ Read-only cumulative branch review before PR publication or epic completion. Pri
 
 ## Conditional detail
 
-Review the committed `git merge-base <target> HEAD` range plus `git status --short --branch`, `git diff`, and `git diff --cached`. Check intent, task evidence, security/data/migration/deployment risks, verification, and PR readiness; PR text is not proof. The initial cumulative pass requires independent epic conformance review of the same evidence. For a remediation handoff, apply the coordinator-provided review scope; unchanged evidence does not rerun review or CI.
+Review the coordinator-supplied committed implementation range from `git merge-base <target> HEAD`, current approved intent, task evidence, named integration risks, verification, and PR readiness; PR text is not proof. Unrelated working-tree residue is outside reviewer scope. The initial cumulative pass requires independent epic conformance review of the same evidence. For a remediation handoff, apply the coordinator-provided review scope; unchanged evidence does not rerun review or CI.
 
 ## Boundaries
 

@@ -29,12 +29,18 @@ Use `$maintain-agent-workflows` for changes to agent prompts, roles, skills, wor
 - Required UI is classified during discovery and preserves its approved UX artifact. Exercise each materially changed scenario in a rendered surface using synthetic or de-identified data and pass the task-scoped evidence directly to applicable reviewers. A direct changed-surface defect or missing required rendered evidence blocks; unavailable tooling gets a concise limitation and the best safe alternative.
 - Planning starts from an approved Discovery Brief (or documented exception) and
   reuses current duplicate evidence. Invoke design, UX, or senior review only for a
-  named material risk. Persist approved intent when it has durable value.
+  named material risk. Persist approved intent when it has durable value. If a
+  repository-backed planning artifact is approved before implementation begins,
+  commit it on a focused planning-only `codex/` branch; that branch preserves intent
+  but does not authorize implementation. Later implementation starts from the current
+  target branch with the current approved artifact in place before the implementation
+  task base.
   Implementation may continue when the user's authorization already covers the
   approved scope; otherwise leave a resumable plan and ask once.
 - Classify UI work as `required`, `optional`, or `skip-recorded`. Required work keeps a proportional scenario artifact and uses a fresh ux-design-reviewer before architecture review when independent design judgment is needed. Architecture retains authority; material architecture changes to the approved UX contract return through UX review before user approval.
 - Substantive behavior or risk changes receive independent code and task-conformance review. Mechanical or straightforward low-risk changes may use coordinator verification with a recorded rationale. Coordinators may close objective bookkeeping or factual/provenance corrections through verification when they leave the reviewed artifact, behavior, approved intent, material evidence, authority boundary, verification, release risk, and substantive review conclusion unchanged. After a review fix, route only the delta and affected evidence to the authority whose concern changed; rerun both reviews only for a named material invalidator.
-- Before PR publication or epic completion, run independent cumulative epic and conformance reviews of the merge-base range and complete working-tree state, except an unchanged, clean single-task branch may reuse its accepted task-completion evidence under the epic-completion workflow. Otherwise, including multi-task or materially invalidated branches, use cumulative gates. After additive remediation, use the epic-completion workflow's Git-delta routing; rerun both gates only for a recorded material invalidator.
+- Before review or publication, the coordinator confirms all intended implementation-task changes are committed and no local change affects reviewed behavior or verification evidence. Exclude unrelated working-tree residue from reviewer packets and review routing; preserve it untouched.
+- Before PR publication or epic completion, run independent cumulative epic and conformance reviews of the committed implementation merge-base range, except an unchanged single-task branch may reuse its accepted task-completion evidence under the epic-completion workflow. Planning-artifact branch setup and commit count do not determine task count. Multi-task implementation or a named material invalidator requires cumulative gates. After additive remediation, use the epic-completion workflow's Git-delta routing; rerun both gates only for a recorded material invalidator.
 - For implementation branch or epic work, use the draft-PR handoff unless the user explicitly opts out: after those reviews, push, open the draft PR, and confirm required checks are visible and passing or documented with exact next steps.
 
 ## Roles

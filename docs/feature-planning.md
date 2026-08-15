@@ -85,11 +85,19 @@ the plan only when consistency, compatibility, safety, or verification depends o
 them. Label externally triggered verification with its trigger, owner, expected
 evidence, and completion boundary.
 
-The approved spec may be committed directly with the implementation when that is the
-smallest coherent change. Create a separate planning task or commit only when it has
-independent value, such as establishing a shared branch basis before multiple tasks
-or preserving an approved artifact before implementation can begin. There is no
-mandatory planning Task 1.
+The approved spec may be committed directly with the implementation when implementation
+begins immediately. If a repository-backed artifact is approved while implementation is
+deferred, commit it on a focused planning-only `codex/` branch so it does not remain as
+workspace residue; the branch and commit preserve approved intent but do not authorize
+implementation. If no repository artifact is authorized, keep the durable record in
+Trekker instead of creating a workspace file. There is no mandatory planning Task 1.
+
+When implementation is later authorized, start its focused branch from the current
+target branch. If the current approved artifact is not already present, place it on the
+branch before establishing the implementation task base. This is branch setup, not an
+implementation task or review gate. Reviewers receive the coordinator's current,
+reconciled statement of approved intent; they do not audit artifact provenance or Git
+topology.
 
 After authorized Trekker writes, mirror only the immediate work in the Codex session
 plan. Trekker wins if the two diverge.

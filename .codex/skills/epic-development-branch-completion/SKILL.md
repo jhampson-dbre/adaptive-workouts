@@ -15,20 +15,26 @@ reviewers to push, merge, create a PR, or update Trekker.
 1. Select and state the target branch, then compute `git merge-base <target> HEAD`.
 2. Inspect the committed cumulative range `<merge-base>...HEAD`, not only local
    changes. Confirm it includes every intended completed-task commit.
-3. Inspect the complete working tree separately with all of:
+3. Inspect the complete working tree as a coordinator-owned preflight with all of:
    - `git status --short --branch`
    - `git diff`
    - `git diff --cached`
+   Commit any omitted implementation-task change before review. If a local change
+   affects reviewed behavior or verification evidence, commit or remove it and rerun
+   the affected verification. Preserve unrelated residue and exclude it from reviewer
+   scope and routing.
 4. For every completed epic task, confirm intended work was committed before
    completion and that its Trekker `Summary:` contains the task commit hash and
    required verification evidence. Reconcile any mismatch before final review.
 
 ## 2. Select final-integration routing
 
-Use the unchanged, clean single-task fast path only when one task contains all intended
-changes; its reviewed or coordinator-verified HEAD is unchanged; the worktree is clean;
-approved intent is unchanged; and there is no concrete cross-task, merge/conflict,
-release, or high-risk integration concern. Reuse the task Summary and whichever
+Use the unchanged single-task fast path when one implementation task contains all
+intended implementation changes; its reviewed or coordinator-verified HEAD is
+unchanged; approved intent is unchanged; required evidence remains valid; and there is
+no concrete cross-task, merge/conflict, release, or high-risk integration concern.
+Planning-artifact branch setup before the implementation task base and commit count do
+not change task count or invalidate this route. Reuse the task Summary and whichever
 task-level review authorities were proportionately applicable; publication does not
 create missing review authorities.
 
@@ -42,25 +48,26 @@ Dispatch both reviews from the same evidence packet:
 - **Epic branch review:** an epic reviewer examines branch readiness, cross-task
   regressions, task evidence, residual risks, and publication state.
 - **Epic spec/conformance review:** a fresh spec reviewer examines the same
-  cumulative range and working tree against approved epic intent.
+  cumulative range against approved epic intent.
 
-Supply each reviewer with the target branch, merge-base commit, cumulative diff,
-working-tree evidence, Trekker task evidence, approved intent, verification results,
-and draft-PR state when one exists. Record `reviewed_sha = HEAD` for their shared
-evidence packet. Neither review substitutes for the other.
+Supply each reviewer with the target branch, merge-base commit, committed implementation
+range, Trekker task evidence, current approved intent, verification results, named
+integration risks, and draft-PR state when one exists. Record `reviewed_sha = HEAD` for
+their shared evidence packet. Neither review substitutes for the other.
 
 ## 4. Resolve final-integration findings
 
 For an accepted finding, make the intended additive fix, run verification proportionate
-to its delta, commit it, and inspect `reviewed_sha..HEAD` plus the complete working
-tree. Record the current SHA, changed evidence, and routing decision.
+to its delta, commit it, and inspect `reviewed_sha..HEAD`; repeat the coordinator-owned
+working-tree preflight. Record the current SHA, changed evidence, and routing decision.
 
 Use scoped closure only when `reviewed_sha` remains an ancestor; every new commit is
 accepted remediation; approved intent is unchanged; no security, data, auth, migration,
 deployment, architecture, or other high-risk boundary is introduced or materially
 expanded; prior evidence still applies and changed evidence is identified; and the
-working tree is clean or fully included in the handoff. Task count and branch size are
-not invalidators.
+no uncommitted change affects reviewed behavior or verification evidence. Task count
+and branch size are not invalidators, and unrelated working-tree residue is not a
+reviewer input or routing condition.
 
 - Dispatch only authorities whose concern changed: technical for implementation, tests,
   build behavior, or technical evidence; conformance for approved behavior, acceptance
