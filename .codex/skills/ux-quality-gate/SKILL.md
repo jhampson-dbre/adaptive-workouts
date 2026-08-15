@@ -11,6 +11,47 @@ the screen's job, action hierarchy, meaningful states, recovery, and accessibili
 Use a fresh ux-design-reviewer before architecture review when that artifact needs
 independent design judgment.
 
+## Pre-approval shaping
+
+Before the coordinator first presents a material user-visible interaction recommendation
+for approval, apply one bounded `$impeccable shape` advisory to the unresolved decision
+or closely related decision cluster. Cover the person's context, flow and action
+hierarchy, applied/draft/loading/success/failure/cancel states, placement and responsive
+behavior, feedback, focus and announcements, recovery, accessibility, reversibility,
+user agency, and the simplest sufficient non-goals. This applies during discovery and
+planning, when resolving a UX-review finding, and when later evidence requires a
+material change to approved UX.
+
+Before first presenting coordinator-authored new or meaningfully revised in-app copy,
+apply one bounded `$impeccable clarify` advisory to the interaction path and its
+meaningful variants. This includes headings, explanations, helper text, labels,
+loading/success/status messages, errors, empty states, recovery, confirmations,
+consequences, accessible names, and announced state changes. Check ambiguous nouns and
+verbs, actionability, message hierarchy, product terminology and voice, factual meaning,
+emotional context, recovery, localization and realistic widths, dynamic values, and
+singular, plural, or combination variants.
+
+Reuse settled decisions, relevant repository behavior, `PRODUCT.md`, `DESIGN.md`, and
+the surface context. Ask the user only when this exposes a genuinely unresolved product,
+factual, legal, or domain decision. When interaction and copy are coupled, apply both
+advisories in the same decision cycle and present one synthesized recommendation. Fold
+the result into the existing Discovery Brief, Decision Log, scenario artifact,
+reviewer-finding resolution, or concise recommendation; do not create a separate
+Impeccable or copy artifact.
+
+Skip interaction shaping for optional, skip-recorded, or genuinely mechanical UI work
+with no material interaction choice. Skip copy clarification for exact user-provided or
+already-approved wording, mechanical substitution within an approved template,
+internal or developer-facing text, and corrections with no meaning change. Batch related
+decisions and repeat an advisory only when new evidence creates a new material decision;
+unchanged evidence does not rerun it.
+
+These advisories are coordinator-owned design methods, not reviewers, approval
+authorities, mandatory subagents, or additional gates. The ux-design-reviewer retains
+independent UX judgment, the feature-planner-advisor retains plan and task-structure
+responsibility, architecture retains system-boundary authority, and the user retains
+approval of material product, UX, factual, and product-language decisions.
+
 After implementation, exercise each materially changed scenario in a rendered surface
 with synthetic or de-identified data. Give applicable changed-surface reviewers a
 task-scoped evidence packet containing the build, viewport and starting state, actions,
