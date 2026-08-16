@@ -11,6 +11,14 @@ the screen's job, action hierarchy, meaningful states, recovery, and accessibili
 Use a fresh ux-design-reviewer before architecture review when that artifact needs
 independent design judgment.
 
+During planning, apply `AGENTS.md`'s approval-and-recording invariant to a proportional
+set of blind user journeys. Write each scenario and goal from the perspective of a
+trainee using the app as part of their training: state the relevant training context,
+constraints, and desired training outcome. A scenario may prescribe a safe starting
+condition, but must not prescribe an interface route, control sequence, expected
+implementation, product walkthrough, or acceptance criteria. The reviewer decides how
+to pursue the trainee's goal.
+
 ## Pre-approval shaping
 
 Before the coordinator first presents a material user-visible interaction recommendation
@@ -61,14 +69,17 @@ PR. Use a task-specific evidence report only when scenario complexity or capabil
 gaps justify it; never require sensitive, personal, or production evidence.
 
 For required core-journey UI whose outcome depends on context across screens, phases,
-time, or physical usage, review one goal-first continuation journey per stabilized
-combined evidence set. Keep the final task represented by a shared journey in progress
-until this review is ready; earlier tasks may complete.
+time, or physical usage, review the approved proportional journey set once per
+stabilized combined evidence set. One journey may cover a cohesive changed surface;
+use additional journeys only when materially distinct training goals, surfaces, states,
+or UX-friction risks require independent observation. Keep the final task represented
+by a shared journey in progress until this review is ready; earlier tasks may complete.
 
-Dispatch a fresh ux-usability-reviewer with only the user goal, usage context, final
-build and starting state, and safe scenario controls. Frame the goal as the real-world
-outcome the person wants or a question they need the product to answer, not as a route,
-control operation, expected interpretation, or request to identify interface elements.
+Dispatch a fresh ux-usability-reviewer with only the approved trainee goal and training
+context, final build and starting state, and safe scenario controls. Keep the goal as
+the trainee's desired training outcome or a question they need the product to answer,
+not as a route, control operation, expected interpretation, or request to identify
+interface elements.
 When the feature's value is informational, let the reviewer choose one or two concrete
 questions that matter in the supplied context before opening the feature, then report
 the conclusions it can support, its confidence and evidence limits, and any friction in
@@ -81,6 +92,11 @@ where realistic, proceeding without optional cleanup. If the reviewer cannot con
 the live final build, the journey review is blocked. Screenshots, recordings, narrated
 transitions, and previously collected evidence belong to changed-surface review and do
 not substitute for an independent journey.
+
+If new evidence reveals another materially affected surface or a previously
+unrepresented scenario with high UX-friction risk, the coordinator may propose an
+additional trainee journey. Obtain user approval and update the durable record before
+dispatching it. Unchanged evidence does not trigger additional journeys.
 
 After the reviewer records its independent findings, disclose approved intent or
 changed-surface evidence only when needed to reconcile coverage or scope. Matching the
