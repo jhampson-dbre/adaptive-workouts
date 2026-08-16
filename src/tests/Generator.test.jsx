@@ -140,6 +140,26 @@ describe('Generator Component', () => {
         expect(document.activeElement).toBe(summary);
     });
 
+    it('reveals minimum-time recovery actions before focusing its heading', async () => {
+        const scrollIntoView = vi.fn();
+        const originalScrollIntoView = Element.prototype.scrollIntoView;
+        Element.prototype.scrollIntoView = scrollIntoView;
+        storage.getSettings.mockResolvedValue({ warmupSeconds: 600, cooldownSeconds: 300, legDayOfWeek: 'None' });
+        try {
+            renderWithAuth(<Generator timeBudget={15} setTimeBudget={vi.fn()} unrecoveredGroups={['Biceps', 'Shoulders', 'Back', 'Chest', 'Triceps', 'Core', 'Legs']} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Plan my workout' }));
+
+            const heading = await screen.findByRole('heading', { name: 'No workout fits your available time' });
+            await waitFor(() => expect(document.activeElement).toBe(heading));
+            expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
+            fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+            expect(screen.queryByRole('heading', { name: 'No workout fits your available time' })).toBeNull();
+        } finally {
+            Element.prototype.scrollIntoView = originalScrollIntoView;
+        }
+    });
+
     it('keeps the applied skips unchanged when replacement staging fails', async () => {
         engine.generateWorkout.mockReturnValue([]);
         engine.findMinimumMuscleGroupRelaxations.mockReturnValue([{ groups: ['Back'], workout: [{ id: 'row' }] }]);

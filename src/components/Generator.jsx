@@ -34,6 +34,7 @@ export default function Generator({
   const [isApplyingRecovery, setIsApplyingRecovery] = useState(false);
   const legDayChoiceHeadingRef = useRef(null);
   const recoveryHeadingRef = useRef(null);
+  const recoveryAreaRef = useRef(null);
   const groupsDetailsRef = useRef(null);
   const groupsSummaryRef = useRef(null);
   const timeRef = useRef(null);
@@ -41,7 +42,12 @@ export default function Generator({
   const recoveryApplyRef = useRef(false);
 
   useEffect(() => { if (legDayChoice) legDayChoiceHeadingRef.current?.focus(); }, [legDayChoice]);
-  useEffect(() => { if (recovery && recovery.kind !== 'checking') recoveryHeadingRef.current?.focus(); }, [recovery]);
+  useEffect(() => {
+    if (recovery && recovery.kind !== 'checking') {
+      recoveryAreaRef.current?.scrollIntoView?.({ block: 'center' });
+      recoveryHeadingRef.current?.focus({ preventScroll: true });
+    }
+  }, [recovery]);
   if (!user) return null;
 
   const invalidateRecovery = () => {
@@ -150,7 +156,7 @@ export default function Generator({
     });
   };
 
-  const recoveryArea = recovery && <section className="no-fit-recovery" aria-busy={recovery.kind === 'checking' || isApplyingRecovery ? 'true' : undefined}>
+  const recoveryArea = recovery && <section ref={recoveryAreaRef} className="no-fit-recovery" aria-busy={recovery.kind === 'checking' || isApplyingRecovery ? 'true' : undefined}>
     {recovery.kind === 'checking' ? <p role="status">Checking other muscle groups…</p> : <>
       <h3 ref={recoveryHeadingRef} tabIndex="-1">{recovery.kind === 'options' ? 'No workout fits these choices' : recovery.kind === 'none' ? 'No workout fits your available time' : 'Couldn’t check other muscle groups.'}</h3>
       {recovery.kind === 'options' && recovery.options.length === 1 && <><p>You can make a workout fit by including {groupList(recovery.options[0].groups)}.</p><button className="recovery-primary" type="button" disabled={isApplyingRecovery} onClick={() => applyOption(recovery.options[0])}>Include {groupList(recovery.options[0].groups)} and replan</button></>}

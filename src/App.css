@@ -73,6 +73,10 @@
   margin-top: 22px;
 }
 
+.plan-action-area {
+  padding-bottom: calc(32px + env(safe-area-inset-bottom));
+}
+
 .no-fit-recovery {
   padding-top: 24px;
   border-top: 2px solid var(--border);
