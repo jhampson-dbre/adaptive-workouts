@@ -4,9 +4,11 @@ import Generator from '../components/Generator';
 import { AuthContext } from '../context/AuthContext';
 import * as storage from '../utils/storage';
 import * as engine from '../utils/engine';
+import * as accessScenarioControl from '../utils/accessScenarioControl';
 
 vi.mock('../utils/storage');
 vi.mock('../utils/engine');
+vi.mock('../utils/accessScenarioControl', () => ({ loadAccessScenarioEvaluator: vi.fn(async evaluate => evaluate) }));
 
 describe('Generator Component', () => {
     it('keeps the Plan action ahead of optional recovery choices', () => {
@@ -85,6 +87,7 @@ describe('Generator Component', () => {
         
         engine.generateWorkout.mockReturnValue([{ id: 'generated' }]);
         engine.findMinimumMuscleGroupRelaxations.mockReturnValue([]);
+        accessScenarioControl.loadAccessScenarioEvaluator.mockImplementation(async evaluate => evaluate);
     });
 
     it('shows and focuses the one-option recovery without handing off an empty workout', async () => {
@@ -225,6 +228,30 @@ describe('Generator Component', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
         expect(cancel).toHaveBeenCalledOnce();
         view.unmount();
+    });
+
+    it('recovers when the baseline scenario rejects one relaxation analysis', async () => {
+        const priorMode = import.meta.env.MODE;
+        import.meta.env.MODE = 'baseline';
+        engine.generateWorkout.mockReturnValue([]);
+        engine.findMinimumMuscleGroupRelaxations.mockReturnValue([{ groups: ['Back'], workout: [{ id: 'row' }] }]);
+        let rejectNext = true;
+        accessScenarioControl.loadAccessScenarioEvaluator.mockImplementation(async evaluate => async (...args) => {
+            if (rejectNext) { rejectNext = false; throw new Error('Scenario verification rejection'); }
+            return evaluate(...args);
+        });
+        try {
+            renderWithAuth(<Generator timeBudget={30} setTimeBudget={vi.fn()} unrecoveredGroups={['Back']} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Plan my workout' }));
+            expect(await screen.findByRole('heading', { name: 'Couldn’t check other muscle groups.' })).toBeTruthy();
+            expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+            expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+            expect(await screen.findByText('You can make a workout fit by including Back.')).toBeTruthy();
+            expect(engine.findMinimumMuscleGroupRelaxations).toHaveBeenCalledOnce();
+        } finally { import.meta.env.MODE = priorMode; }
     });
 
     const renderWithAuth = (ui) => {

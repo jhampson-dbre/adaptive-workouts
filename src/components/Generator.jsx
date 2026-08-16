@@ -69,7 +69,10 @@ export default function Generator({
     await new Promise(resolve => setTimeout(resolve, 16));
     if (request !== requestRef.current || !isCurrent(capture)) return;
     try {
-      const options = findMinimumMuscleGroupRelaxations(capture.phaseTargets.performanceSeconds / 60, capture.draftGroups, capture.forceLegDay, capture.catalog, capture.history, capture.settings);
+      const analyzeRelaxations = import.meta.env.DEV && import.meta.env.MODE === 'baseline'
+        ? await import('../utils/accessScenarioControl').then(({ loadAccessScenarioEvaluator }) => loadAccessScenarioEvaluator(findMinimumMuscleGroupRelaxations))
+        : findMinimumMuscleGroupRelaxations;
+      const options = await analyzeRelaxations(capture.phaseTargets.performanceSeconds / 60, capture.draftGroups, capture.forceLegDay, capture.catalog, capture.history, capture.settings);
       if (request !== requestRef.current || !isCurrent(capture)) return;
       setSelectedOption(null); setShowAll(false); setRecovery({ kind: options.length ? 'options' : 'none', options, capture });
     } catch (cause) {
