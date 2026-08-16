@@ -152,6 +152,57 @@ describe('Generator Component', () => {
         expect(screen.getByRole('checkbox', { name: /Back/ }).checked).toBe(true);
     });
 
+    it('hands off a one-option recovery only once while staging is pending', async () => {
+        engine.generateWorkout.mockReturnValue([]);
+        engine.findMinimumMuscleGroupRelaxations.mockReturnValue([{ groups: ['Back'], workout: [{ id: 'row' }] }]);
+        let settleHandoff;
+        const onGenerate = vi.fn(() => new Promise(resolve => { settleHandoff = resolve; }));
+        renderWithAuth(<Generator timeBudget={30} setTimeBudget={vi.fn()} unrecoveredGroups={['Back']} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Plan my workout' }));
+        const apply = await screen.findByRole('button', { name: 'Include Back and replan' });
+        fireEvent.click(apply);
+        fireEvent.click(apply);
+
+        expect(onGenerate).toHaveBeenCalledTimes(1);
+        settleHandoff(false);
+        await waitFor(() => expect(apply.disabled).toBe(false));
+    });
+
+    it('locks recovery choices, muscle groups, and time until a multiple-option handoff settles', async () => {
+        engine.generateWorkout.mockReturnValue([]);
+        engine.findMinimumMuscleGroupRelaxations.mockReturnValue(['Back', 'Chest'].map(group => ({ groups: [group], workout: [{ id: group }] })));
+        let settleHandoff;
+        const onGenerate = vi.fn(() => new Promise(resolve => { settleHandoff = resolve; }));
+        const setTimeBudget = vi.fn();
+        renderWithAuth(<Generator timeBudget={30} setTimeBudget={setTimeBudget} unrecoveredGroups={['Back', 'Chest']} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Plan my workout' }));
+        fireEvent.click(await screen.findByRole('radio', { name: 'Back' }));
+        const apply = screen.getByRole('button', { name: 'Apply and replan' });
+        fireEvent.click(apply);
+        fireEvent.click(apply);
+
+        expect(onGenerate).toHaveBeenCalledTimes(1);
+        expect(apply.disabled).toBe(true);
+        expect(apply.closest('.no-fit-recovery').getAttribute('aria-busy')).toBe('true');
+        expect(screen.getAllByRole('radio').every(input => input.disabled)).toBe(true);
+        expect(screen.getByRole('slider', { name: /Time available/ }).disabled).toBe(true);
+        expect(screen.getByRole('button', { name: 'Decrease time by 5 minutes' }).disabled).toBe(true);
+        expect(screen.getByRole('button', { name: 'Increase time by 5 minutes' }).disabled).toBe(true);
+        expect(screen.getByRole('button', { name: 'Cancel' }).disabled).toBe(true);
+        expect(screen.getAllByRole('checkbox').every(input => input.disabled)).toBe(true);
+        fireEvent.click(screen.getByRole('checkbox', { name: /Back/ }));
+        fireEvent.change(screen.getByRole('slider', { name: /Time available/ }), { target: { value: '35' } });
+        expect(screen.getByRole('checkbox', { name: /Back/ }).checked).toBe(true);
+        expect(setTimeBudget).not.toHaveBeenCalled();
+
+        settleHandoff(false);
+        await waitFor(() => expect(apply.disabled).toBe(false));
+        expect(screen.getByRole('alert').textContent).toBe('Failed to generate workout. Please try again.');
+        expect(screen.getAllByRole('radio').every(input => !input.disabled)).toBe(true);
+    });
+
     it('invalidates stale suggestions on manual selection and supports no-fit, failure, change-time, and cancel recovery', async () => {
         engine.generateWorkout.mockReturnValue([]);
         const setTimeBudget = vi.fn(); const cancel = vi.fn();
