@@ -322,7 +322,7 @@ function exerciseTimingStatus(exercise, exerciseIndex, activeTimer, now) {
 const expansionKey = (exercise, exerciseIndex) => exercise?.occurrenceId || `${exercise?.id || 'exercise'}-${exerciseIndex}`;
 const expansionKeyAt = (workout, exerciseIndex) => expansionKey(workout.exercises[exerciseIndex], exerciseIndex);
 
-export default function WorkoutView({ session, sessionState, onFinish, onComplete, onDiscard, onBackToPlan, onResume, preference, onSavePreference, onStarted, onDismissPreference }) {
+export default function WorkoutView({ session, sessionState, onFinish, onComplete, onDiscard, onBackToPlan, onResume, preference, onSavePreference, onStarted, onDismissPreference, onChangeSkippedGroups, focusReplanTrigger = false, onReplanTriggerFocused, replanAnnouncement }) {
   const activeWorkout = sessionState?.activeWorkout ?? EMPTY_ACTIVE_WORKOUT;
   const durableEpochFloor = durableDisplayEpoch(activeWorkout, sessionState?.snapshot);
   const initialDisplayEpochMs = Math.max(Date.now(), durableEpochFloor);
@@ -349,6 +349,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
   const [clipboardFeedback, setClipboardFeedback] = useState('');
   const summaryRef = useRef(null);
   const phaseHeadingRef = useRef(null);
+  const replanTriggerRef = useRef(null);
   const activeWorkTimerRef = useRef(activeWorkout.activeWorkTimer);
   const recoveryHeadingRef = useRef(null);
   const promptHeadingRef = useRef(null);
@@ -532,6 +533,11 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
 
   useEffect(() => { if (finishCandidate) summaryRef.current?.focus(); }, [finishCandidate, blockedSaveConflict]);
   useEffect(() => { if (phasePresentation && !activeWorkTimerRef.current) phaseHeadingRef.current?.focus(); }, [phasePresentation]);
+  useEffect(() => {
+    if (!focusReplanTrigger) return;
+    replanTriggerRef.current?.focus();
+    onReplanTriggerFocused?.();
+  }, [focusReplanTrigger, onReplanTriggerFocused]);
   useEffect(() => { if (recoveryPresentation) recoveryHeadingRef.current?.focus(); }, [recoveryPresentation]);
   useEffect(() => { if (earlyFinishPrompt) promptHeadingRef.current?.focus(); }, [earlyFinishPrompt]);
 
@@ -862,7 +868,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
     return <div className="workout-view"><JourneyProgress current="Review" /><section className="workout-summary workout-summary--saved"><h2 ref={savedRef} tabIndex="-1">Workout saved</h2><p className="summary-save-status" role="status">Saved to workout history</p>{receipt && <><p className="summary-total">{recordedWorkText(receipt.exercises)} recorded</p><ReceiptFacts phaseDurations={receipt.phaseDurations} /><PlannedWorkNotRecorded exercises={receipt.exercises} /><RecordedExercises exercises={receipt.exercises} summary="Recorded exercises" /></>}<div className="summary-actions saved-actions"><button type="button" className="recovery-secondary" onClick={returnToPlan}>Return to plan</button><button ref={copyRef} type="button" className="recovery-secondary" onClick={copyWorkout}>Copy workout results</button></div>{clipboardFeedback && <p role={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'status' : 'alert'} aria-live={normalizeLiveMessage(clipboardFeedback) === 'Workout results copied.' ? 'polite' : 'assertive'} aria-atomic="true">{clipboardFeedback}</p>}</section></div>;
   }
   return <div className={`workout-view phase-${activeWorkout.phase}`}>
-    <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{orderAnnouncement || restAnnouncement || recoveryAcknowledgement}</div>
+    <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{replanAnnouncement || orderAnnouncement || restAnnouncement || recoveryAcknowledgement}</div>
     <JourneyProgress current={finishCandidate ? 'Review' : journeyStep} />
     {finishCandidate ? <WorkoutSummary candidate={finishCandidate} phaseTargets={sessionState?.phaseTargets} isSaving={isSaving} saveError={saveError} saveStatus={saveStatus} blockedConflict={blockedSaveConflict} onBack={handleBack} onSave={handleSave} onKeepPending={() => setRecoveryAcknowledgement('This workout is still open.')} onExit={async () => { await session.exit(); (onComplete ?? onFinish)?.(); }} summaryRef={summaryRef} /> : <>
       <div className="workout-header"><h2 className="workout-title" ref={phaseHeadingRef} tabIndex="-1">{phaseTitle}</h2>{started && <div className="timer" aria-label={`Total elapsed ${formatTime(displayedElapsedSeconds)}`}><span className="timer-label">Elapsed</span><span className="timer-value">{formatTime(displayedElapsedSeconds)}</span></div>}</div>
@@ -871,6 +877,7 @@ export default function WorkoutView({ session, sessionState, onFinish, onComplet
       {!started && activeWorkout.phase !== 'cancelled' && <section className="workout-ready" aria-label="Review your workout">
         <div className="workout-ready-summary"><p>{plannedSeconds > 0 ? `${Math.round(plannedSeconds / 60)} min planned · ` : ''}{activeWorkout.exercises.length} {activeWorkout.exercises.length === 1 ? 'exercise' : 'exercises'} · {counts.planned} {counts.planned === 1 ? 'set' : 'sets'}</p>{orderSummary && <p>{orderSummary}</p>}</div>
         <button className="start-btn" disabled={preference?.operation?.state === 'pending'} onClick={async () => { const timestamp = acceptDisplayTime(Date.now()); const successOperationId = preference?.operation?.state === 'success' ? preference.operation.id : null; if (await session.action({ type: 'startWorkout', timestamp })) { setOrderAnnouncement(''); setRecoveryAcknowledgement(''); onStarted?.(activeWorkout.exercises, successOperationId); } }}>Start workout</button>
+        {onChangeSkippedGroups && <button ref={replanTriggerRef} className="recovery-secondary workout-ready-change-groups" type="button" onClick={onChangeSkippedGroups}>Change muscle groups to skip</button>}
         <button className="recovery-secondary workout-ready-back" type="button" onClick={async () => { await session.discard(); onBackToPlan?.(); }}>Back to Plan</button>
       </section>}
       {activeWorkout.phase === 'cooldown' && <div className="summary-actions"><button ref={finishRef} className="finish-btn" aria-describedby={finishError ? 'finish-feedback' : undefined} onClick={handleFinish}>Finish workout</button><button type="button" onClick={() => dispatch({ type: 'resumeWorkout', timestamp: acceptDisplayTime(Date.now()) })}>{hasUnfinishedSets ? 'Continue workout' : 'Edit completed sets'}</button>{finishError && <p id="finish-feedback" className="error-message" role="alert">{finishError}</p>}</div>}

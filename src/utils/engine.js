@@ -374,6 +374,28 @@ export function checkIsLegDay(date, unrecoveredGroups, history, settings) {
     return false;
 }
 
+const RELAXABLE_MUSCLE_GROUPS = ['Biceps', 'Shoulders', 'Back', 'Chest', 'Triceps', 'Core', 'Legs'];
+
+export function findMinimumMuscleGroupRelaxations(timeBudget, unrecoveredGroups, forceLegDay, catalog, history, settings) {
+    const skipped = RELAXABLE_MUSCLE_GROUPS.filter(group => unrecoveredGroups.includes(group));
+    for (let count = 1; count <= skipped.length; count++) {
+        const options = [];
+        const visit = (start, groups) => {
+            if (groups.length === count) {
+                const workout = generateWorkout(timeBudget, unrecoveredGroups.filter(group => !groups.includes(group)), forceLegDay, catalog, history, settings);
+                if (workout.length) options.push({ groups: [...groups], workout });
+                return;
+            }
+            for (let index = start; index <= skipped.length - (count - groups.length); index++) {
+                groups.push(skipped[index]); visit(index + 1, groups); groups.pop();
+            }
+        };
+        visit(0, []);
+        if (options.length) return options;
+    }
+    return [];
+}
+
 export function generateWorkout(timeBudget, unrecoveredGroups = [], forceLegDay = false, catalog, history, settings) {
     const performanceSeconds = timeBudget * 60;
     if (!Number.isFinite(performanceSeconds) || performanceSeconds < 0 || !Number.isInteger(performanceSeconds)) {
