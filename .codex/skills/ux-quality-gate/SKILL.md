@@ -19,6 +19,15 @@ condition, but must not prescribe an interface route, control sequence, expected
 implementation, product walkthrough, or acceptance criteria. The reviewer decides how
 to pursue the trainee's goal.
 
+When an approved journey requires nontrivial preconditions, record its intended
+starting boundary and whether pre-boundary setup is part of the named UX risk. If setup
+is outside that risk, the coordinator owns staging and verifies the exact starting state
+before dispatch using supported product or harness controls. The reviewer begins from
+that state and does not recreate or assess the excluded setup. Do not stage past an
+interaction whose usability is in scope. If the exact state cannot be delivered to the
+reviewer's fresh context, treat that as a start-state capability gap rather than asking
+the reviewer to approximate it.
+
 ## Pre-approval shaping
 
 Before the coordinator first presents a material user-visible interaction recommendation
