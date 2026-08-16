@@ -158,7 +158,7 @@ export default function Generator({
 
   const recoveryArea = recovery && <section ref={recoveryAreaRef} className="no-fit-recovery" aria-busy={recovery.kind === 'checking' || isApplyingRecovery ? 'true' : undefined}>
     {recovery.kind === 'checking' ? <p role="status">Checking other muscle groups…</p> : <>
-      <h3 ref={recoveryHeadingRef} tabIndex="-1">{recovery.kind === 'options' ? 'No workout fits these choices' : recovery.kind === 'none' ? 'No workout fits your available time' : 'Couldn’t check other muscle groups.'}</h3>
+      <h3 ref={recoveryHeadingRef} tabIndex="-1">{recovery.kind === 'options' ? 'No workout fits these choices' : recovery.kind === 'none' ? `No workout fits these choices in ${timeBudget} minutes` : 'Couldn’t check other muscle groups.'}</h3>
       {recovery.kind === 'options' && recovery.options.length === 1 && <><p>You can make a workout fit by including {groupList(recovery.options[0].groups)}.</p><button className="recovery-primary" type="button" disabled={isApplyingRecovery} onClick={() => applyOption(recovery.options[0])}>Include {groupList(recovery.options[0].groups)} and replan</button></>}
       {recovery.kind === 'options' && recovery.options.length > 1 && <>
         <p>You can make a workout fit by including one of these:</p>
@@ -166,9 +166,9 @@ export default function Generator({
         {!showAll && recovery.options.length > 3 && <button className="recovery-secondary" type="button" disabled={isApplyingRecovery} onClick={() => setShowAll(true)}>Show {recovery.options.length - 3} more {recovery.options.length - 3 === 1 ? 'option' : 'options'}</button>}
         <button className="recovery-primary" type="button" disabled={selectedOption === null || isApplyingRecovery} onClick={() => applyOption(recovery.options[selectedOption])}>Apply and replan</button>
       </>}
-      {recovery.kind === 'none' && <><p>Add time or stop planning for now.</p><button className="recovery-primary" type="button" onClick={() => { invalidateRecovery(); timeRef.current?.focus(); }}>Change time</button></>}
+      {recovery.kind === 'none' && <><p>{isReplanning ? 'Add time or include any muscle groups you can train today. If neither is possible, keep your current workout.' : 'Add time or include any muscle groups you can train today. If neither is possible, stop planning for now.'}</p><button className="recovery-primary" type="button" onClick={() => { invalidateRecovery(); timeRef.current?.focus(); }}>Change time</button></>}
       {recovery.kind === 'failure' && <button className="recovery-primary" type="button" onClick={() => void checkRelaxations(recovery.capture)}>Try again</button>}
-      <button className="recovery-secondary" type="button" disabled={isApplyingRecovery} onClick={cancelRecovery}>Cancel</button>
+      <button className="recovery-secondary" type="button" disabled={isApplyingRecovery} onClick={cancelRecovery}>{recovery.kind === 'none' ? isReplanning ? 'Keep current workout' : 'Stop planning for now' : 'Cancel'}</button>
     </>}
   </section>;
 
