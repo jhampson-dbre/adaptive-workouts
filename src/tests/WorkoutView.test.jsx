@@ -484,6 +484,15 @@ test('puts Back to Plan below Start workout, discards the unstarted session, and
   expect(screen.queryByRole('button', { name: 'Back to Plan' })).toBeNull();
 });
 
+test('opens muscle-group replanning without discarding the generated workout', async () => {
+  const discard = vi.fn(); const onChangeSkippedGroups = vi.fn();
+  const activeWorkout = initializeActiveWorkout(timedWorkout, { phaseTimingEnabled: true });
+  render(<AuthContext.Provider value={{ uid: 'test-user-id' }}><WorkoutView session={{ action: vi.fn(), discard }} sessionState={{ status: 'generated', activeWorkout, phaseTargets: { warmupSeconds: 0, performanceSeconds: 0, cooldownSeconds: 0 }, blocked: false }} onChangeSkippedGroups={onChangeSkippedGroups} /></AuthContext.Provider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Change muscle groups to skip' }));
+  expect(onChangeSkippedGroups).toHaveBeenCalledOnce();
+  expect(discard).not.toHaveBeenCalled();
+});
+
 test('places the compact future-save action after the reordered exercise rows', () => {
   const baseline = { blocks: [{ exerciseIds: ['plank'] }, { exerciseIds: ['squat'] }] };
   const view = renderWorkout(timedWorkout, () => {}, { uid: 'test-user-id' }, undefined, {}, { baseline });

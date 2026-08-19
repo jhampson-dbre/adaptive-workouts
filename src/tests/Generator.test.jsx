@@ -4,9 +4,11 @@ import Generator from '../components/Generator';
 import { AuthContext } from '../context/AuthContext';
 import * as storage from '../utils/storage';
 import * as engine from '../utils/engine';
+import * as accessScenarioControl from '../utils/accessScenarioControl';
 
 vi.mock('../utils/storage');
 vi.mock('../utils/engine');
+vi.mock('../utils/accessScenarioControl', () => ({ loadAccessScenarioEvaluator: vi.fn(async evaluate => evaluate) }));
 
 describe('Generator Component', () => {
     it('keeps the Plan action ahead of optional recovery choices', () => {
@@ -26,7 +28,7 @@ describe('Generator Component', () => {
         expect(screen.getByRole('heading', { name: "Plan today's workout" })).toBeTruthy();
         expect(screen.getByText('Nudge uses your recent workouts and available time to plan today\'s workout.')).toBeTruthy();
         expect(screen.getByRole('button', { name: 'Plan my workout' })).toBeTruthy();
-        expect(screen.getByText('Any areas need rest?').closest('details').open).toBe(false);
+        expect(screen.getByText('Skip any muscle groups today?').closest('details').open).toBe(false);
     });
 
     it('reports a returned order-save outcome without moving focus from the Plan heading', () => {
@@ -83,7 +85,203 @@ describe('Generator Component', () => {
             { id: 'leg1', name: 'Squat', muscleGroup: 'Legs', tier: 3, sets: 3, isActive: true }
         ]);
         
+        engine.generateWorkout.mockReturnValue([{ id: 'generated' }]);
+        engine.findMinimumMuscleGroupRelaxations.mockReturnValue([]);
+        accessScenarioControl.loadAccessScenarioEvaluator.mockImplementation(async evaluate => evaluate);
+    });
+
+    it('shows and focuses the one-option recovery without handing off an empty workout', async () => {
         engine.generateWorkout.mockReturnValue([]);
+        engine.findMinimumMuscleGroupRelaxations.mockReturnValue([{ groups: ['Back'], workout: [{ id: 'row' }] }]);
+        const onGenerate = vi.fn().mockResolvedValue(true);
+        renderWithAuth(<Generator timeBudget={30} setTimeBudget={vi.fn()} unrecoveredGroups={['Back']} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Plan my workout' }));
+
+        const checking = await screen.findByRole('status');
+        expect(checking.textContent).toBe('Checking other muscle groups…');
+        expect(checking.closest('[aria-busy="true"]')).toBeTruthy();
+        const heading = await screen.findByRole('heading', { name: 'No workout fits these choices' });
+        await waitFor(() => expect(document.activeElement).toBe(heading));
+        expect(screen.getByText('You can make a workout fit by including Back.')).toBeTruthy();
+        expect(onGenerate).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button', { name: 'Include Back and replan' }));
+        await waitFor(() => expect(onGenerate).toHaveBeenCalledWith([{ id: 'row' }], expect.objectContaining({ appliedUnrecoveredGroups: [] })));
+    });
+
+    it('shows only three neutral options initially and preserves selection when revealing more', async () => {
+        engine.generateWorkout.mockReturnValue([]);
+        engine.findMinimumMuscleGroupRelaxations.mockReturnValue(['Back', 'Chest', 'Core', 'Legs'].map(group => ({ groups: [group], workout: [{ id: group }] })));
+        renderWithAuth(<Generator timeBudget={30} setTimeBudget={vi.fn()} unrecoveredGroups={['Back', 'Chest', 'Core', 'Legs']} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Plan my workout' }));
+        await screen.findByRole('radiogroup', { name: 'Muscle groups to include' });
+        expect(screen.getAllByRole('radio')).toHaveLength(3);
+        fireEvent.click(screen.getByRole('radio', { name: 'Chest' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Show 1 more option' }));
+        expect(screen.getAllByRole('radio')).toHaveLength(4);
+        expect(screen.getByRole('radio', { name: 'Chest' }).checked).toBe(true);
+    });
+
+    it('invalidates suggestions when time changes and returns initial planning focus on cancel', async () => {
+        engine.generateWorkout.mockReturnValue([]);
+        engine.findMinimumMuscleGroupRelaxations.mockReturnValue([{ groups: ['Back'], workout: [{ id: 'row' }] }]);
+        renderWithAuth(<Generator timeBudget={30} setTimeBudget={vi.fn()} unrecoveredGroups={['Back']} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Plan my workout' }));
+        await screen.findByText('You can make a workout fit by including Back.');
+        fireEvent.change(screen.getByRole('slider', { name: /Time available/ }), { target: { value: '35' } });
+        expect(screen.queryByText('You can make a workout fit by including Back.')).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Plan my workout' }));
+        await screen.findByText('You can make a workout fit by including Back.');
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+        const summary = screen.getByText('Skip any muscle groups today?');
+        expect(summary.closest('details').open).toBe(false);
+        expect(document.activeElement).toBe(summary);
+    });
+
+    it('reveals minimum-time recovery actions before focusing its heading', async () => {
+        const scrollIntoView = vi.fn();
+        const originalScrollIntoView = Element.prototype.scrollIntoView;
+        Element.prototype.scrollIntoView = scrollIntoView;
+        storage.getSettings.mockResolvedValue({ warmupSeconds: 600, cooldownSeconds: 300, legDayOfWeek: 'None' });
+        try {
+            renderWithAuth(<Generator timeBudget={15} setTimeBudget={vi.fn()} unrecoveredGroups={['Biceps', 'Shoulders', 'Back', 'Chest', 'Triceps', 'Core', 'Legs']} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Plan my workout' }));
+
+            const heading = await screen.findByRole('heading', { name: 'No workout fits these choices in 15 minutes' });
+            await waitFor(() => expect(document.activeElement).toBe(heading));
+            expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
+            expect(screen.getByText('Add time or include any muscle groups you can train today. If neither is possible, stop planning for now.')).toBeTruthy();
+            expect(screen.getByRole('button', { name: 'Change time' })).toBeTruthy();
+            fireEvent.click(screen.getByRole('button', { name: 'Stop planning for now' }));
+            expect(screen.queryByRole('heading', { name: 'No workout fits these choices in 15 minutes' })).toBeNull();
+        } finally {
+            Element.prototype.scrollIntoView = originalScrollIntoView;
+        }
+    });
+
+    it('keeps the applied skips unchanged when replacement staging fails', async () => {
+        engine.generateWorkout.mockReturnValue([]);
+        engine.findMinimumMuscleGroupRelaxations.mockReturnValue([{ groups: ['Back'], workout: [{ id: 'row' }] }]);
+        const setUnrecoveredGroups = vi.fn();
+        renderWithAuth(<Generator timeBudget={30} setTimeBudget={vi.fn()} unrecoveredGroups={['Back']} setUnrecoveredGroups={setUnrecoveredGroups} onGenerate={vi.fn().mockResolvedValue(false)} workout={[{ id: 'old', name: 'Old row', muscleGroup: 'Chest' }]} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Replan workout' }));
+        await screen.findByText('You can make a workout fit by including Back.');
+        fireEvent.click(screen.getByRole('button', { name: 'Include Back and replan' }));
+
+        expect((await screen.findByRole('alert')).textContent).toBe('Failed to generate workout. Please try again.');
+        expect(setUnrecoveredGroups).not.toHaveBeenCalled();
+        expect(screen.getByRole('checkbox', { name: /Back/ }).checked).toBe(true);
+    });
+
+    it('hands off a one-option recovery only once while staging is pending', async () => {
+        engine.generateWorkout.mockReturnValue([]);
+        engine.findMinimumMuscleGroupRelaxations.mockReturnValue([{ groups: ['Back'], workout: [{ id: 'row' }] }]);
+        let settleHandoff;
+        const onGenerate = vi.fn(() => new Promise(resolve => { settleHandoff = resolve; }));
+        renderWithAuth(<Generator timeBudget={30} setTimeBudget={vi.fn()} unrecoveredGroups={['Back']} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Plan my workout' }));
+        const apply = await screen.findByRole('button', { name: 'Include Back and replan' });
+        fireEvent.click(apply);
+        fireEvent.click(apply);
+
+        expect(onGenerate).toHaveBeenCalledTimes(1);
+        settleHandoff(false);
+        await waitFor(() => expect(apply.disabled).toBe(false));
+    });
+
+    it('locks recovery choices, muscle groups, and time until a multiple-option handoff settles', async () => {
+        engine.generateWorkout.mockReturnValue([]);
+        engine.findMinimumMuscleGroupRelaxations.mockReturnValue(['Back', 'Chest'].map(group => ({ groups: [group], workout: [{ id: group }] })));
+        let settleHandoff;
+        const onGenerate = vi.fn(() => new Promise(resolve => { settleHandoff = resolve; }));
+        const setTimeBudget = vi.fn();
+        renderWithAuth(<Generator timeBudget={30} setTimeBudget={setTimeBudget} unrecoveredGroups={['Back', 'Chest']} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Plan my workout' }));
+        fireEvent.click(await screen.findByRole('radio', { name: 'Back' }));
+        const apply = screen.getByRole('button', { name: 'Apply and replan' });
+        fireEvent.click(apply);
+        fireEvent.click(apply);
+
+        expect(onGenerate).toHaveBeenCalledTimes(1);
+        expect(apply.disabled).toBe(true);
+        expect(apply.closest('.no-fit-recovery').getAttribute('aria-busy')).toBe('true');
+        expect(screen.getAllByRole('radio').every(input => input.disabled)).toBe(true);
+        expect(screen.getByRole('slider', { name: /Time available/ }).disabled).toBe(true);
+        expect(screen.getByRole('button', { name: 'Decrease time by 5 minutes' }).disabled).toBe(true);
+        expect(screen.getByRole('button', { name: 'Increase time by 5 minutes' }).disabled).toBe(true);
+        expect(screen.getByRole('button', { name: 'Cancel' }).disabled).toBe(true);
+        expect(screen.getAllByRole('checkbox').every(input => input.disabled)).toBe(true);
+        fireEvent.click(screen.getByRole('checkbox', { name: /Back/ }));
+        fireEvent.change(screen.getByRole('slider', { name: /Time available/ }), { target: { value: '35' } });
+        expect(screen.getByRole('checkbox', { name: /Back/ }).checked).toBe(true);
+        expect(setTimeBudget).not.toHaveBeenCalled();
+
+        settleHandoff(false);
+        await waitFor(() => expect(apply.disabled).toBe(false));
+        expect(screen.getByRole('alert').textContent).toBe('Failed to generate workout. Please try again.');
+        expect(screen.getAllByRole('radio').every(input => !input.disabled)).toBe(true);
+    });
+
+    it('invalidates stale suggestions on manual selection and supports no-fit, failure, change-time, and cancel recovery', async () => {
+        engine.generateWorkout.mockReturnValue([]);
+        const setTimeBudget = vi.fn(); const cancel = vi.fn();
+        engine.findMinimumMuscleGroupRelaxations.mockReturnValueOnce([{ groups: ['Back'], workout: [{ id: 'row' }] }]);
+        const view = renderWithAuth(<Generator timeBudget={30} setTimeBudget={setTimeBudget} unrecoveredGroups={['Back']} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} onCancelReplan={cancel} workout={[{ id: 'old', name: 'Old row', muscleGroup: 'Chest' }]} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Replan workout' }));
+        await screen.findByText('You can make a workout fit by including Back.');
+        fireEvent.click(screen.getByRole('checkbox', { name: /Back/ }));
+        expect(screen.queryByText('You can make a workout fit by including Back.')).toBeNull();
+
+        engine.findMinimumMuscleGroupRelaxations.mockReturnValueOnce([]);
+        fireEvent.click(screen.getByRole('button', { name: 'Replan workout' }));
+        await screen.findByRole('heading', { name: 'No workout fits these choices in 30 minutes' });
+        expect(screen.getByText('Add time or include any muscle groups you can train today. If neither is possible, keep your current workout.')).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Keep current workout' })).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'Change time' }));
+        await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('slider', { name: /Time available/ })));
+
+        engine.findMinimumMuscleGroupRelaxations.mockReturnValueOnce([]);
+        fireEvent.click(screen.getByRole('button', { name: 'Replan workout' }));
+        await screen.findByRole('heading', { name: 'No workout fits these choices in 30 minutes' });
+        fireEvent.click(screen.getByRole('button', { name: 'Keep current workout' }));
+        expect(cancel).toHaveBeenCalledOnce();
+
+        engine.findMinimumMuscleGroupRelaxations.mockImplementationOnce(() => { throw new Error('failed'); });
+        fireEvent.click(screen.getByRole('button', { name: 'Replan workout' }));
+        expect(await screen.findByText("Couldn’t check other muscle groups.")).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+        expect(cancel).toHaveBeenCalledTimes(2);
+        view.unmount();
+    });
+
+    it('recovers when the baseline scenario rejects one relaxation analysis', async () => {
+        const priorMode = import.meta.env.MODE;
+        import.meta.env.MODE = 'baseline';
+        engine.generateWorkout.mockReturnValue([]);
+        engine.findMinimumMuscleGroupRelaxations.mockReturnValue([{ groups: ['Back'], workout: [{ id: 'row' }] }]);
+        let rejectNext = true;
+        accessScenarioControl.loadAccessScenarioEvaluator.mockImplementation(async evaluate => async (...args) => {
+            if (rejectNext) { rejectNext = false; throw new Error('Scenario verification rejection'); }
+            return evaluate(...args);
+        });
+        try {
+            renderWithAuth(<Generator timeBudget={30} setTimeBudget={vi.fn()} unrecoveredGroups={['Back']} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Plan my workout' }));
+            expect(await screen.findByRole('heading', { name: 'Couldn’t check other muscle groups.' })).toBeTruthy();
+            expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+            expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+            expect(await screen.findByText('You can make a workout fit by including Back.')).toBeTruthy();
+            expect(engine.findMinimumMuscleGroupRelaxations).toHaveBeenCalledOnce();
+        } finally { import.meta.env.MODE = priorMode; }
     });
 
     const renderWithAuth = (ui) => {
@@ -127,7 +325,7 @@ describe('Generator Component', () => {
         fireEvent.click(screen.getByText('Plan my workout'));
         await waitFor(() => {
             expect(engine.generateWorkout).toHaveBeenCalledWith(35, [], false, expect.any(Array), expect.any(Array), expect.any(Object));
-            expect(onGenerate).toHaveBeenCalledWith([], { phaseTargets: { warmupSeconds: 420, performanceSeconds: 2100, cooldownSeconds: 180 } });
+            expect(onGenerate).toHaveBeenCalledWith(expect.any(Array), expect.objectContaining({ phaseTargets: { warmupSeconds: 420, performanceSeconds: 2100, cooldownSeconds: 180 } }));
         });
     });
 
@@ -151,21 +349,21 @@ describe('Generator Component', () => {
         renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
 
         fireEvent.click(screen.getByText('Plan my workout'));
-        expect((await screen.findByRole('alert')).textContent).toMatch(/no time remains for exercises/i);
+        expect(await screen.findByRole('heading', { name: 'No workout fits these choices in 45 minutes' })).toBeTruthy();
         expect(engine.generateWorkout).not.toHaveBeenCalled();
         expect(onGenerate).not.toHaveBeenCalled();
     });
 
     it('forwards the engine phase target snapshot without changing the array-based handoff', async () => {
         storage.getCatalog.mockResolvedValue([]);
-        const generated = [];
+        const generated = [{ id: 'generated' }];
         Object.defineProperty(generated, 'phaseTargets', { value: Object.freeze({ warmupSeconds: 600, performanceSeconds: 1800, cooldownSeconds: 300 }) });
         engine.generateWorkout.mockReturnValue(generated);
         const onGenerate = vi.fn();
         renderWithAuth(<Generator timeBudget={30} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
 
         fireEvent.click(screen.getByText('Plan my workout'));
-        await waitFor(() => expect(onGenerate).toHaveBeenCalledWith(generated, { phaseTargets: { warmupSeconds: 600, performanceSeconds: 900, cooldownSeconds: 300 }, preferredOrderResolution: undefined }));
+        await waitFor(() => expect(onGenerate).toHaveBeenCalledWith(generated, expect.objectContaining({ phaseTargets: { warmupSeconds: 600, performanceSeconds: 900, cooldownSeconds: 300 }, preferredOrderResolution: undefined })));
     });
 
     it('offers a neutral inline leg-day choice when legs are due', async () => {
@@ -190,7 +388,7 @@ describe('Generator Component', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Include legs today' }));
         await waitFor(() => {
             expect(engine.generateWorkout).toHaveBeenCalledWith(30, [], true, expect.any(Array), expect.any(Array), expect.any(Object)); // doLegDay=true
-            expect(onGenerate).toHaveBeenCalledWith([], { phaseTargets: { warmupSeconds: 600, performanceSeconds: 1800, cooldownSeconds: 300 }, preferredOrderResolution: undefined });
+            expect(onGenerate).toHaveBeenCalledWith(expect.any(Array), expect.objectContaining({ phaseTargets: { warmupSeconds: 600, performanceSeconds: 1800, cooldownSeconds: 300 }, preferredOrderResolution: undefined }));
         });
     });
 

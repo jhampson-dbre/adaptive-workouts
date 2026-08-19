@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { generateWorkout, getDaysSinceLastLegDay, resolvePreferredOrder } from '../utils/engine';
+import { findMinimumMuscleGroupRelaxations, generateWorkout, getDaysSinceLastLegDay, resolvePreferredOrder } from '../utils/engine';
 import { isValidV2ExerciseOccurrence } from '../utils/workoutSchema';
 
 const mockCatalog = [
@@ -15,6 +15,22 @@ const mockCatalog = [
     { id: 'leg_extension', name: 'Leg Extension', muscleGroup: 'Legs', tier: 4, sets: 3, linkedTo: 'leg_curl' },
     { id: 'leg_curl', name: 'Leg Curl', muscleGroup: 'Legs', tier: 4, sets: 3 }
 ];
+
+describe('minimum muscle-group relaxation analysis', () => {
+  it('returns every successful smallest relaxation with its generated workout', () => {
+    const skipped = ['Biceps', 'Shoulders', 'Back', 'Chest', 'Triceps', 'Core', 'Legs'];
+    const options = findMinimumMuscleGroupRelaxations(60, skipped, false, mockCatalog, [], { legDayOfWeek: 'None' });
+
+    expect(options.length).toBeGreaterThan(1);
+    expect(new Set(options.map(option => option.groups.length))).toEqual(new Set([1]));
+    expect(options.every(option => option.workout.length > 0)).toBe(true);
+    expect(options.every(option => option.groups.every(group => skipped.includes(group)))).toBe(true);
+  });
+
+  it('ignores skips outside the fixed seven groups', () => {
+    expect(findMinimumMuscleGroupRelaxations(60, ['Not a muscle group'], false, mockCatalog, [], { legDayOfWeek: 'None' })).toEqual([]);
+  });
+});
 
 describe('preferred order resolution', () => {
   it('uses specific rules first and preserves planner fallback', () => {

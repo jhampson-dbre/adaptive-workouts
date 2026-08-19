@@ -78,6 +78,8 @@ function App() {
   const [baselineStage, setBaselineStage] = useState(isBaselineBuild ? 'preparing' : 'shared')
   const [baselineError, setBaselineError] = useState(null)
   const [preference, setPreference] = useState({ baseline: null, resolution: null, operation: null })
+  const [replanReturnFocus, setReplanReturnFocus] = useState(false)
+  const [replanAnnouncement, setReplanAnnouncement] = useState('')
   const preferenceTimer = useRef(null)
   const preferenceOperation = useRef(0)
   const generation = useRef(0)
@@ -389,10 +391,10 @@ function App() {
               : activeDestination === 'history' ? () => import('./components/WorkoutHistory') : () => import('./components/WorkoutView')}
           retryLoader={generation => import(/* @vite-ignore */ retryModuleUrl(lazyEntryUrls[activeDestination], generation))}
           componentProps={activeDestination === 'plan'
-            ? { workout, timeBudget, setTimeBudget, unrecoveredGroups, setUnrecoveredGroups, preference, onGenerate: async (generated, options = {}) => { const staged = await activeWorkout.stageGenerated(generated, options.phaseTargets ?? { warmupSeconds: 0, performanceSeconds: timeBudget * 60, cooldownSeconds: 0 }); if (staged && generated?.length) { retirePreferenceOperation(); setPreference({ baseline: orderRuleFor(generated), resolution: options.preferredOrderResolution, operation: null }); chooseDestination('workout') } } }
+            ? { workout, timeBudget, setTimeBudget, unrecoveredGroups, setUnrecoveredGroups, preference, onCancelReplan: workout?.length ? () => { setReplanReturnFocus(true); chooseDestination('workout') } : undefined, onGenerate: async (generated, options = {}) => { const staged = generated?.length && await activeWorkout.stageGenerated(generated, options.phaseTargets ?? { warmupSeconds: 0, performanceSeconds: timeBudget * 60, cooldownSeconds: 0 }); if (staged) { retirePreferenceOperation(); if (options.appliedUnrecoveredGroups) setUnrecoveredGroups(options.appliedUnrecoveredGroups); setPreference({ baseline: orderRuleFor(generated), resolution: options.preferredOrderResolution, operation: null }); setReplanAnnouncement(options.replanned ? 'Workout replanned' : ''); chooseDestination('workout'); return true } return false } }
             : activeDestination === 'settings' ? { onClose: () => chooseDestination(shellDestination), onDirtyChange: onSettingsDirtyChange, preference, onClearPreferences: clearPreferences, onSavePreference: savePreference, onDismissPreference: dismissPreference }
               : activeDestination === 'history' ? { historyKey: user?.uid, loadPage: ({ cursor, pageSize }) => import('./utils/storage').then(({ getHistoryPage }) => getHistoryPage(user?.uid, { cursor, pageSize })), loadRange: loadHistoryRange, onPlan: () => chooseDestination(shellDestination) }
-              : { session: activeWorkout, sessionState: activeWorkoutSession, onComplete: () => chooseDestination('plan'), onDiscard: () => { retirePreferenceOperation(); setPreference({ baseline: null, resolution: null, operation: null }); chooseDestination('plan') }, onBackToPlan: () => chooseDestination('plan'), onResume: () => { setDestination('workout') }, preference, onSavePreference: savePreference, onStarted, onDismissPreference: dismissPreference }}
+              : { session: activeWorkout, sessionState: activeWorkoutSession, onComplete: () => chooseDestination('plan'), onDiscard: () => { retirePreferenceOperation(); setPreference({ baseline: null, resolution: null, operation: null }); chooseDestination('plan') }, onBackToPlan: () => chooseDestination('plan'), onChangeSkippedGroups: activeWorkoutSession.status === 'generated' ? () => { setReplanAnnouncement(''); setReplanReturnFocus(false); chooseDestination('plan') } : undefined, focusReplanTrigger: replanReturnFocus, onReplanTriggerFocused: () => setReplanReturnFocus(false), replanAnnouncement, onResume: () => { setDestination('workout') }, preference, onSavePreference: savePreference, onStarted, onDismissPreference: dismissPreference }}
           onReady={() => {}}
           isCurrent={() => access === 'authorized'}
         />
