@@ -37,11 +37,16 @@ export default function Generator({
   const [error, setError] = useState(null);
   const [retryMode, setRetryMode] = useState(null);
   const [legDayChoice, setLegDayChoice] = useState(null);
+  const [legDaySelected, setLegDaySelected] = useState(false);
   const legDayChoiceHeadingRef = useRef(null);
 
   useEffect(() => {
     if (legDayChoice) legDayChoiceHeadingRef.current?.focus();
   }, [legDayChoice]);
+
+  useEffect(() => {
+    if (unrecoveredGroups.includes('Legs')) setLegDaySelected(false);
+  }, [unrecoveredGroups]);
 
   const handleToggleGroup = (group) => {
     setUnrecoveredGroups((prev) => 
@@ -120,6 +125,7 @@ export default function Generator({
         return;
       }
       await handoffGeneratedWorkout(generated);
+      setLegDaySelected(false);
     } catch (err) {
       console.error("Error generating workout:", err);
       if (err instanceof HistoryLoadError) {
@@ -175,8 +181,8 @@ export default function Generator({
       {retryMode && (
         <button
           type="button"
-          onClick={() => handleGenerate(retryMode === 'manual')}
-          disabled={isGenerating || (retryMode === 'manual' && unrecoveredGroups.includes('Legs'))}
+          onClick={() => handleGenerate(legDaySelected)}
+          disabled={isGenerating}
         >
           {isGenerating ? 'Loading workout history...' : 'Try loading history again'}
         </button>
@@ -218,20 +224,9 @@ export default function Generator({
         </div>
       </div>
 
-      <button className="generate-btn" onClick={() => handleGenerate(false)} disabled={isGenerating}>
+      <button className="generate-btn" onClick={() => handleGenerate(legDaySelected)} disabled={isGenerating}>
         {isGenerating ? 'Planning...' : 'Plan my workout'}
       </button>
-      <div className="manual-leg-day-action">
-        <button
-          type="button"
-          onClick={() => handleGenerate(true)}
-          disabled={isGenerating || unrecoveredGroups.includes('Legs')}
-          aria-describedby={unrecoveredGroups.includes('Legs') ? 'manual-leg-day-rest' : undefined}
-        >
-          Make today a leg day
-        </button>
-        {unrecoveredGroups.includes('Legs') && <p id="manual-leg-day-rest">Legs are marked for rest.</p>}
-      </div>
       {legDayChoice && <section className="leg-day-choice" role="region" aria-label="Leg day choice">
         <h2 ref={legDayChoiceHeadingRef} tabIndex="-1">Include legs in today&apos;s workout?</h2>
         <button type="button" onClick={() => completeLegDayChoice(true)}>Include legs today</button>
@@ -239,7 +234,29 @@ export default function Generator({
       </section>}
 
       <details className="groups-container">
-        <summary>Any areas need rest?</summary>
+        <summary>
+          Adjust today’s workout
+          {(legDaySelected || unrecoveredGroups.length > 0) && <span className="adjustments-summary">
+            {legDaySelected && <span>Leg day selected</span>}
+            {unrecoveredGroups.length > 0 && <span>Rest: {unrecoveredGroups.join(', ')}</span>}
+          </span>}
+        </summary>
+        <div className="manual-leg-day-selection">
+          <label>
+            <input
+              type="checkbox"
+              checked={legDaySelected}
+              disabled={isGenerating || unrecoveredGroups.includes('Legs')}
+              aria-describedby={unrecoveredGroups.includes('Legs') ? 'manual-leg-day-rest' : undefined}
+              onChange={event => {
+                setLegDaySelected(event.target.checked);
+                setLegDayChoice(null);
+              }}
+            />
+            Make today a leg day
+          </label>
+          {unrecoveredGroups.includes('Legs') && <p id="manual-leg-day-rest">Legs are marked for rest.</p>}
+        </div>
         <p>Select any muscle groups you would rather rest today.</p>
         <div className="checkbox-grid">
           {MUSCLE_GROUPS.map((group) => (

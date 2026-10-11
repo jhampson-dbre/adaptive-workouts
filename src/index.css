@@ -522,37 +522,43 @@ input:focus-visible {
   cursor: wait;
 }
 
-.manual-leg-day-action {
+.adjustments-summary {
   display: grid;
-  gap: 8px;
-  padding: 18px clamp(22px, 7vw, 52px) 22px;
-  border-bottom: 2px solid var(--border);
-  background: var(--code-bg);
+  gap: 4px;
+  margin-top: 8px;
+  color: var(--text);
+  font-size: var(--type-body);
+  font-weight: 400;
 }
 
-.manual-leg-day-action button {
+.manual-leg-day-selection {
+  margin-top: 22px;
+}
+
+.manual-leg-day-selection label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   min-height: 48px;
-  border: 2px solid var(--border);
-  border-radius: 0;
-  background: var(--code-bg);
-  color: var(--text-h);
   font-weight: 700;
+  cursor: pointer;
 }
 
-.manual-leg-day-action button:hover:not(:disabled) {
-  background: var(--accent-bg);
+.manual-leg-day-selection input {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  accent-color: var(--border);
 }
 
-.manual-leg-day-action button:disabled {
+.manual-leg-day-selection label:has(input:disabled) {
   color: var(--text);
   cursor: default;
-  opacity: 0.55;
 }
 
-.manual-leg-day-action p {
+.manual-leg-day-selection p {
   margin: 0;
   color: var(--text);
-  font-size: var(--type-label);
 }
 
 .workout-header {
