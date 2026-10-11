@@ -1,8 +1,17 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import WorkoutHistory from '../components/WorkoutHistory';
 
-afterEach(cleanup);
+beforeEach(() => {
+  // Keep the dated fixtures in range without faking async polling or focus timers.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 6, 20, 12));
+});
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 function openHistory() {
   document.querySelectorAll('details:not([open]) > summary').forEach(summary => fireEvent.click(summary));
@@ -133,7 +142,7 @@ test('opens Exercises with a fresh complete discovery read and replaces stale re
   expect(document.activeElement).toBe(filter);
   fireEvent.click(screen.getByRole('button', { name: /Bench Press.*weighted/i }));
   expect(screen.getByRole('button', { name: 'Back to exercises' }).textContent).toBe('Return to exercise list');
-  await waitFor(() => expect(loadRange).toHaveBeenLastCalledWith({ range: '3M', endDate: expect.any(String) }));
+  await waitFor(() => expect(loadRange).toHaveBeenLastCalledWith({ range: '3M', endDate: '2026-07-20' }));
   expect(screen.queryByText(/Latest volume/)).toBeNull();
   await act(async () => detail.resolve([workout({ date: '2026-07-12', exercises: [weighted()] })]));
   expect(await screen.findByRole('heading', { name: 'Performance overview' })).toBeDefined();
@@ -294,7 +303,7 @@ test('shows separate bodyweight facts and keeps the native scrubber operable by 
 
 test('keeps the evidence scrubber focused after range-result focus and keyboard selection', async () => {
   const workouts = [
-    workout({ id: 'first', date: '2026-06-01', exercises: [weighted()] }),
+    workout({ id: 'first', date: '2026-06-20', exercises: [weighted()] }),
     workout({ id: 'latest', date: '2026-07-01', exercises: [weighted()] }),
   ];
   render(<WorkoutHistory historyKey="u1" loadRange={vi.fn().mockResolvedValue(workouts)} />);
@@ -308,7 +317,7 @@ test('keeps the evidence scrubber focused after range-result focus and keyboard 
   const scrubber = screen.getByRole('slider', { name: 'Recorded workout' });
   scrubber.focus();
   fireEvent.keyDown(scrubber, { key: 'ArrowLeft' });
-  expect(screen.getByText(/Selected June 1, 2026: 1600 lb volume/)).toBeDefined();
+  expect(screen.getByText(/Selected June 20, 2026: 1600 lb volume/)).toBeDefined();
   expect(document.activeElement).toBe(scrubber);
 });
 
