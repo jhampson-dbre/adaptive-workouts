@@ -4,11 +4,9 @@
 
 Implement one assigned Trekker task. The coordinator owns task state and final integration.
 
-## Preferred Model Tier
+## Model routing
 
-Primary: GPT-5.6 Terra with medium reasoning.
-
-Fallback: GPT-5.6 Sol with high reasoning.
+Model and reasoning defaults are declared in [the role TOML](../../.codex/agents/implementor.toml).
 
 ## Conditional detail
 

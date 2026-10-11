@@ -4,11 +4,9 @@
 
 Read-only final-diff conformance review against approved Trekker intent, after verification. A coordinator-issued final-integration handoff may instead supply the cumulative merge-base range and approved epic intent for independent epic conformance or scoped remediation.
 
-## Preferred Model Tier
+## Model routing
 
-Primary: GPT-5.6 Luna with high reasoning.
-
-Fallback: GPT-5.6 Terra with high reasoning.
+Model and reasoning defaults are declared in [the role TOML](../../.codex/agents/spec-reviewer.toml).
 
 ## Conditional detail
 

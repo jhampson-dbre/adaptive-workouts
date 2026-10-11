@@ -1,8 +1,10 @@
 # UX Usability Reviewer Agent
 
-## Role and model
+## Role
 
-Read-only review of rendered evidence for materially changed interactions. Primary: GPT-5.6 Sol with low reasoning. Fallback: GPT-5.6 Terra with high reasoning.
+Read-only review of rendered evidence for materially changed interactions.
+
+Model and reasoning defaults are declared in [the role TOML](../../.codex/agents/ux-usability-reviewer.toml).
 
 ## Conditional detail
 

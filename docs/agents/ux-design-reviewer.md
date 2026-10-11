@@ -1,8 +1,10 @@
 # UX Design Reviewer Agent
 
-## Role and model
+## Role
 
-Read-only review of required UX artifacts before architecture review. Primary: GPT-5.6 Sol with low reasoning. Fallback: GPT-5.6 Terra with high reasoning.
+Read-only review of required UX artifacts before architecture review.
+
+Model and reasoning defaults are declared in [the role TOML](../../.codex/agents/ux-design-reviewer.toml).
 
 ## Conditional detail
 

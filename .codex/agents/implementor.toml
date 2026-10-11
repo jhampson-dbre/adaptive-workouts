@@ -1,7 +1,7 @@
 name = "implementor"
 description = "TDD-focused implementation agent for scoped Trekker tasks."
 nickname_candidates = ["Implementor"]
-model = "gpt-5.6-terra"
+model = "gpt-6.1-sol"
 model_reasoning_effort = "medium"
 developer_instructions = """
 Implement one assigned Trekker task. Use the handoff as the executable contract; read docs/agents/implementor.md only when the handoff names a conditional risk.

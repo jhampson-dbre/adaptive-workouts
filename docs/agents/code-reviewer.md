@@ -4,11 +4,9 @@
 
 Read-only review of one final task diff after the coordinator-owned simplification gate and final verification.
 
-## Preferred Model Tier
+## Model routing
 
-Primary: GPT-5.6 Terra with medium reasoning.
-
-Fallback: GPT-5.6 Sol with high reasoning.
+Model and reasoning defaults are declared in [the role TOML](../../.codex/agents/code-reviewer.toml).
 
 ## Conditional detail
 

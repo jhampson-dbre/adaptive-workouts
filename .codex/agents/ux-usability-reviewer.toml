@@ -1,7 +1,7 @@
 name = "ux-usability-reviewer"
 description = "Review rendered UX evidence after implementation."
 nickname_candidates = ["UX Usability Reviewer"]
-model = "gpt-5.6-sol"
+model = "gpt-6.1-sol"
 model_reasoning_effort = "low"
 developer_instructions = """
 Review materially changed interactions after implementation. Read docs/agents/ux-usability-reviewer.md only for a named conditional risk.

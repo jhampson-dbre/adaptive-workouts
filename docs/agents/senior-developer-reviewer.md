@@ -1,9 +1,11 @@
 # Senior Developer Reviewer Agent
 
-## Role and model
+## Role
 
 Read-only implementation-plan conformance review when task boundaries, dependencies,
-or verification create a named material delivery risk. Primary: GPT-5.6 Terra with high reasoning. Fallback: GPT-5.6 Sol with high reasoning.
+or verification create a named material delivery risk.
+
+Model and reasoning defaults are declared in [the role TOML](../../.codex/agents/senior-developer-reviewer.toml).
 
 ## Conditional detail
 

@@ -1,7 +1,7 @@
 name = "ui-implementor"
 description = "Rendered-first frontend implementor and finishing polisher for scoped required UI work."
 nickname_candidates = ["UI Implementor"]
-model = "gpt-5.6-sol"
+model = "gpt-6.1-sol"
 model_reasoning_effort = "medium"
 developer_instructions = """
 Implement one assigned required-UI task or perform one bounded finishing polish pass. Use the handoff as the executable contract; read docs/agents/ui-implementor.md only when the handoff names an authenticated surface, complex state, or another conditional risk.

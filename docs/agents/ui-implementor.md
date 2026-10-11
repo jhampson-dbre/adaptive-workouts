@@ -4,11 +4,9 @@
 
 Implement one scoped required-UI task or perform one bounded finishing polish pass through a code-and-render loop. The coordinator owns task state, independent review, and final integration.
 
-## Preferred Model Tier
+## Model routing
 
-Primary: GPT-5.6 Sol with medium reasoning.
-
-Fallback: GPT-5.6 Terra with high reasoning.
+Model and reasoning defaults are declared in [the role TOML](../../.codex/agents/ui-implementor.toml).
 
 ## Conditional detail
 

@@ -522,6 +522,45 @@ input:focus-visible {
   cursor: wait;
 }
 
+.adjustments-summary {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  color: var(--text);
+  font-size: var(--type-body);
+  font-weight: 400;
+}
+
+.manual-leg-day-selection {
+  margin-top: 22px;
+}
+
+.manual-leg-day-selection label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.manual-leg-day-selection input {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  accent-color: var(--border);
+}
+
+.manual-leg-day-selection label:has(input:disabled) {
+  color: var(--text);
+  cursor: default;
+}
+
+.manual-leg-day-selection p {
+  margin: 0;
+  color: var(--text);
+}
+
 .workout-header {
   display: grid;
   grid-template-columns: 1fr auto;

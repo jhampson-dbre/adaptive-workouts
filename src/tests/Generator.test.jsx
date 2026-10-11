@@ -26,7 +26,18 @@ describe('Generator Component', () => {
         expect(screen.getByRole('heading', { name: "Plan today's workout" })).toBeTruthy();
         expect(screen.getByText('Nudge uses your recent workouts and available time to plan today\'s workout.')).toBeTruthy();
         expect(screen.getByRole('button', { name: 'Plan my workout' })).toBeTruthy();
-        expect(screen.getByText('Any areas need rest?').closest('details').open).toBe(false);
+        const adjustments = screen.getByText('Adjust today’s workout').closest('details');
+        expect(adjustments.open).toBe(false);
+        expect(screen.queryByRole('button', { name: 'Make today a leg day' })).toBeNull();
+        adjustments.open = true;
+        const selection = screen.getByRole('checkbox', { name: 'Make today a leg day' });
+        expect(selection.checked).toBe(false);
+        fireEvent.click(selection);
+        expect(selection.checked).toBe(true);
+        expect(storage.getGenerationHistory).not.toHaveBeenCalled();
+        expect(engine.generateWorkout).not.toHaveBeenCalled();
+        adjustments.open = false;
+        expect(adjustments.querySelector('summary').textContent).toContain('Leg day selected');
     });
 
     it('reports a returned order-save outcome without moving focus from the Plan heading', () => {
@@ -220,6 +231,218 @@ describe('Generator Component', () => {
             expect(window.confirm).not.toHaveBeenCalled();
             expect(engine.generateWorkout).toHaveBeenCalledWith(30, [], false, expect.any(Array), expect.any(Array), expect.any(Object));
         });
+    });
+
+    const selectLegDay = () => {
+        screen.getByText('Adjust today’s workout').closest('details').open = true;
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Make today a leg day' }));
+    };
+
+    const planSelectedLegDay = () => {
+        selectLegDay();
+        fireEvent.click(screen.getByRole('button', { name: 'Plan my workout' }));
+    };
+
+    it('plans a selected leg day without a redundant overdue question', async () => {
+        engine.getDaysSinceLastLegDay.mockReturnValue(8);
+        engine.getDayOfWeek.mockReturnValue('Monday');
+        const generated = [{ id: 'leg1', name: 'Squat', muscleGroup: 'Legs', tier: 3 }];
+        engine.generateWorkout.mockReturnValue(generated);
+        const onGenerate = vi.fn();
+
+        renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
+
+        const primaryAction = screen.getByRole('button', { name: 'Plan my workout' });
+        selectLegDay();
+        fireEvent.click(primaryAction);
+
+        await waitFor(() => {
+            expect(engine.generateWorkout).toHaveBeenCalledWith(30, [], true, expect.any(Array), expect.any(Array), expect.any(Object));
+            expect(onGenerate).toHaveBeenCalledWith(generated, {
+                phaseTargets: { warmupSeconds: 600, performanceSeconds: 1800, cooldownSeconds: 300 },
+                preferredOrderResolution: undefined,
+            });
+        });
+        expect(screen.queryByRole('region', { name: 'Leg day choice' })).toBeNull();
+    });
+
+    it('disables the manual leg-day action while Legs are marked for rest', () => {
+        renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={['Legs']} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />);
+
+        screen.getByText('Adjust today’s workout').closest('details').open = true;
+        const action = screen.getByRole('checkbox', { name: 'Make today a leg day' });
+        const explanation = screen.getByText('Legs are marked for rest.');
+        expect(action.disabled).toBe(true);
+        expect(action.getAttribute('aria-describedby')).toBe(explanation.id);
+    });
+
+    it('keeps a manual leg-day request when retrying history loading', async () => {
+        storage.getGenerationHistory.mockRejectedValueOnce(new Error('offline'));
+        const generated = [{ id: 'leg1', name: 'Squat', muscleGroup: 'Legs', tier: 3 }];
+        engine.generateWorkout.mockReturnValue(generated);
+
+        renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />);
+        planSelectedLegDay();
+        fireEvent.click(await screen.findByRole('button', { name: 'Try loading history again' }));
+
+        await waitFor(() => expect(engine.generateWorkout).toHaveBeenCalledWith(30, [], true, expect.any(Array), expect.any(Array), expect.any(Object)));
+    });
+
+    it('holds the selected planning inputs while a manual leg-day request is loading', () => {
+        storage.getGenerationHistory.mockReturnValue(new Promise(() => {}));
+        renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />);
+
+        planSelectedLegDay();
+
+        expect(screen.getByRole('button', { name: 'Planning...' }).disabled).toBe(true);
+        expect(screen.getByRole('checkbox', { name: 'Make today a leg day' }).disabled).toBe(true);
+        expect(screen.getByRole('slider', { name: /Time available/i }).disabled).toBe(true);
+        expect(screen.getByRole('checkbox', { name: /LegsReady/i }).disabled).toBe(true);
+    });
+
+    it('holds the manual request through an async workout handoff and handles its failure', async () => {
+        const generated = [{ id: 'leg1', name: 'Squat', muscleGroup: 'Legs', tier: 3 }];
+        engine.generateWorkout.mockReturnValue(generated);
+        let rejectHandoff;
+        const onGenerate = vi.fn(() => new Promise((resolve, reject) => { rejectHandoff = reject; }));
+        renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
+
+        planSelectedLegDay();
+        await waitFor(() => expect(onGenerate).toHaveBeenCalled());
+        expect(screen.getByRole('button', { name: 'Planning...' }).disabled).toBe(true);
+        expect(screen.getByRole('checkbox', { name: 'Make today a leg day' }).checked).toBe(true);
+
+        rejectHandoff(new Error('handoff failed'));
+        expect((await screen.findByRole('alert')).textContent).toMatch(/failed to generate workout/i);
+        expect(screen.getByRole('button', { name: 'Plan my workout' }).disabled).toBe(false);
+        expect(screen.getByRole('checkbox', { name: 'Make today a leg day' }).checked).toBe(true);
+    });
+
+    it('clears leg selection for Legs rest without reselecting or resetting rest choices', async () => {
+        const React = await import('react');
+        const onGenerate = vi.fn();
+        function Planner() {
+            const [groups, setGroups] = React.useState(['Chest']);
+            return <Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={groups} setUnrecoveredGroups={setGroups} onGenerate={onGenerate} />;
+        }
+        renderWithAuth(<Planner />);
+        selectLegDay();
+        fireEvent.click(screen.getByRole('checkbox', { name: /LegsReady/i }));
+        const selection = screen.getByRole('checkbox', { name: 'Make today a leg day' });
+        expect(selection.checked).toBe(false);
+        expect(selection.disabled).toBe(true);
+        expect(screen.getByText('Rest: Chest, Legs')).toBeTruthy();
+        fireEvent.click(screen.getByRole('checkbox', { name: /LegsRest/i }));
+        expect(selection.checked).toBe(false);
+        expect(selection.disabled).toBe(false);
+        expect(screen.getByText('Rest: Chest')).toBeTruthy();
+    });
+
+    it('retries history with the visible current intent after reversing leg selection', async () => {
+        storage.getSettings.mockResolvedValue({ legDayOfWeek: 'None' });
+        storage.getGenerationHistory.mockRejectedValueOnce(new Error('offline'));
+        renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={['Chest']} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />);
+        planSelectedLegDay();
+        const retry = await screen.findByRole('button', { name: 'Try loading history again' });
+        expect(screen.getByRole('checkbox', { name: 'Make today a leg day' }).checked).toBe(true);
+        selectLegDay();
+        fireEvent.click(retry);
+        await waitFor(() => expect(engine.generateWorkout).toHaveBeenCalledWith(30, ['Chest'], false, expect.any(Array), expect.any(Array), expect.any(Object)));
+        expect(screen.getByText('Rest: Chest')).toBeTruthy();
+    });
+
+    it('locks only leg selection during ordinary generation and preserves ordinary input behavior', () => {
+        storage.getGenerationHistory.mockReturnValue(new Promise(() => {}));
+        renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />);
+        screen.getByText('Adjust today’s workout').closest('details').open = true;
+        fireEvent.click(screen.getByRole('button', { name: 'Plan my workout' }));
+        expect(screen.getByRole('checkbox', { name: 'Make today a leg day' }).disabled).toBe(true);
+        expect(screen.getByRole('slider', { name: /Time available/i }).disabled).toBe(false);
+        expect(screen.getByRole('checkbox', { name: /LegsReady/i }).disabled).toBe(false);
+    });
+
+    it('keeps rest choices editable after an ordinary history failure and retries current rest areas', async () => {
+        const React = await import('react');
+        storage.getSettings.mockResolvedValue({ legDayOfWeek: 'None' });
+        storage.getGenerationHistory.mockRejectedValueOnce(new Error('offline'));
+        function Planner() {
+            const [groups, setGroups] = React.useState(['Chest']);
+            return <Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={groups} setUnrecoveredGroups={setGroups} onGenerate={vi.fn()} />;
+        }
+        renderWithAuth(<Planner />);
+        fireEvent.click(screen.getByRole('button', { name: 'Plan my workout' }));
+        const retry = await screen.findByRole('button', { name: 'Try loading history again' });
+        screen.getByText('Adjust today’s workout').closest('details').open = true;
+        const restLegs = screen.getByRole('checkbox', { name: /LegsReady/i });
+        expect(restLegs.disabled).toBe(false);
+        fireEvent.click(restLegs);
+        fireEvent.click(retry);
+        await waitFor(() => expect(engine.generateWorkout).toHaveBeenCalledWith(30, ['Chest', 'Legs'], false, expect.any(Array), expect.any(Array), expect.any(Object)));
+        expect(screen.getByText('Rest: Chest, Legs')).toBeTruthy();
+    });
+
+    it('clears a stale automatic question when leg intent changes', async () => {
+        engine.getDaysSinceLastLegDay.mockReturnValue(8);
+        engine.getDayOfWeek.mockReturnValue('Monday');
+        const generated = [{ id: 'leg1', name: 'Squat', muscleGroup: 'Legs', tier: 3 }];
+        engine.generateWorkout.mockReturnValue(generated);
+        renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Plan my workout' }));
+        expect(await screen.findByRole('region', { name: 'Leg day choice' })).toBeTruthy();
+        selectLegDay();
+        expect(screen.queryByRole('region', { name: 'Leg day choice' })).toBeNull();
+        expect(engine.generateWorkout).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button', { name: 'Plan my workout' }));
+
+        await waitFor(() => expect(engine.generateWorkout).toHaveBeenCalledWith(30, [], true, expect.any(Array), expect.any(Array), expect.any(Object)));
+        expect(screen.queryByRole('region', { name: 'Leg day choice' })).toBeNull();
+    });
+
+    it('keeps the manual leg-day request one-off', async () => {
+        storage.getSettings.mockResolvedValue({ legDayOfWeek: 'None' });
+        const generated = [{ id: 'leg1', name: 'Squat', muscleGroup: 'Legs', tier: 3 }];
+        engine.generateWorkout.mockReturnValue(generated);
+        renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={vi.fn()} />);
+
+        planSelectedLegDay();
+        await waitFor(() => expect(engine.generateWorkout).toHaveBeenCalledWith(30, [], true, expect.any(Array), expect.any(Array), expect.any(Object)));
+        await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Make today a leg day' }).checked).toBe(false));
+        fireEvent.click(screen.getByRole('button', { name: 'Plan my workout' }));
+
+        await waitFor(() => expect(engine.generateWorkout).toHaveBeenLastCalledWith(30, [], false, expect.any(Array), expect.any(Array), expect.any(Object)));
+        expect(engine.generateWorkout).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps invalid manual leg-day outcomes on Plan with actionable recovery', async () => {
+        const onGenerate = vi.fn();
+        storage.getCatalog.mockResolvedValueOnce([]);
+        const view = renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
+
+        planSelectedLegDay();
+        expect((await screen.findByRole('alert')).textContent).toMatch(/add an active primary Legs exercise in Settings/i);
+        expect(engine.generateWorkout).not.toHaveBeenCalled();
+        expect(onGenerate).not.toHaveBeenCalled();
+
+        view.unmount();
+        engine.generateWorkout.mockReturnValue([{ id: 'curl', name: 'Curl', muscleGroup: 'Biceps', tier: 1 }]);
+        renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
+        planSelectedLegDay();
+
+        expect((await screen.findByRole('alert')).textContent).toMatch(/leg workout needs more time.*increase Time available/i);
+        expect(onGenerate).not.toHaveBeenCalled();
+    });
+
+    it('retains selected leg intent when the phase budget leaves no exercise time', async () => {
+        storage.getSettings.mockResolvedValue({ legDayOfWeek: 'None', warmupSeconds: 1800, cooldownSeconds: 900 });
+        const onGenerate = vi.fn();
+        renderWithAuth(<Generator timeBudget={45} setTimeBudget={vi.fn()} unrecoveredGroups={[]} setUnrecoveredGroups={vi.fn()} onGenerate={onGenerate} />);
+        planSelectedLegDay();
+        expect((await screen.findByRole('alert')).textContent).toMatch(/leg workout needs more time/i);
+        expect(screen.getByRole('checkbox', { name: 'Make today a leg day' }).checked).toBe(true);
+        expect(screen.getByRole('slider', { name: /Time available/i }).disabled).toBe(false);
+        expect(engine.generateWorkout).not.toHaveBeenCalled();
+        expect(onGenerate).not.toHaveBeenCalled();
     });
 
     it('blocks generation on history failure and retries without an empty-history fallback', async () => {
