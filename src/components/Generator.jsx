@@ -7,6 +7,8 @@ import JourneyProgress from './JourneyProgress';
 const MUSCLE_GROUPS = ['Biceps', 'Shoulders', 'Back', 'Chest', 'Triceps', 'Core', 'Legs'];
 const HISTORY_UNAVAILABLE_MESSAGE = 'Workout history is unavailable. Try loading it again before planning a workout.';
 const NO_FIT_MESSAGE = 'No time remains for exercises after your warmup and cooldown. Increase Time available or adjust Defaults in Settings.';
+const NO_PRIMARY_LEGS_MESSAGE = 'Add an active primary Legs exercise in Settings, then try again.';
+const LEG_DAY_NEEDS_MORE_TIME_MESSAGE = 'This leg workout needs more time. Increase Time available and try again.';
 
 const phaseTargetsFor = (timeBudget, settings) => {
   const { warmupSeconds, cooldownSeconds } = normalizeWorkoutSettings(settings);
@@ -31,9 +33,9 @@ export default function Generator({
   baselineFocus = false,
 }) {
   const user = useContext(AuthContext);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationMode, setGenerationMode] = useState(null);
   const [error, setError] = useState(null);
-  const [canRetryHistory, setCanRetryHistory] = useState(false);
+  const [retryMode, setRetryMode] = useState(null);
   const [legDayChoice, setLegDayChoice] = useState(null);
   const legDayChoiceHeadingRef = useRef(null);
 
@@ -51,10 +53,15 @@ export default function Generator({
 
   if (!user) return null;
 
-  const handleGenerate = async () => {
-    if (timeBudget <= 0) return;
+  const isGenerating = generationMode !== null;
+  const isManualGenerating = generationMode === 'manual';
 
-    setIsGenerating(true);
+  const handleGenerate = async (forceLegDay = false) => {
+    if (timeBudget <= 0) return;
+    if (forceLegDay && unrecoveredGroups.includes('Legs')) return;
+    if (forceLegDay) setLegDayChoice(null);
+
+    setGenerationMode(forceLegDay ? 'manual' : 'normal');
     setError(null);
     try {
       const { getSettings, getGenerationHistory, getCatalog } = await import('../utils/storage');
@@ -69,14 +76,14 @@ export default function Generator({
       const settings = settingsResult.value;
       const history = historyResult.value;
       const catalog = catalogResult.value;
-      setCanRetryHistory(false);
+      setRetryMode(null);
       const phaseTargets = phaseTargetsFor(timeBudget, settings);
       if (!phaseTargets.performanceSeconds) {
-        setError(NO_FIT_MESSAGE);
+        setError(forceLegDay ? LEG_DAY_NEEDS_MORE_TIME_MESSAGE : NO_FIT_MESSAGE);
         return;
       }
-      const handoffGeneratedWorkout = generated => {
-        if (onGenerate) onGenerate(generated, {
+      const handoffGeneratedWorkout = async generated => {
+        if (onGenerate) await onGenerate(generated, {
           phaseTargets,
           preferredOrderResolution: generated.preferredOrderResolution,
         });
@@ -86,8 +93,13 @@ export default function Generator({
       const hasPrimaryLegs = catalog.some(ex => (
         ex.isActive !== false && ex.muscleGroup === 'Legs' && ex.tier === 3
       ));
+
+      if (forceLegDay && !hasPrimaryLegs) {
+        setError(NO_PRIMARY_LEGS_MESSAGE);
+        return;
+      }
       
-      if (hasPrimaryLegs && settings.legDayOfWeek && settings.legDayOfWeek !== 'None' && !unrecoveredGroups.includes('Legs')) {
+      if (!forceLegDay && hasPrimaryLegs && settings.legDayOfWeek && settings.legDayOfWeek !== 'None' && !unrecoveredGroups.includes('Legs')) {
         const daysSince = getDaysSinceLastLegDay(history);
         const today = new Date();
         const tomorrow = new Date(today);
@@ -102,22 +114,26 @@ export default function Generator({
         }
       }
 
-      const generated = generateWorkout(phaseTargets.performanceSeconds / 60, unrecoveredGroups, false, catalog, history, settings);
-      handoffGeneratedWorkout(generated);
+      const generated = generateWorkout(phaseTargets.performanceSeconds / 60, unrecoveredGroups, forceLegDay, catalog, history, settings);
+      if (forceLegDay && !generated.some(ex => ex.muscleGroup === 'Legs' && ex.tier === 3)) {
+        setError(LEG_DAY_NEEDS_MORE_TIME_MESSAGE);
+        return;
+      }
+      await handoffGeneratedWorkout(generated);
     } catch (err) {
       console.error("Error generating workout:", err);
       if (err instanceof HistoryLoadError) {
         setError(HISTORY_UNAVAILABLE_MESSAGE);
-        setCanRetryHistory(true);
+        setRetryMode(forceLegDay ? 'manual' : 'normal');
       } else if (err?.name === 'InvalidCatalogExerciseError') {
         setError(err.message);
-        setCanRetryHistory(false);
+        setRetryMode(null);
       } else {
         setError("Failed to generate workout. Please try again.");
-        setCanRetryHistory(false);
+        setRetryMode(null);
       }
     } finally {
-      setIsGenerating(false);
+      setGenerationMode(null);
     }
   };
 
@@ -156,8 +172,12 @@ export default function Generator({
       </section>}
       
       {error && <div className="error-message" role="alert">{error}</div>}
-      {canRetryHistory && (
-        <button type="button" onClick={handleGenerate} disabled={isGenerating}>
+      {retryMode && (
+        <button
+          type="button"
+          onClick={() => handleGenerate(retryMode === 'manual')}
+          disabled={isGenerating || (retryMode === 'manual' && unrecoveredGroups.includes('Legs'))}
+        >
           {isGenerating ? 'Loading workout history...' : 'Try loading history again'}
         </button>
       )}
@@ -174,6 +194,7 @@ export default function Generator({
           max="120"
           step="5"
           value={timeBudget}
+          disabled={isManualGenerating}
           onChange={(e) => setTimeBudget(Number(e.target.value))}
           className="slider"
         />
@@ -181,7 +202,7 @@ export default function Generator({
           <button
             type="button"
             aria-label="Decrease time by 5 minutes"
-            disabled={timeBudget <= 15}
+            disabled={isManualGenerating || timeBudget <= 15}
             onClick={() => setTimeBudget(Math.max(15, timeBudget - 5))}
           >
             −5 min
@@ -189,7 +210,7 @@ export default function Generator({
           <button
             type="button"
             aria-label="Increase time by 5 minutes"
-            disabled={timeBudget >= 120}
+            disabled={isManualGenerating || timeBudget >= 120}
             onClick={() => setTimeBudget(Math.min(120, timeBudget + 5))}
           >
             +5 min
@@ -197,9 +218,20 @@ export default function Generator({
         </div>
       </div>
 
-      <button className="generate-btn" onClick={handleGenerate} disabled={isGenerating}>
+      <button className="generate-btn" onClick={() => handleGenerate(false)} disabled={isGenerating}>
         {isGenerating ? 'Planning...' : 'Plan my workout'}
       </button>
+      <div className="manual-leg-day-action">
+        <button
+          type="button"
+          onClick={() => handleGenerate(true)}
+          disabled={isGenerating || unrecoveredGroups.includes('Legs')}
+          aria-describedby={unrecoveredGroups.includes('Legs') ? 'manual-leg-day-rest' : undefined}
+        >
+          Make today a leg day
+        </button>
+        {unrecoveredGroups.includes('Legs') && <p id="manual-leg-day-rest">Legs are marked for rest.</p>}
+      </div>
       {legDayChoice && <section className="leg-day-choice" role="region" aria-label="Leg day choice">
         <h2 ref={legDayChoiceHeadingRef} tabIndex="-1">Include legs in today&apos;s workout?</h2>
         <button type="button" onClick={() => completeLegDayChoice(true)}>Include legs today</button>
@@ -217,6 +249,7 @@ export default function Generator({
               <input
                 type="checkbox"
                 checked={unrecoveredGroups.includes(group)}
+                disabled={isManualGenerating}
                 onChange={() => handleToggleGroup(group)}
               />
             </label>

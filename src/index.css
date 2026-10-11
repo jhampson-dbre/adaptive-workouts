@@ -522,6 +522,39 @@ input:focus-visible {
   cursor: wait;
 }
 
+.manual-leg-day-action {
+  display: grid;
+  gap: 8px;
+  padding: 18px clamp(22px, 7vw, 52px) 22px;
+  border-bottom: 2px solid var(--border);
+  background: var(--code-bg);
+}
+
+.manual-leg-day-action button {
+  min-height: 48px;
+  border: 2px solid var(--border);
+  border-radius: 0;
+  background: var(--code-bg);
+  color: var(--text-h);
+  font-weight: 700;
+}
+
+.manual-leg-day-action button:hover:not(:disabled) {
+  background: var(--accent-bg);
+}
+
+.manual-leg-day-action button:disabled {
+  color: var(--text);
+  cursor: default;
+  opacity: 0.55;
+}
+
+.manual-leg-day-action p {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--type-label);
+}
+
 .workout-header {
   display: grid;
   grid-template-columns: 1fr auto;
