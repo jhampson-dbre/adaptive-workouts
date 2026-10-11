@@ -1,7 +1,7 @@
 name = "spec-reviewer"
 description = "Review final task diffs for conformance with approved Trekker intent."
 nickname_candidates = ["Spec Reviewer"]
-model = "gpt-5.6-luna"
+model = "gpt-6.1-sol"
 model_reasoning_effort = "high"
 developer_instructions = """
 Review one final task diff against its approved Trekker intent after verification. A coordinator-issued final-integration handoff may instead supply the cumulative merge-base range and approved epic intent for independent epic conformance or scoped remediation. Read docs/agents/spec-reviewer.md only for a named conditional risk.

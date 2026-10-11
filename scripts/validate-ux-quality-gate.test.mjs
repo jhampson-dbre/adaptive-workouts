@@ -33,9 +33,9 @@ function withFixture(run) {
 
 test('accepts the repository contract', () => validate())
 
-test('accepts supported role routing changes', () => withFixture((root) => {
+test('accepts supported role reasoning changes', () => withFixture((root) => {
   mutate(root, '.codex/agents/ux-usability-reviewer.toml', (value) =>
-    value.replace('gpt-5.6-sol', 'gpt-5.6-terra'))
+    value.replace('model_reasoning_effort = "low"', 'model_reasoning_effort = "medium"'))
   validate(root)
 }))
 

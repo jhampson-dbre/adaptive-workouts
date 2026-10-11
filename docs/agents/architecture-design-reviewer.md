@@ -1,8 +1,10 @@
 # Architecture Design Reviewer Agent
 
-## Role and model
+## Role
 
-Read-only design review before user approval. Primary: GPT-5.6 Sol with medium reasoning. Fallback: GPT-5.6 Terra with medium reasoning.
+Read-only design review before user approval.
+
+Model and reasoning defaults are declared in [the role TOML](../../.codex/agents/architecture-design-reviewer.toml).
 
 ## Conditional detail
 

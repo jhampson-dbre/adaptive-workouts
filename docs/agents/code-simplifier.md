@@ -4,11 +4,9 @@
 
 Remove a coordinator-identified complexity signal from authorized files in a green task diff without changing observable behavior.
 
-## Preferred Model Tier
+## Model routing
 
-Primary: GPT-5.6 Luna with xhigh reasoning.
-
-Fallback: GPT-5.6 Sol with high reasoning.
+Model and reasoning defaults are declared in [the role TOML](../../.codex/agents/code-simplifier.toml).
 
 ## Conditional detail
 

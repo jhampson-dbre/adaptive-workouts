@@ -46,7 +46,7 @@ Use `$maintain-agent-workflows` for changes to agent prompts, roles, skills, wor
 
 ## Roles
 
-Use the project role contracts in `docs/agents/` and corresponding `.codex/agents/*.toml`: architecture-design-reviewer, feature-planner-advisor, senior-developer-reviewer, implementor, ui-implementor, code-simplifier, code-reviewer, spec-reviewer, epic-reviewer, ux-design-reviewer, and ux-usability-reviewer. Keep model and reasoning assignments unchanged. Reviewers are read-only unless the coordinator expressly authorizes a patch.
+Use the project role contracts in `docs/agents/` and corresponding `.codex/agents/*.toml`: architecture-design-reviewer, feature-planner-advisor, senior-developer-reviewer, implementor, ui-implementor, code-simplifier, code-reviewer, spec-reviewer, epic-reviewer, ux-design-reviewer, and ux-usability-reviewer. Use `gpt-6.1-sol` with medium reasoning for the main coordinator. Role TOMLs are authoritative for child model and reasoning defaults; preserve them unless the user authorizes a change. If a configured route is unavailable, report the limitation instead of silently falling back to an older model. Reviewers are read-only unless the coordinator expressly authorizes a patch.
 
 ## Workflow feedback
 

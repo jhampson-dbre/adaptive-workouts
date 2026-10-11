@@ -1,8 +1,10 @@
 # Feature Planner Agent
 
-## Role and model
+## Role
 
-The main coordinator owns feature planning, approval gates, and Trekker writes; the advisor is draft-only. Primary: GPT-5.6 Terra with high reasoning. Fallback: GPT-5.6 Terra with medium reasoning.
+The main coordinator owns feature planning, approval gates, and Trekker writes; the advisor is draft-only.
+
+Model and reasoning defaults are declared in [the role TOML](../../.codex/agents/feature-planner-advisor.toml).
 
 ## Conditional detail
 

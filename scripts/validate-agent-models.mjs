@@ -7,10 +7,10 @@ import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const agentsDirectory = path.join(repositoryRoot, '.codex', 'agents');
-const allowedModels = new Set(['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']);
+const allowedModels = new Set(['gpt-6.1-sol']);
 const allowedReasoning = new Set(['low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
 
-test('active custom agents use fully specified supported GPT-5.6 routes', async () => {
+test('active custom agents use fully specified supported GPT-6.1 routes', async () => {
   const agentFiles = (await readdir(agentsDirectory)).filter((file) => file.endsWith('.toml'));
 
   for (const agentFile of agentFiles) {
